@@ -35,6 +35,24 @@ uv run ruff check .
 
 The three plain `python scripts/...` checks (`verify_package.py`, `build_flow.py --check`, and the `tests/hooks` unittest run) stay stdlib-only and do not need uv.
 
+### Local stack (Docker)
+
+Runs Postgres with pgvector, the API and the worker. No API keys are needed. Requires Docker with Compose v2.
+
+```bash
+cp .env.example .env     # PowerShell: Copy-Item .env.example .env
+# edit .env and set POSTGRES_PASSWORD to your own local value; .env is git-ignored
+docker compose up -d --build --wait    # builds the app image, waits for healthy
+docker compose ps --format "{{.Service}} {{.Health}}"
+curl http://127.0.0.1:8000/health      # {"status":"ok","version":"0.0.0"}
+# PowerShell: Invoke-RestMethod http://127.0.0.1:8000/health
+docker compose down                    # stops; the pgdata volume is kept (down -v deletes it)
+```
+
+- All published ports bind to `127.0.0.1` only. Do not change them to `0.0.0.0`.
+- The optional `docker compose --profile ollama up -d --wait ollama` starts a local Ollama server. It pulls the `ollama/ollama` image (about 1.5-3 GB) but no models.
+- Never commit `.env` or paste its contents into issues or logs.
+
 ## Proposing a technique
 
 Use the "Technique proposal" issue template. Include a primary source (paper, official repository or docs), the mechanism, the category, how it differs from existing catalogue entries, and an observable acceptance check. Accepted techniques are added to `config/techniques.json` and `docs/techniques/TECHNIQUE_CATALOG.md` together. Implementations are plugins ([ADR-0002](docs/decisions/ADR-0002-technique-plugin-system.md)).
