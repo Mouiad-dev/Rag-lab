@@ -24,6 +24,7 @@ Plan P1.3 (local stack: `compose.yaml`, `.env.example`) with the planner. P1.1 c
 - Job engine: both, PostgreSQL default + Temporal optional. [ADR-0005](decisions/ADR-0005-pluggable-job-engine.md)
 - Observability: both, OpenTelemetry default + LangSmith optional. [ADR-0006](decisions/ADR-0006-observability-otel-and-langsmith.md)
 - 2026-11-01: pipeline stage map `config/pipeline_stages.json` (72/72 techniques mapped to 18 stages, 8 routers), interactive view `docs/flow/index.html` built by `python scripts/build_flow.py` (CI checks it is current), router design [ROUTER_DESIGN.md](architecture/ROUTER_DESIGN.md).
+- 2026-11-01: sandbox per run added to the roadmap as a cross-cutting requirement (every agent run in its own ephemeral, isolated environment; only explicit outputs persist). Delivered by P8.3, P8.4, P10.1. Roadmap only; nothing implemented.
 - Catalogue source links audited. [SOURCE_LINK_AUDIT.md](techniques/SOURCE_LINK_AUDIT.md)
 
 ## Phases

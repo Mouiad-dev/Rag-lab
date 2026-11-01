@@ -6,6 +6,12 @@ Order rationale: tooling and the provider layer come first because every later s
 
 Router work (ADR-0007) is spread across existing steps; see [ROUTER_DESIGN.md §6](../architecture/ROUTER_DESIGN.md). Interactive pipeline view: [docs/flow/index.html](../flow/index.html).
 
+## Cross-cutting requirement: sandbox per run
+
+Every agent run (task or conversation turn) executes inside its own isolated, ephemeral environment. A run must not be able to affect the host, other runs, or any data or secret it was not explicitly given. When the run ends, the environment is destroyed and nothing persists except explicit outputs (PR, logs, artifacts).
+
+This extends the code-execution sandbox in [PROJECT_ARCH.md §12](../architecture/PROJECT_ARCH.md) from "generated code" to the whole run. Delivered by: P8.3 (per-run sandbox lifecycle on the sandbox port), P8.4 (job engine creates and destroys the sandbox for each run, including on cancel, failure and worker crash), P10.1 (isolation tests gate the release). Earlier steps must not add anything that assumes runs share a writable workspace or ambient credentials.
+
 ## Phase 1: Foundation, tooling and CI (old M0)
 
 | Step | Goal | Deliverable | Done when | Implementer |
@@ -82,8 +88,8 @@ Router work (ADR-0007) is spread across existing steps; see [ROUTER_DESIGN.md §
 |---|---|---|---|---|
 | P8.1 | Bounded workflows | LangGraph runtime with budgets/checkpoints; R29, R30, R32 | Loops stop on budget and no-progress; resume from checkpoint | Sonnet |
 | P8.2 | Agentic retrieval | R33 agentic, R34 multi-hop, R44 opt-in web fallback | Tool decisions traced; web evidence labelled; no private-query leakage test | Sonnet |
-| P8.3 | Tools and data | R43 constrained SQL, R35 multi-source routing, MCP adapter, sandbox port, R36 multi-agent | Readonly SQL denials tested; sandbox cleanup tested; multi-agent compared to single | Sonnet |
-| P8.4 | Durable jobs and scheduler | `JobEngine` interface with Postgres engine (default) and Temporal adapter (ADR-0005); persisted jobs, retries, cancellation, cron scheduler | Shared contract tests pass on both engines; cancel/retry/recovery; scheduled job survives worker restart | Sonnet |
+| P8.3 | Tools and data | R43 constrained SQL, R35 multi-source routing, MCP adapter, sandbox port with one ephemeral sandbox per run (only explicitly staged inputs and brokered credentials), R36 multi-agent | Readonly SQL denials tested; a run cannot read another run's files, host paths or unstaged secrets (tests); sandbox destroyed after the run with only declared outputs kept; multi-agent compared to single | Sonnet |
+| P8.4 | Durable jobs and scheduler | `JobEngine` interface with Postgres engine (default) and Temporal adapter (ADR-0005); persisted jobs, retries, cancellation, cron scheduler; per-run sandbox create/destroy in the job lifecycle | Shared contract tests pass on both engines; cancel/retry/recovery; scheduled job survives worker restart; no sandbox left behind after success, failure, cancel or worker crash (test) | Sonnet |
 | P8.5 | Tech Scout | `packages/scout`: fetchers, dedup, triage, cited report, `proposed` entries, approve/reject API, cost cap | Dry run produces a cited report under cap; duplicates skipped; nothing written outside the app DB | Sonnet |
 
 ## Phase 9: Web UI
@@ -100,7 +106,7 @@ Router work (ADR-0007) is spread across existing steps; see [ROUTER_DESIGN.md §
 
 | Step | Goal | Deliverable | Done when | Implementer |
 |---|---|---|---|---|
-| P10.1 | Security pass | Tenant isolation tests, prompt-injection fixtures, secret scanning, dependency audit | No high findings open; security tests fail the build independently | Sonnet |
+| P10.1 | Security pass | Tenant isolation tests, per-run sandbox isolation tests (host, cross-run, secrets, persistence), prompt-injection fixtures, secret scanning, dependency audit | No high findings open; security tests fail the build independently | Sonnet |
 | P10.2 | One-command install | Compose quickstart with Ollama, zero paid keys; clean-machine smoke test in CI | New user reaches a cited answer following README only | Sonnet |
 | P10.3 | Documentation | User guide, provider guide, plugin authoring guide, technique lesson index | Docs link check passes; a contributor adds a sample plugin from the guide | Sonnet |
 | P10.4 | Release engineering | Versioning, CHANGELOG, release workflow, container images, SBOM, license applied per ADR-0004 | Tagged pre-release builds images reproducibly | Haiku |
