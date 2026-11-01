@@ -2,14 +2,14 @@
 
 ## Current state
 
-- Current step: **P1.4** (in progress; 01–03 done, 04 push + PR pending). P1.2 and P1.3 done (Windows evidence); P1.1 waits on a Linux clean-clone run. P1.1 in progress (Linux clean-clone pending); P1.2 done (Windows evidence). Application code: `packages/core` (strict settings), `apps/api` (FastAPI `/health`), `apps/worker` (entrypoint, `--once`); no product features.
+- Current step: **P1.5** (in progress). P1.1–P1.4 done; CI green on ubuntu and windows ([PR #1](https://github.com/Mouiad-dev/Rag-lab/pull/1)). Application code: `packages/core` (strict settings), `apps/api` (FastAPI `/health`), `apps/worker` (entrypoint, heartbeat), Docker image and compose stack; no product features.
 - Delivered: architecture v2.0, [roadmap](plan/ROADMAP.md), [agent workflow](plan/AGENT_WORKFLOW.md), ADR-0001 to ADR-0004, 72-entry catalogue (schema v2), example configs, Claude Code rules/subagents, optional dev hooks with tests.
 - Technique implementation/benchmarking: none; all 72 entries `planned`, `catalog_status: accepted`.
 - Package checks: see [VALIDATION.md](VALIDATION.md).
 
 ## Next action
 
-P1.4-04: push `p1/toolchain-and-skeleton`, open a PR and record the first CI run (needs user OK). A green ubuntu `check` leg closes P1.1 (Linux clean-clone run). Then plan P1.5. The license decision below is still open.
+Implement P1.5-01..05 (specs in `docs/tasks/`). Phase 1 closes when P1.5 is done. The license decision below is still open.
 
 ## Open decisions (maintainer)
 
@@ -46,10 +46,10 @@ P1.4-04: push `p1/toolchain-and-skeleton`, open a PR and record the first CI run
 
 | Step | Goal | State | Evidence |
 |---|---|---|---|
-| P1.1 | Reproducible toolchain | in_progress | P1.1-01 and P1.1-02 Windows runs (see History 2026-11-01); Linux clean-clone pending |
+| P1.1 | Reproducible toolchain | done | Windows local runs plus CI clean clones on ubuntu-latest and windows-latest: [run 41307162676](https://github.com/Mouiad-dev/Rag-lab/actions/runs/41307162676) |
 | P1.2 | Modular skeleton | done | P1.2-01 and P1.2-02 (see History 2026-11-01); `tasks.py check` 35 passed on Windows 11 |
 | P1.3 | Local stack | done | P1.3-01..04 (see History 2026-11-01); `docker compose up -d --build --wait` all healthy on Windows 11 with zero API keys; Ollama profile not run |
-| P1.4 | Continuous integration | in_progress | P1.4-01..03 reviewed (see History 2026-11-01); P1.4-04 push + PR needs user OK; CI not run yet |
+| P1.4 | Continuous integration | done | [PR #1](https://github.com/Mouiad-dev/Rag-lab/pull/1), [run 41307162676](https://github.com/Mouiad-dev/Rag-lab/actions/runs/41307162676) green; broken catalogue fails via `tests/repo/test_catalogue_validation.py` |
 | P1.5 | Contracts and plugin contract v0 | planned | - |
 | P2.1 | Provider ports and registry | planned | - |
 | P2.2 | Local default | planned | - |
@@ -116,6 +116,7 @@ Keep entries short (3–6 lines). Archive old entries when this file grows.
 - 2026-11-01: P1.1-01 uv workspace (coder). `uv sync --locked` exit 0; `uv run pytest` 22 passed (21 hooks + 1 core); `uv run ruff check .` and `ruff format --check .` pass; `verify_package.py` PASS; `unittest discover -s tests/hooks` OK (21); `build_flow.py --check` PASS. Resolved pytest 9.2.0, ruff 0.17.3.
 - 2026-11-01: P1.1-02 task runner (coder-light). Added `scripts/tasks.py` (`repo`, `lint`, `format`, `test`, `check`) and CONTRIBUTING "Development setup". `uv run python scripts/tasks.py check` exit 0; `uv run python scripts/tasks.py lint` exit 0; `verify_package.py` PASS. Windows 11 only; P1.1 stays `in_progress` until a Linux clean-clone run exists.
 - 2026-11-01: P1.2-01 core settings (coder; reviewer APPROVE round 1). `packages/core` `Settings`/`load_settings()` (pydantic-settings, `RAG_FOUNDRY_` prefix, frozen, unknown keys rejected). `uv sync --locked` exit 0; `uv run pytest tests/core -q` 9 passed; `ruff check .` and `ruff format --check .` pass; `tasks.py check` exit 0 (30 passed: 1 import + 8 settings + 21 hooks). Review notes carried to P1.2-02: services must call `load_settings()`, not `Settings()`; future secret settings use `SecretStr`.
+- 2026-11-01: P1.4-04 push and CI (user approved push + PR). Pushed `p1/toolchain-and-skeleton`, opened [PR #1](https://github.com/Mouiad-dev/Rag-lab/pull/1) (not merged). [Run 41307162676](https://github.com/Mouiad-dev/Rag-lab/actions/runs/41307162676) on 3cd2e6e: `check (ubuntu-latest)` success, `tasks.py check` 75 passed, 0 skipped; `check (windows-latest)` success, 75 passed, 0 skipped; `image` success, db/api/worker Healthy, `/health` → `{"status":"ok","version":"0.0.0"}`. No fix commits needed. Closes P1.1 (clean clone on Linux and Windows) and P1.4.
 - 2026-11-01: P1.4-01..03 (coder-light, coder ×2; reviewer APPROVE on all three, round 1). 01: ruff now lints `scripts/` (formatting only; `verify_package.py` output and `build_flow.py --check` unchanged), hook tests run once via pytest in `tasks.py check`. 02: `tests/repo/test_catalogue_validation.py`, 10 broken-catalogue variants on a temp copy each exit 1 with the expected message, unmodified copy passes; real catalogue untouched. 03: `.github/workflows/ci.yml` with `check` (ubuntu + windows: `uv sync --locked`, `tasks.py check`, compose config on ubuntu) and `image` (ubuntu: compose build/up --wait, /health, down -v; generated password masked); actions pinned by SHA (checkout v7.0.1 3d3c42e, setup-uv v10.3.3 68559e9, uv 0.13.6), `contents: read`. Local: `ruff check .` and `ruff format --check .` pass; `tasks.py check` exit 0, 75 passed; `verify_package.py` PASS. CI has not run on GitHub yet.
 - 2026-11-01: P1.3-04 stack bring-up (coder; reviewer CHANGES_REQUESTED round 1 for bookkeeping only, fixed directly). Windows 11, Docker Engine 29.8.2. User approved core-stack image downloads only. `.env` created from `.env.example` with a random local password (git-ignored, not printed). `docker compose up -d --build --wait` exit 0; `docker compose ps`: api, db, worker healthy; `/health` on 127.0.0.1:8000 → `{"status":"ok","version":"0.0.0"}`; `docker compose port api 8000` → `127.0.0.1:8000`; pgvector `default_version` 0.8.7; `docker compose down` (volume kept). Reviewer re-ran up/ps/health/down with the same results. Images: rag-foundry-app:local 203MB, pgvector/pgvector:0.8.7-pg18-trixie 652MB. pg18 `VOLUME /var/lib/postgresql` confirmed in the docker-library postgres docs. `tasks.py check` exit 0, 60 passed. CONTRIBUTING "Local stack (Docker)" added. Ollama profile not run (not approved).
 - 2026-11-01: P1.3-01..03 (coder ×3; reviewer: 01 APPROVE, 02 CHANGES_REQUESTED fixed directly (Dockerfile secret check now joins line continuations, negative test added), 03 APPROVE). Worker `--heartbeat-file`/`--check-heartbeat` (future mtime counts as stale); non-root multi-stage `Dockerfile` (`python:3.12.16-slim-trixie`, `ghcr.io/astral-sh/uv:0.13.6`); `compose.yaml` (`pgvector/pgvector:0.8.7-pg18-trixie`, api, worker, `ollama/ollama:0.40.13` under profile `ollama`; ports on 127.0.0.1 only, db unpublished, read-only + cap_drop ALL for api/worker); `.env.example` placeholders only, `POSTGRES_PASSWORD` required. Tags checked via registry metadata, no pulls. `docker compose --env-file .env.example config --quiet` exit 0; `uv run pytest tests/worker tests/stack/test_dockerfile.py -q` 16 passed; `tasks.py check` exit 0, 60 passed. Not built or started: P1.3-04 pending user OK for ~250–350 MB of images. Open for P1.3-04: confirm pg18 data dir against postgres image docs; consider no-new-privileges/cap_drop on ollama.
