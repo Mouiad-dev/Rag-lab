@@ -21,6 +21,20 @@ Thanks for your interest. The project is in the planning stage. The most useful 
    Application test commands will be added as code lands (roadmap phase 1).
 4. Open a pull request using the template. CI must pass.
 
+### Development setup
+
+Requires [uv](https://docs.astral.sh/uv/) (0.7.9 or newer). Works on Windows, macOS and Linux without `make`.
+
+```bash
+uv sync --locked
+uv run python scripts/tasks.py check   # repo checks, lint, then tests; stops at first failure
+uv run python scripts/tasks.py lint    # ruff check and ruff format --check
+uv run pytest
+uv run ruff check .
+```
+
+The three plain `python scripts/...` checks (`verify_package.py`, `build_flow.py --check`, and the `tests/hooks` unittest run) stay stdlib-only and do not need uv.
+
 ## Proposing a technique
 
 Use the "Technique proposal" issue template. Include a primary source (paper, official repository or docs), the mechanism, the category, how it differs from existing catalogue entries, and an observable acceptance check. Accepted techniques are added to `config/techniques.json` and `docs/techniques/TECHNIQUE_CATALOG.md` together. Implementations are plugins ([ADR-0002](docs/decisions/ADR-0002-technique-plugin-system.md)).

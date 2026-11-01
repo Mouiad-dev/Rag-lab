@@ -2,14 +2,14 @@
 
 ## Current state
 
-- Current step: **P1.1** (not started). Application code: none.
+- Current step: **P1.3** (next). P1.1 in progress (Linux clean-clone pending); P1.2 done (Windows evidence). Application code: `packages/core` (strict settings), `apps/api` (FastAPI `/health`), `apps/worker` (entrypoint, `--once`); no product features.
 - Delivered: architecture v2.0, [roadmap](plan/ROADMAP.md), [agent workflow](plan/AGENT_WORKFLOW.md), ADR-0001 to ADR-0004, 72-entry catalogue (schema v2), example configs, Claude Code rules/subagents, optional dev hooks with tests.
 - Technique implementation/benchmarking: none; all 72 entries `planned`, `catalog_status: accepted`.
 - Package checks: see [VALIDATION.md](VALIDATION.md).
 
 ## Next action
 
-Run the `planner` agent on P1.1 to write the first task specs in `docs/tasks/`. Before P1.1, the maintainer should settle the license decision below.
+Plan P1.3 (local stack: `compose.yaml`, `.env.example`) with the planner. P1.1 closes after a Linux clean-clone run (`uv sync --locked`, `uv run python scripts/tasks.py check`), planned via CI in P1.4. Follow-ups for P1.4: lint `scripts/` with ruff; stop running hook tests twice in `tasks.py check`. The license decision below is still open.
 
 ## Open decisions (maintainer)
 
@@ -45,8 +45,8 @@ Run the `planner` agent on P1.1 to write the first task specs in `docs/tasks/`. 
 
 | Step | Goal | State | Evidence |
 |---|---|---|---|
-| P1.1 | Reproducible toolchain | planned | - |
-| P1.2 | Modular skeleton | planned | - |
+| P1.1 | Reproducible toolchain | in_progress | P1.1-01 and P1.1-02 Windows runs (see History 2026-11-01); Linux clean-clone pending |
+| P1.2 | Modular skeleton | done | P1.2-01 and P1.2-02 (see History 2026-11-01); `tasks.py check` 35 passed on Windows 11 |
 | P1.3 | Local stack | planned | - |
 | P1.4 | Continuous integration | planned | - |
 | P1.5 | Contracts and plugin contract v0 | planned | - |
@@ -112,6 +112,10 @@ Keep entries short (3–6 lines). Archive old entries when this file grows.
 
 ## History
 
+- 2026-11-01: P1.1-01 uv workspace (coder). `uv sync --locked` exit 0; `uv run pytest` 22 passed (21 hooks + 1 core); `uv run ruff check .` and `ruff format --check .` pass; `verify_package.py` PASS; `unittest discover -s tests/hooks` OK (21); `build_flow.py --check` PASS. Resolved pytest 9.2.0, ruff 0.17.3.
+- 2026-11-01: P1.1-02 task runner (coder-light). Added `scripts/tasks.py` (`repo`, `lint`, `format`, `test`, `check`) and CONTRIBUTING "Development setup". `uv run python scripts/tasks.py check` exit 0; `uv run python scripts/tasks.py lint` exit 0; `verify_package.py` PASS. Windows 11 only; P1.1 stays `in_progress` until a Linux clean-clone run exists.
+- 2026-11-01: P1.2-01 core settings (coder; reviewer APPROVE round 1). `packages/core` `Settings`/`load_settings()` (pydantic-settings, `RAG_FOUNDRY_` prefix, frozen, unknown keys rejected). `uv sync --locked` exit 0; `uv run pytest tests/core -q` 9 passed; `ruff check .` and `ruff format --check .` pass; `tasks.py check` exit 0 (30 passed: 1 import + 8 settings + 21 hooks). Review notes carried to P1.2-02: services must call `load_settings()`, not `Settings()`; future secret settings use `SecretStr`.
+- 2026-11-01: P1.2-02 API and worker (coder; reviewer CHANGES_REQUESTED round 1, fixed directly: lower bounds `fastapi>=0.162.0`, `uvicorn>=0.54.0`; API test now captures server output on startup failure). Locked fastapi 0.162.0, starlette 1.10.0, uvicorn 0.54.0. httpx not added (needs user OK); API tests run the server in a subprocess and use urllib. `uv lock` and `uv sync --locked` exit 0; `ruff check .` and `ruff format --check .` pass; `tasks.py check` exit 0, 35 passed (3 api, 9 core, 21 hooks, 2 worker); `uv run rag-foundry-worker --once` logs `worker started env=dev`, exit 0. `FastAPI(title, version)`, `app.state` and `uvicorn.run(app, host, port, log_level)` checked against fastapi.tiangolo.com and uvicorn.dev: current, not deprecated. Windows 11 only.
 - 2026-10-14: v1.0 planning pack (67 catalogue entries, M0–M9 milestones).
 - 2026-10-26: v1.1 added R47–R51 (CAG, KAG, prefix KV, exact and semantic response caches) and independent-consumer/source-anchor contracts.
 - 2026-10-26: v2.0 restructure. Project moved to repo root; provider-agnostic layer, technique plugin system, in-app Tech Scout and open-source goal added; M0–M9 replaced by 10 phases × 5 steps (mapping in the roadmap); catalogue schema v2; planner/coder/reviewer agent workflow. No application milestone completed; no benchmark run.

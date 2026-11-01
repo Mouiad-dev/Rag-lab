@@ -31,6 +31,10 @@ Planner → coder → reviewer, defined in `.claude/agents/` and `docs/plan/AGEN
 python scripts/verify_package.py
 python -m unittest discover -s tests/hooks -v
 python scripts/build_flow.py   # regenerate docs/flow/index.html after editing config/pipeline_stages.json
+uv sync --locked               # install the uv workspace (requires uv >= 0.7.9)
+uv run python scripts/tasks.py check   # all repo checks, ruff lint and pytest; stops at first failure
+uv run pytest
+uv run ruff check .
 ```
 
 Optional dev hooks: `.claude/settings.example.json`, see `docs/HOOKS.md`.
