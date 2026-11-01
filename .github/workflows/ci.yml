@@ -1,28 +1,65 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  repo-checks:
+  check:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6" # keep in sync with the Dockerfile
           python-version: "3.12"
-      - name: Verify repository structure and catalogue
-        run: python scripts/verify_package.py
-      - name: Hook tests
-        run: python -m unittest discover -s tests/hooks -v
-      - name: Flow view is up to date
-        run: python scripts/build_flow.py --check
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install workspace
+        run: uv sync --locked
+      - name: Repo checks, lint and tests
+        run: uv run python scripts/tasks.py check
+      - name: Validate compose model
+        if: runner.os == 'Linux'
+        run: docker compose --env-file .env.example config --quiet
+
+  image:
+    runs-on: ubuntu-latest
+    needs: check
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Write .env with a random database password
+        run: |
+          pw="$(openssl rand -hex 24)"
+          echo "::add-mask::${pw}"
+          sed "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${pw}/" .env.example > .env
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Smoke test the API
+        run: |
+          curl -fsS http://127.0.0.1:8000/health
+          docker compose ps
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

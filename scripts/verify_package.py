@@ -6,10 +6,9 @@ Standard library only. No network, no installs, no model calls.
 
 import ast
 import json
-from pathlib import Path
 import re
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKIP_DIRS = {".git", ".idea", ".venv", "node_modules", "private", "__pycache__"}
@@ -17,19 +16,42 @@ PHASES, STEPS_PER_PHASE = 10, 5
 EXPECTED_AGENTS = {"planner": "opus", "coder": "sonnet", "coder-light": "haiku", "reviewer": "opus"}
 EXPECTED_RULES = 9
 REQUIRED = [
-    "README.md", "CLAUDE.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md", ".gitignore",
-    "docs/architecture/PROJECT_ARCH.md", "docs/architecture/SUMMARY.md",
-    "docs/architecture/REUSE_AND_INTEGRATION.md", "docs/architecture/SOURCE_ANCHORS_AND_MEDIA.md",
-    "docs/plan/ROADMAP.md", "docs/plan/AGENT_WORKFLOW.md",
-    "docs/techniques/TECHNIQUE_CATALOG.md", "docs/techniques/CACHE_AND_KNOWLEDGE_LABS.md",
-    "docs/decisions/ADR-0001-provider-agnostic-layer.md", "docs/decisions/ADR-0002-technique-plugin-system.md",
-    "docs/decisions/ADR-0003-in-app-tech-scout.md", "docs/decisions/ADR-0004-open-source-license.md",
-    "docs/templates/TECHNIQUE.md", "docs/templates/EXPERIMENT.md", "docs/templates/ADR.md", "docs/templates/TASK.md",
-    "docs/PROGRESS.md", "docs/HOOKS.md", "docs/SOURCES.md", "docs/VALIDATION.md",
-    "config/techniques.json", "config/experiment.example.json", "config/source-media.example.json",
-    "config/providers.example.json", "config/scout.example.json",
-    ".claude/settings.example.json", ".claude/hooks/dev_hooks.py", "tests/hooks/test_dev_hooks.py",
-    ".github/workflows/ci.yml", ".github/PULL_REQUEST_TEMPLATE.md",
+    "README.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
+    ".gitignore",
+    "docs/architecture/PROJECT_ARCH.md",
+    "docs/architecture/SUMMARY.md",
+    "docs/architecture/REUSE_AND_INTEGRATION.md",
+    "docs/architecture/SOURCE_ANCHORS_AND_MEDIA.md",
+    "docs/plan/ROADMAP.md",
+    "docs/plan/AGENT_WORKFLOW.md",
+    "docs/techniques/TECHNIQUE_CATALOG.md",
+    "docs/techniques/CACHE_AND_KNOWLEDGE_LABS.md",
+    "docs/decisions/ADR-0001-provider-agnostic-layer.md",
+    "docs/decisions/ADR-0002-technique-plugin-system.md",
+    "docs/decisions/ADR-0003-in-app-tech-scout.md",
+    "docs/decisions/ADR-0004-open-source-license.md",
+    "docs/templates/TECHNIQUE.md",
+    "docs/templates/EXPERIMENT.md",
+    "docs/templates/ADR.md",
+    "docs/templates/TASK.md",
+    "docs/PROGRESS.md",
+    "docs/HOOKS.md",
+    "docs/SOURCES.md",
+    "docs/VALIDATION.md",
+    "config/techniques.json",
+    "config/experiment.example.json",
+    "config/source-media.example.json",
+    "config/providers.example.json",
+    "config/scout.example.json",
+    ".claude/settings.example.json",
+    ".claude/hooks/dev_hooks.py",
+    "tests/hooks/test_dev_hooks.py",
+    ".github/workflows/ci.yml",
+    ".github/PULL_REQUEST_TEMPLATE.md",
 ]
 PRIVATE_MARKERS = re.compile(r"\bTora\b|Tiger Lab|tora-main|DIPANSHU", re.IGNORECASE)
 
@@ -65,7 +87,10 @@ def check_roadmap(errors):
     steps = re.findall(r"^\| (P\d+\.\d+) \|", road, re.M)
     expected = [f"P{p}.{s}" for p in range(1, PHASES + 1) for s in range(1, STEPS_PER_PHASE + 1)]
     if steps != expected:
-        errors.append(f"ROADMAP.md must have exactly {STEPS_PER_PHASE} steps per phase ({len(expected)} total); found {len(steps)}.")
+        errors.append(
+            f"ROADMAP.md must have exactly {STEPS_PER_PHASE} steps per phase "
+            f"({len(expected)} total); found {len(steps)}."
+        )
     progress = re.findall(r"^\| (P\d+\.\d+) \|", read("docs/PROGRESS.md"), re.M)
     if progress != expected:
         errors.append(f"PROGRESS.md must track the same {len(expected)} steps as ROADMAP.md; found {len(progress)}.")
@@ -132,7 +157,12 @@ def check_claude_config(errors):
             continue
         head = path.read_text(encoding="utf-8").split("---")
         meta = head[1] if len(head) > 2 else ""
-        if f"name: {name}" not in meta or f"model: {model}" not in meta or "description:" not in meta or "tools:" not in meta:
+        if (
+            f"name: {name}" not in meta
+            or f"model: {model}" not in meta
+            or "description:" not in meta
+            or "tools:" not in meta
+        ):
             errors.append(f"Agent frontmatter incomplete or wrong model: {name}")
     if len(read("CLAUDE.md").splitlines()) > 60:
         errors.append("CLAUDE.md should stay under 60 lines (loaded every session).")
@@ -174,9 +204,11 @@ def main():
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print(f"PASS: structure, Python/JSON syntax, {count} catalogue entries (schema v2, in sync), "
-          f"roadmap {PHASES}x{STEPS_PER_PHASE} steps tracked in PROGRESS, hook example commands, "
-          f"{rules} rules, {len(EXPECTED_AGENTS)} agents, local Markdown links, no private references.")
+    print(
+        f"PASS: structure, Python/JSON syntax, {count} catalogue entries (schema v2, in sync), "
+        f"roadmap {PHASES}x{STEPS_PER_PHASE} steps tracked in PROGRESS, hook example commands, "
+        f"{rules} rules, {len(EXPECTED_AGENTS)} agents, local Markdown links, no private references."
+    )
     if (ROOT / ".claude/settings.json").exists():
         print("Note: .claude/settings.json exists and is active for everyone who opens this repo; see docs/HOOKS.md.")
     print("Scope: planning/configuration validation only; no application was executed.")

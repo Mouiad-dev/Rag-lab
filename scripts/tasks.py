@@ -3,14 +3,14 @@
 
 Standard library only. Tools (ruff, pytest) run through the current interpreter,
 so start this script with `uv run python scripts/tasks.py <command>`.
+Hook tests (tests/hooks) run in the `test` group through pytest, not in `repo`.
 Commands are executed as argument lists without a shell.
 """
 
 import argparse
-from pathlib import Path
 import subprocess
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -19,7 +19,6 @@ PY = sys.executable
 GROUPS = {
     "repo": [
         [PY, str(SCRIPTS / "verify_package.py")],
-        [PY, "-m", "unittest", "discover", "-s", "tests/hooks", "-v"],
         [PY, str(SCRIPTS / "build_flow.py"), "--check"],
     ],
     "lint": [

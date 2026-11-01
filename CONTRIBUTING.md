@@ -33,7 +33,7 @@ uv run pytest
 uv run ruff check .
 ```
 
-The three plain `python scripts/...` checks (`verify_package.py`, `build_flow.py --check`, and the `tests/hooks` unittest run) stay stdlib-only and do not need uv.
+The three plain `python scripts/...` checks (`verify_package.py`, `build_flow.py --check`, and the `tests/hooks` unittest run) stay stdlib-only and do not need uv. `tasks.py check` runs the hook tests once, through pytest (the `test` group), not through unittest.
 
 ### Local stack (Docker)
 

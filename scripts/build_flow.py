@@ -7,6 +7,7 @@ Usage:
     python scripts/build_flow.py --check  # validate and fail if the HTML is stale
 Standard library only; the output is one self-contained file (no CDN, works offline).
 """
+
 from __future__ import annotations
 
 import json
@@ -30,7 +31,7 @@ def validate(stages: dict, catalog: dict) -> list[str]:
     ids = {t["id"] for t in catalog["techniques"]}
     stage_ids = {s["id"] for s in stages["stages"]}
     router_ids = {r["id"] for r in stages["routers"]}
-    lanes = {l["id"] for l in stages["lanes"]}
+    lanes = {ln["id"] for ln in stages["lanes"]}
     primary: dict[str, str] = {}
     for s in stages["stages"]:
         if s["lane"] not in lanes:
@@ -84,11 +85,15 @@ def main() -> int:
         return 0
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(html, encoding="utf-8", newline="\n")
-    print(f"Wrote {OUT.relative_to(ROOT)} ({len(catalog['techniques'])} techniques, "
-          f"{len(stages['stages'])} stages, {len(stages['routers'])} routers)")
+    print(
+        f"Wrote {OUT.relative_to(ROOT)} ({len(catalog['techniques'])} techniques, "
+        f"{len(stages['stages'])} stages, {len(stages['routers'])} routers)"
+    )
     return 0
 
 
+# Long lines below are the embedded HTML/CSS/JS; wrapping them would change the generated file.
+# ruff: noqa: E501
 TEMPLATE = r"""<!doctype html>
 <html lang="en">
 <head>

@@ -8,7 +8,7 @@ Environment: Windows 11, Git Bash, Python 3.14.0 (`python`).
 - Negative check: a temporary Markdown file with a broken link and a private marker made the script fail with both errors; the file was removed.
 - `python -m unittest discover -s tests/hooks -v`: PASS, 21 tests, 0 skipped (symlink tests ran on this machine). The orientation test now also asserts the 72-entry text.
 - Hooks were not activated in a live Claude Code session; `.claude/settings.example.json` is not loaded by Claude Code.
-- No application, model, database, provider or Tech Scout code exists or was run. CI workflow (`.github/workflows/ci.yml`) has not run yet; it will on the first push.
+- No application, model, database, provider or Tech Scout code exists or was run. CI workflow (`.github/workflows/ci.yml`) has not run yet; it will on the first push. Jobs: `check` (uv sync --locked and `scripts/tasks.py check` on ubuntu and windows, plus a compose config check on ubuntu) and `image` (ubuntu: compose build, health check, teardown).
 
 ## Earlier versions (summary)
 
