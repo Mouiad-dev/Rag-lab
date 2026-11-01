@@ -5,7 +5,9 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "rag-foundry-api",
+    "rag-foundry-contracts",
     "rag-foundry-core",
+    "rag-foundry-techniques",
     "rag-foundry-worker",
 ]
 
@@ -13,7 +15,9 @@ members = [
 dev = [
     { name = "pytest", specifier = ">=9.2" },
     { name = "rag-foundry-api", editable = "apps/api" },
+    { name = "rag-foundry-contracts", editable = "packages/contracts" },
     { name = "rag-foundry-core", editable = "packages/core" },
+    { name = "rag-foundry-techniques", editable = "packages/techniques" },
     { name = "rag-foundry-worker", editable = "apps/worker" },
     { name = "ruff", specifier = ">=0.17" },
 ]
@@ -329,6 +333,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "rag-foundry-contracts"
+version = "0.0.0"
+source = { editable = "packages/contracts" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.14.2" }]
+
+[[package]]
 name = "rag-foundry-core"
 version = "0.0.0"
 source = { editable = "packages/core" }
@@ -342,6 +357,17 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.14.2" },
     { name = "pydantic-settings", specifier = ">=2.16.2" },
 ]
+
+[[package]]
+name = "rag-foundry-techniques"
+version = "0.0.0"
+source = { editable = "packages/techniques" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.14.2" }]
 
 [[package]]
 name = "rag-foundry-worker"

@@ -34,6 +34,7 @@ Start as one deployable API plus one worker. No microservices until a measured n
 | Routing | 8 stage routers (3 ingest, 5 query) behind one `Router` contract; orchestrator emits one replayable plan; L0→L4 policies gated by held-out regret (ADR-0007, proposed) | [ROUTER_DESIGN.md](ROUTER_DESIGN.md) |
 | Frontend | React + TypeScript + Vite + TanStack Query; SSE for live events | §3 |
 | Isolation | Generated code only in a sandbox service, never in the API process | §12 |
+| Independence | RAG Foundry builds, starts and tests without consumers; integration only via versioned contracts, `/api/v1` and source bundles | [ADR-0008](../decisions/ADR-0008-independent-product-and-consumers.md) |
 
 ## Core contracts
 - **Provenance.** Immutable document versions → extraction views → **source anchors** (Unicode code-point offsets, page geometry with stated precision). Anchors survive rechunking; chunk IDs do not. §6, [SOURCE_ANCHORS_AND_MEDIA.md](SOURCE_ANCHORS_AND_MEDIA.md).

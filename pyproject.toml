@@ -2,15 +2,17 @@
 required-version = ">=0.7.9"
 
 [tool.uv.workspace]
-members = ["packages/core", "apps/api", "apps/worker"]
+members = ["packages/core", "packages/contracts", "packages/techniques", "apps/api", "apps/worker"]
 
 [tool.uv.sources]
 rag-foundry-core = { workspace = true }
+rag-foundry-contracts = { workspace = true }
+rag-foundry-techniques = { workspace = true }
 rag-foundry-api = { workspace = true }
 rag-foundry-worker = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-api", "rag-foundry-worker"]
+dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-contracts", "rag-foundry-techniques", "rag-foundry-api", "rag-foundry-worker"]
 
 [tool.ruff]
 target-version = "py312"

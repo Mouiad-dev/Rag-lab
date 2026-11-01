@@ -9,5 +9,6 @@
 | [ADR-0005](ADR-0005-pluggable-job-engine.md) | Pluggable job engine (PostgreSQL queue + Temporal) | accepted |
 | [ADR-0006](ADR-0006-observability-otel-and-langsmith.md) | Observability: OpenTelemetry + LangSmith | accepted |
 | [ADR-0007](ADR-0007-router-architecture.md) | Router architecture: many stage routers, one plan | proposed |
+| [ADR-0008](ADR-0008-independent-product-and-consumers.md) | Independent product; consumers integrate through contracts | accepted |
 
 New ADRs use [the template](../templates/ADR.md).

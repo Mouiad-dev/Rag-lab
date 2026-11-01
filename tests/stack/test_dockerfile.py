@@ -1,6 +1,7 @@
 """Static checks on the Dockerfile and .dockerignore. Text parsing only; no docker needed."""
 
 import re
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +61,14 @@ def test_no_credential_named_env_or_arg():
 def test_credential_check_sees_continuation_lines():
     text = "FROM python:3.12.16-slim-trixie\nENV A=1 \\\n    OPENAI_API_KEY=x\n"
     assert _credential_names(_lines(text)) == ["OPENAI_API_KEY"]
+
+
+def test_every_workspace_member_manifest_is_copied_in_dependency_layer():
+    members = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["uv"]["workspace"]["members"]
+    assert members
+    lines = _lines()
+    for member in members:
+        assert f"COPY {member}/pyproject.toml {member}/pyproject.toml" in lines, f"missing COPY for {member}"
 
 
 def test_dockerignore_excludes_env_and_git():
