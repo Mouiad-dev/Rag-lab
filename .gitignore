@@ -1,0 +1,34 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!.env.template
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+
+# Editors and IDEs
+.idea/
+.vscode/
+
+# Claude Code personal settings (enable dev hooks here; see docs/HOOKS.md)
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Private owner material: never published (see docs/SOURCES.md)
+private/
+data/private/
+artifacts/private/
