@@ -13,6 +13,7 @@ COPY pyproject.toml uv.lock ./
 COPY packages/core/pyproject.toml packages/core/pyproject.toml
 COPY packages/contracts/pyproject.toml packages/contracts/pyproject.toml
 COPY packages/techniques/pyproject.toml packages/techniques/pyproject.toml
+COPY packages/providers/pyproject.toml packages/providers/pyproject.toml
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 RUN uv sync --locked --no-dev --all-packages --no-install-workspace
