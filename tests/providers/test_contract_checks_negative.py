@@ -216,7 +216,11 @@ CHAT_NEGATIVE: list[tuple[str, Callable[[Any], Any], Callable[[], BrokenChat]]] 
     ("stream_usage_on_two_chunks", cc.check_chat_stream, lambda: BrokenChat(chunks_fn=_usage_on_two)),
     ("stream_operation_chat", cc.check_chat_stream, lambda: BrokenChat(chunks_fn=_stream_op_chat)),
     ("stream_empty_joined_text", cc.check_chat_stream, lambda: BrokenChat(chunks_fn=_empty_deltas)),
-    ("stream_text_differs_from_complete", cc.check_chat_stream, lambda: BrokenChat(chunks_fn=_different_text)),
+    (
+        "stream_text_differs_from_complete",
+        cc.check_chat_stream_matches_complete,
+        lambda: BrokenChat(chunks_fn=_different_text),
+    ),
     (
         "stream_undeclared_but_yields",
         cc.check_chat_stream,

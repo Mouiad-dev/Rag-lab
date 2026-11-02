@@ -105,6 +105,15 @@ async def check_chat_stream(model: Any) -> None:
     joined = "".join(c.delta for c in chunks)
     if not joined:
         _fail("concatenated stream text is empty")
+
+
+async def check_chat_stream_matches_complete(model: Any) -> None:
+    """Stream text equals complete() text. Only for deterministic adapters (e.g. the fake):
+    real models sample, so two calls can differ even with the same request."""
+    if model.profile.declared(Capability.STREAMING) is not True:
+        return
+    request = _req()
+    joined = "".join(c.delta for c in await _drain(model, request))
     complete = await model.complete(request)
     if joined != complete.text:
         _fail("stream chunks joined do not equal complete() text for the same request")
@@ -142,6 +151,9 @@ CHAT_CHECKS: tuple[Callable[[Any], Awaitable[None]], ...] = (
     check_chat_tools,
     check_chat_structured,
 )
+
+# Extra checks for deterministic adapters only (the fake provider); not for real models.
+DETERMINISTIC_CHAT_CHECKS: tuple[Callable[[Any], Awaitable[None]], ...] = (check_chat_stream_matches_complete,)
 
 # --- embeddings ---------------------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 """Typed errors for the providers package. None subclass KeyError or LookupError."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 
 class ProviderError(Exception):
@@ -64,3 +65,27 @@ class MissingCapabilityError(ProviderError):
             raise ValueError("MissingCapabilityError needs at least one problem")
         self.problems = problems
         super().__init__("; ".join(p.describe() for p in problems))
+
+
+class AdapterDependencyError(ProviderError):
+    """An adapter needs an optional dependency that is not installed."""
+
+    def __init__(self) -> None:
+        super().__init__("install rag-foundry-providers[ollama]")
+
+
+ProviderCallReason = Literal["connection", "timeout", "model_not_found", "input_too_long", "bad_response"]
+
+
+class ProviderCallError(ProviderError):
+    """A provider call failed. The message holds only the reason and HTTP status.
+
+    It never includes request text, response bodies, headers or environment values.
+    """
+
+    def __init__(self, profile_id: str, reason: ProviderCallReason, *, status: int | None = None) -> None:
+        self.profile_id = profile_id
+        self.reason = reason
+        self.status = status
+        suffix = f" (HTTP {status})" if status is not None else ""
+        super().__init__(f"profile '{profile_id}' call failed: {reason}{suffix}")

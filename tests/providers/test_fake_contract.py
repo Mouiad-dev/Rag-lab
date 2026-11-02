@@ -13,7 +13,13 @@ from rag_foundry_providers import (
     fake_embedding_profile,
     fake_reranker_profile,
 )
-from rag_foundry_providers.contract_checks import CHAT_CHECKS, EMBEDDING_CHECKS, REGISTRY_CHECKS, RERANK_CHECKS
+from rag_foundry_providers.contract_checks import (
+    CHAT_CHECKS,
+    DETERMINISTIC_CHAT_CHECKS,
+    EMBEDDING_CHECKS,
+    REGISTRY_CHECKS,
+    RERANK_CHECKS,
+)
 
 _BLOCKED = "network blocked in provider tests"
 
@@ -23,7 +29,9 @@ def _ids(checks: tuple) -> list[str]:
 
 
 @pytest.mark.parametrize("streaming", [True, False], ids=["streaming", "no-streaming"])
-@pytest.mark.parametrize("check", CHAT_CHECKS, ids=_ids(CHAT_CHECKS))
+@pytest.mark.parametrize(
+    "check", CHAT_CHECKS + DETERMINISTIC_CHAT_CHECKS, ids=_ids(CHAT_CHECKS + DETERMINISTIC_CHAT_CHECKS)
+)
 def test_chat_contract(check, streaming: bool) -> None:
     asyncio.run(check(FakeChatModel(fake_chat_profile(streaming=streaming))))
 

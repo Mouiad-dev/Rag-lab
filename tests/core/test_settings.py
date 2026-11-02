@@ -46,6 +46,47 @@ def test_unknown_env_file_key_rejected(tmp_path):
         load_settings(str(f))
 
 
+def test_ollama_base_url_default():
+    assert load_settings().ollama_base_url == "http://127.0.0.1:11434"
+
+
+def test_ollama_base_url_env_override(monkeypatch):
+    monkeypatch.setenv("RAG_FOUNDRY_OLLAMA_BASE_URL", "http://ollama:11434")
+    assert load_settings().ollama_base_url == "http://ollama:11434"
+
+
+def test_ollama_base_url_trailing_slash_stripped():
+    assert Settings(ollama_base_url="https://host:11434/").ollama_base_url == "https://host:11434"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://x",
+        "127.0.0.1:11434",
+        "http://u:p@host:11434",
+        "http://host/?a=1",
+        "http://host/#frag",
+        "http://",
+        " http://host:11434",
+        "http://host:11434\n",
+        "http://ho\tst:11434",
+        "http://host:99999",
+        "http://host:abc",
+    ],
+)
+def test_ollama_base_url_rejected(url):
+    with pytest.raises(ValidationError):
+        Settings(ollama_base_url=url)
+
+
+def test_ollama_base_url_user_info_not_echoed(monkeypatch):
+    monkeypatch.setenv("RAG_FOUNDRY_OLLAMA_BASE_URL", "http://u:hunter2-secret@host:11434")
+    with pytest.raises(ValidationError) as exc:
+        load_settings()
+    assert "hunter2-secret" not in str(exc.value)
+
+
 @pytest.mark.parametrize("kwargs", [{"api_port": 0}, {"environment": "staging"}])
 def test_invalid_values_rejected(kwargs):
     with pytest.raises(ValidationError):

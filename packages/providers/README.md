@@ -14,7 +14,7 @@ Provider-agnostic model layer (ADR-0001, see `docs/decisions/ADR-0001-provider-a
 ## Reusing the contract checks
 
 `rag_foundry_providers.contract_checks` has plain async functions with no pytest import, grouped in
-`CHAT_CHECKS`, `EMBEDDING_CHECKS`, `RERANK_CHECKS` and `REGISTRY_CHECKS` (called as `check(registry, profile_id)`).
+`CHAT_CHECKS`, `EMBEDDING_CHECKS`, `RERANK_CHECKS` and `REGISTRY_CHECKS` (called as `check(registry, profile_id)`). `DETERMINISTIC_CHAT_CHECKS` adds a stream-equals-`complete()` check for deterministic adapters such as the fake; real models sample, so it does not apply to them.
 An adapter test runs each one against its model:
 
 ```python
@@ -25,6 +25,22 @@ def test_my_adapter(check):
 
 Capabilities a profile does not declare as `True` are checked on their refusal path (`MissingCapabilityError`).
 
-## Not yet
+## Local Ollama (P2.2)
 
-There are no real adapters, no keys and no network access in this package. The local Ollama default arrives in P2.2.
+Direct HTTP adapters (`rag_foundry_providers.adapters.ollama`), no API keys. This is a direct adapter; whether
+LiteLLM replaces it is re-decided at P2.3/P2.4.
+
+- Install the extra: `uv sync --locked --extra ollama` (or add `rag-foundry-providers[ollama]`); it pulls in `httpx`.
+- Default profiles: `ollama_chat_profile()` is `gemma4:e4b` (effective `num_ctx` 8192); `ollama_embedding_profile()`
+  is `bge-m3` (1024 dims). Both have zero cost rates (hardware cost is not modelled).
+- Run Ollama natively (0.40.13 verified), or with Docker: `docker compose --profile ollama up -d ollama`.
+- Pull the models (sizes from `docs/plan/FREE_MODELS.md`): `ollama pull gemma4:e4b` (6.6 GB) and
+  `ollama pull bge-m3` (1.2 GB).
+- Token counts are `provider` when Ollama returns them and `estimated` when it omits them.
+- Opt-in live test (skipped by default, CI stays offline; the first call can be slow while the model loads):
+
+```powershell
+$env:RAG_LIVE_OLLAMA = "1"; uv run pytest tests/live -m live -v -s
+```
+
+The base URL comes from `RAG_FOUNDRY_OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`).
