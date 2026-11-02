@@ -20,6 +20,7 @@ from rag_foundry_providers.fake import (
     fake_embedding_profile,
     fake_reranker_profile,
 )
+from rag_foundry_providers.ledger import RecordingChatModel, UsageLedger, UsageSink, UsageTotals
 from rag_foundry_providers.messages import (
     ChatChunk,
     ChatMessage,
@@ -58,6 +59,7 @@ __all__ = [
     "ProviderError",
     "ProviderRegistry",
     "ProviderUnavailableError",
+    "RecordingChatModel",
     "RerankItem",
     "RerankResult",
     "Reranker",
@@ -68,6 +70,9 @@ __all__ = [
     "ToolSpec",
     "UnknownProfileError",
     "Usage",
+    "UsageLedger",
+    "UsageSink",
+    "UsageTotals",
     "check_chat_request",
     "contract_checks",
     "estimate_cost",

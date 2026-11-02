@@ -1,7 +1,10 @@
 """Typed errors for the providers package. None subclass KeyError or LookupError."""
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from rag_foundry_providers.usage import Usage
 
 
 class ProviderError(Exception):
@@ -70,11 +73,33 @@ class MissingCapabilityError(ProviderError):
 class AdapterDependencyError(ProviderError):
     """An adapter needs an optional dependency that is not installed."""
 
-    def __init__(self) -> None:
-        super().__init__("install rag-foundry-providers[ollama]")
+    def __init__(self, extra: str = "ollama") -> None:
+        super().__init__(f"install rag-foundry-providers[{extra}]")
 
 
-ProviderCallReason = Literal["connection", "timeout", "model_not_found", "input_too_long", "bad_response"]
+class MissingCredentialError(ProviderError):
+    """A required credential environment variable is not set. The message names the variable only."""
+
+    def __init__(self, env_var: str) -> None:
+        self.env_var = env_var
+        super().__init__(f"environment variable {env_var} is not set or empty")
+
+
+# "billing" is used for HTTP 402 (Anthropic billing_error); "auth" covers 401 and 403.
+ProviderCallReason = Literal[
+    "connection",
+    "timeout",
+    "model_not_found",
+    "input_too_long",
+    "bad_response",
+    "auth",
+    "billing",
+    "rate_limited",
+    "overloaded",
+    "server_error",
+    "invalid_request",
+    "refused",
+]
 
 
 class ProviderCallError(ProviderError):
@@ -83,9 +108,21 @@ class ProviderCallError(ProviderError):
     It never includes request text, response bodies, headers or environment values.
     """
 
-    def __init__(self, profile_id: str, reason: ProviderCallReason, *, status: int | None = None) -> None:
+    def __init__(
+        self,
+        profile_id: str,
+        reason: ProviderCallReason,
+        *,
+        status: int | None = None,
+        request_id: str | None = None,
+        usage: "Usage | None" = None,
+    ) -> None:
         self.profile_id = profile_id
         self.reason = reason
         self.status = status
+        self.request_id = request_id  # non-secret provider request id; kept out of the message
+        # Billed usage of a 200 reply that still failed (for example a refusal), so callers can
+        # record the cost. Never part of the message, str or repr.
+        self.usage = usage
         suffix = f" (HTTP {status})" if status is not None else ""
         super().__init__(f"profile '{profile_id}' call failed: {reason}{suffix}")

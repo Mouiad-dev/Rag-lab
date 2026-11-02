@@ -44,3 +44,27 @@ $env:RAG_LIVE_OLLAMA = "1"; uv run pytest tests/live -m live -v -s
 ```
 
 The base URL comes from `RAG_FOUNDRY_OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`).
+
+## Anthropic (P2.3)
+
+Direct HTTP chat adapter (`rag_foundry_providers.adapters.anthropic`, `AnthropicChatModel`). Chat only: Anthropic has no
+embeddings API, so there is no embedding adapter.
+
+- Install the extra: `uv sync --locked --extra anthropic` (or add `rag-foundry-providers[anthropic]`); it pulls in `httpx`.
+- The key comes only from the `ANTHROPIC_API_KEY` environment variable. Never put it in settings, config, fixtures or logs.
+- Profiles: `anthropic_haiku_profile()` is `claude-haiku-5-5` (thinking disabled, default `max_tokens` 1024);
+  `anthropic_sonnet_profile()` is `claude-sonnet-5-5` (thinking cannot be disabled, default `max_tokens` 16384).
+  Rates in USD per MTok, verified 2026-11-02 (ADR-0001): Haiku in 0.10, out 0.50, cache read 0.01, 5-minute cache write
+  0.125 (prompts up to 100,000 tokens; above that the cost is unknown, `None`); Sonnet in 2, out 10, cache read 0.10,
+  5-minute cache write 2.50. 1-hour cache writes have unknown cost.
+- Tools, structured output and vision are refused until P2.4. `temperature` is refused (the API rejects it).
+- No retries until P2.5: every call is a single attempt.
+- Usage is provider-sourced and includes cache read and write tokens. `UsageLedger` (append-only, in memory) and
+  `RecordingChatModel` (`rag_foundry_providers.ledger`) record each call's tokens and cost; totals report cost as `None`
+  when any call has unknown cost.
+- Opt-in PAID live test (skipped by default). It uses Haiku, `max_output_tokens` 64 (32 for the two prompt tests), about
+  5 to 8 calls, and a hard cap of USD 0.05 per run checked before each call against the worst-case cost:
+
+```powershell
+$k = Read-Host -AsSecureString 'Anthropic key'; $env:ANTHROPIC_API_KEY = [System.Net.NetworkCredential]::new('', $k).Password; $env:RAG_LIVE_ANTHROPIC = '1'; uv run pytest tests/live/test_anthropic_live.py -m live -v -s; Remove-Item Env:ANTHROPIC_API_KEY, Env:RAG_LIVE_ANTHROPIC; Remove-Variable k
+```

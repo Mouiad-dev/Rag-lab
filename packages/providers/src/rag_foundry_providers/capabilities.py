@@ -62,6 +62,8 @@ class ModelProfile(BaseModel):
     capabilities: Capabilities = Field(default_factory=Capabilities)
     cost_per_mtok_in: Decimal | None = Field(default=None, ge=0)
     cost_per_mtok_out: Decimal | None = Field(default=None, ge=0)
+    cost_per_mtok_cache_read: Decimal | None = Field(default=None, ge=0)
+    cost_per_mtok_cache_write: Decimal | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def _check_kind(self) -> Self:
