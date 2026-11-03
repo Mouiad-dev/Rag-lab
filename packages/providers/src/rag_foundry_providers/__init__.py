@@ -1,14 +1,27 @@
 """Provider-agnostic model layer: ports, profiles, registry and usage records (ADR-0001)."""
 
 from rag_foundry_providers import contract_checks
+from rag_foundry_providers.budget import (
+    BudgetedChatModel,
+    BudgetedEmbeddingModel,
+    BudgetSnapshot,
+    Reservation,
+    RunBudget,
+    worst_case_chat_cost,
+    worst_case_embed_cost,
+)
 from rag_foundry_providers.capabilities import Capabilities, Capability, ModelKind, ModelProfile
 from rag_foundry_providers.errors import (
+    BudgetError,
+    BudgetExceededError,
+    BudgetRequiredError,
     CapabilityProblem,
     DuplicateProfileError,
     MissingCapabilityError,
     ProfileKindError,
     ProviderError,
     ProviderUnavailableError,
+    UnboundedCostError,
     UnboundStageError,
     UnknownProfileError,
 )
@@ -21,7 +34,13 @@ from rag_foundry_providers.fake import (
     fake_embedding_profile,
     fake_reranker_profile,
 )
-from rag_foundry_providers.ledger import RecordingChatModel, UsageLedger, UsageSink, UsageTotals
+from rag_foundry_providers.ledger import (
+    RecordingChatModel,
+    RecordingEmbeddingModel,
+    UsageLedger,
+    UsageSink,
+    UsageTotals,
+)
 from rag_foundry_providers.messages import (
     ChatChunk,
     ChatMessage,
@@ -35,9 +54,22 @@ from rag_foundry_providers.messages import (
 )
 from rag_foundry_providers.ports import ChatModel, EmbeddingModel, Reranker, check_chat_request
 from rag_foundry_providers.registry import ProviderRegistry, StageRequirement
+from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel, RetryPolicy
 from rag_foundry_providers.usage import Operation, TokenSource, Usage, estimate_cost, measure_latency_ms
 
 __all__ = [
+    "BudgetError",
+    "BudgetExceededError",
+    "BudgetRequiredError",
+    "BudgetSnapshot",
+    "BudgetedChatModel",
+    "BudgetedEmbeddingModel",
+    "RecordingEmbeddingModel",
+    "Reservation",
+    "RunBudget",
+    "UnboundedCostError",
+    "worst_case_chat_cost",
+    "worst_case_embed_cost",
     "Capabilities",
     "Capability",
     "CapabilityProblem",
@@ -62,6 +94,9 @@ __all__ = [
     "ProviderUnavailableError",
     "RecordingChatModel",
     "RerankItem",
+    "ResilientChatModel",
+    "ResilientEmbeddingModel",
+    "RetryPolicy",
     "RerankResult",
     "Reranker",
     "StageRequirement",

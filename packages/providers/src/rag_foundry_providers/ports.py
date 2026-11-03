@@ -1,4 +1,9 @@
-"""Async-only model ports (ADR-0001). Retries and timeouts belong to adapters (P2.5)."""
+"""Async-only model ports (ADR-0001).
+
+Adapters make one HTTP attempt; retries, deadlines and budgets are wrappers (P2.5, resilience.py and
+budget.py). Rule for adapters: every failure after a request is sent must be a ProviderCallError; any
+other ProviderError means "raised before I/O", and the budget releases its reservation for it.
+"""
 
 from collections.abc import AsyncIterator, Sequence
 from typing import Literal, Protocol, runtime_checkable

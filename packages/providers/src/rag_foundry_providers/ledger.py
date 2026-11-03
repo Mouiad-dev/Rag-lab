@@ -1,16 +1,16 @@
 """In-memory append-only usage ledger and a recording wrapper for chat models."""
 
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from decimal import Decimal
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
 from rag_foundry_providers.capabilities import ModelProfile
 from rag_foundry_providers.errors import ProviderCallError
-from rag_foundry_providers.messages import ChatChunk, ChatRequest, ChatResult
-from rag_foundry_providers.ports import ChatModel
+from rag_foundry_providers.messages import ChatChunk, ChatRequest, ChatResult, EmbeddingResult
+from rag_foundry_providers.ports import ChatModel, EmbeddingModel
 from rag_foundry_providers.usage import TokenSource, Usage
 
 
@@ -110,3 +110,22 @@ class RecordingChatModel:
             if exc.usage is not None and not recorded:
                 self._sink.append(exc.usage)
             raise
+
+
+class RecordingEmbeddingModel:
+    """Wraps an EmbeddingModel and appends each successful call's usage to a sink. Errors record nothing."""
+
+    def __init__(self, model: EmbeddingModel, sink: UsageSink) -> None:
+        self._model = model
+        self._sink = sink
+
+    @property
+    def profile(self) -> ModelProfile:
+        return self._model.profile
+
+    async def embed(
+        self, texts: Sequence[str], *, input_type: Literal["document", "query"] = "document"
+    ) -> EmbeddingResult:
+        result = await self._model.embed(texts, input_type=input_type)
+        self._sink.append(result.usage)
+        return result

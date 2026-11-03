@@ -9,6 +9,7 @@ import json
 import math
 import os
 import urllib.request
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -19,8 +20,10 @@ from rag_foundry_providers.adapters.ollama import (
     ollama_chat_profile,
     ollama_embedding_profile,
 )
+from rag_foundry_providers.budget import BudgetedChatModel, BudgetedEmbeddingModel, RunBudget
 from rag_foundry_providers.contract_checks import CHAT_CHECKS, EMBEDDING_CHECKS
 from rag_foundry_providers.messages import ChatMessage, ChatRequest
+from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel, RetryPolicy
 
 pytestmark = pytest.mark.live
 
@@ -57,13 +60,17 @@ def base_url() -> str:
 
 
 @pytest.fixture(scope="module")
-def chat_model(base_url: str) -> OllamaChatModel:
-    return OllamaChatModel(ollama_chat_profile(), api_base=base_url, timeout_s=CHAT_TIMEOUT_S)
+def chat_model(base_url: str) -> ResilientChatModel:
+    inner = OllamaChatModel(ollama_chat_profile(), api_base=base_url, timeout_s=CHAT_TIMEOUT_S)
+    budgeted = BudgetedChatModel(inner, RunBudget(Decimal("0")), default_max_output_tokens=None)
+    return ResilientChatModel(budgeted, RetryPolicy(attempt_timeout_s=CHAT_TIMEOUT_S))
 
 
 @pytest.fixture(scope="module")
-def embed_model(base_url: str) -> OllamaEmbeddingModel:
-    return OllamaEmbeddingModel(ollama_embedding_profile(), api_base=base_url, timeout_s=EMBED_TIMEOUT_S)
+def embed_model(base_url: str) -> ResilientEmbeddingModel:
+    inner = OllamaEmbeddingModel(ollama_embedding_profile(), api_base=base_url, timeout_s=EMBED_TIMEOUT_S)
+    budgeted = BudgetedEmbeddingModel(inner, RunBudget(Decimal("0")))
+    return ResilientEmbeddingModel(budgeted, RetryPolicy(attempt_timeout_s=EMBED_TIMEOUT_S))
 
 
 def _show(label: str, usage: Any) -> None:
@@ -74,17 +81,17 @@ def _show(label: str, usage: Any) -> None:
 
 
 @pytest.mark.parametrize("check", CHAT_CHECKS, ids=lambda c: c.__name__)
-def test_chat_contract(chat_model: OllamaChatModel, check: Any) -> None:
+def test_chat_contract(chat_model: ResilientChatModel, check: Any) -> None:
     asyncio.run(check(chat_model))
 
 
 @pytest.mark.parametrize("check", EMBEDDING_CHECKS, ids=lambda c: c.__name__)
-def test_embedding_contract(embed_model: OllamaEmbeddingModel, check: Any) -> None:
+def test_embedding_contract(embed_model: ResilientEmbeddingModel, check: Any) -> None:
     asyncio.run(check(embed_model))
 
 
 @pytest.mark.parametrize(("lang", "prompt"), [("english", _EN), ("arabic", _AR)], ids=["english", "arabic"])
-def test_chat_text_and_finish_reason(chat_model: OllamaChatModel, lang: str, prompt: str) -> None:
+def test_chat_text_and_finish_reason(chat_model: ResilientChatModel, lang: str, prompt: str) -> None:
     request = ChatRequest(messages=(ChatMessage(role="user", content=prompt),), max_output_tokens=64)
     result = asyncio.run(chat_model.complete(request))
     _show(f"chat {lang}", result.usage)
@@ -93,7 +100,7 @@ def test_chat_text_and_finish_reason(chat_model: OllamaChatModel, lang: str, pro
     print(f"[live] chat {lang}: finish_reason={result.finish_reason} chars={len(result.text)}")
 
 
-def test_embed_english_and_arabic(embed_model: OllamaEmbeddingModel) -> None:
+def test_embed_english_and_arabic(embed_model: ResilientEmbeddingModel) -> None:
     result = asyncio.run(embed_model.embed([_EN, _AR]))
     _show("embed en+ar", result.usage)
     english, arabic = result.vectors

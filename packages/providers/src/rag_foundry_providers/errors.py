@@ -1,6 +1,7 @@
 """Typed errors for the providers package. None subclass KeyError or LookupError."""
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -111,6 +112,20 @@ ProviderCallReason = Literal[
     "refused",
 ]
 
+# Reasons the retry wrapper may retry (ADR-0001 P2.5 D3). `timeout` is decided by the wrapper (local only).
+RETRYABLE_REASONS: frozenset[ProviderCallReason] = frozenset(
+    {"connection", "rate_limited", "overloaded", "server_error"}
+)
+
+
+def parse_retry_after(value: object) -> float | None:
+    """Delta-seconds only: a str of 1 to 6 ASCII digits. Anything else (HTTP-date, sign, decimals, spaces) is None."""
+    if not isinstance(value, str) or not (1 <= len(value) <= 6):
+        return None
+    if not all(c in "0123456789" for c in value):
+        return None
+    return float(int(value))
+
 
 class ProviderCallError(ProviderError):
     """A provider call failed. The message holds only the reason and HTTP status.
@@ -126,6 +141,7 @@ class ProviderCallError(ProviderError):
         status: int | None = None,
         request_id: str | None = None,
         usage: "Usage | None" = None,
+        retry_after_s: float | None = None,
     ) -> None:
         self.profile_id = profile_id
         self.reason = reason
@@ -134,5 +150,56 @@ class ProviderCallError(ProviderError):
         # Billed usage of a 200 reply that still failed (for example a refusal), so callers can
         # record the cost. Never part of the message, str or repr.
         self.usage = usage
+        # Parsed Retry-After in seconds (bounded number); never part of the message, str or repr.
+        self.retry_after_s = retry_after_s
         suffix = f" (HTTP {status})" if status is not None else ""
         super().__init__(f"profile '{profile_id}' call failed: {reason}{suffix}")
+
+
+class BudgetError(ProviderError):
+    """A run budget refused a call. Never a ProviderCallError, so retry wrappers never retry it."""
+
+
+class BudgetExceededError(BudgetError):
+    """Spent + reserved + the worst case of this call would pass a cap. Numbers and profile id only."""
+
+    def __init__(
+        self,
+        profile_id: str,
+        limit: Literal["usd", "calls"],
+        cap: Decimal | int,
+        spent: Decimal | int,
+        reserved: Decimal | int,
+        requested: Decimal | int,
+    ) -> None:
+        self.profile_id = profile_id
+        self.limit = limit
+        self.cap = cap
+        self.spent = spent
+        self.reserved = reserved
+        self.requested = requested
+        super().__init__(
+            f"budget exceeded for profile '{profile_id}': {limit} cap {cap}, spent {spent}, "
+            f"reserved {reserved}, requested {requested}"
+        )
+
+
+class UnboundedCostError(BudgetError):
+    """A paid profile lacks a rate or output cap needed to bound the cost of a call."""
+
+    def __init__(self, profile_id: str, missing: str) -> None:
+        self.profile_id = profile_id
+        self.missing = missing
+        super().__init__(f"profile '{profile_id}' cannot be budgeted: missing {missing}")
+
+
+class BudgetRequiredError(BudgetError):
+    """A run binds non-local profiles but gave no budget. Profile ids only."""
+
+    def __init__(self, profile_ids: tuple[str, ...]) -> None:
+        if not profile_ids:
+            raise ValueError("BudgetRequiredError needs at least one profile id")
+        self.profile_ids = tuple(sorted(profile_ids))
+        super().__init__(
+            "a RunBudget is required for non-local profile(s): " + ", ".join(f"'{p}'" for p in self.profile_ids)
+        )

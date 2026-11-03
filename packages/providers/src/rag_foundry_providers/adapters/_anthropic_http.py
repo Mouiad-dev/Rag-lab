@@ -19,6 +19,7 @@ from rag_foundry_providers.errors import (
     MissingCredentialError,
     ProviderCallError,
     ProviderCallReason,
+    parse_retry_after,
 )
 
 # Verified 2026-11-02 (ADR-0001, P2.3-01): https://platform.claude.com/docs/en/api/versioning
@@ -91,7 +92,10 @@ def anthropic_status_error(
     )
     if status not in _STATUS_REASON and err_type == "overloaded_error":
         reason = "overloaded"
-    return ProviderCallError(profile_id, reason, status=status, request_id=_request_id(headers, body))
+    retry_after = parse_retry_after(headers.get("retry-after")) if headers is not None else None
+    return ProviderCallError(
+        profile_id, reason, status=status, request_id=_request_id(headers, body), retry_after_s=retry_after
+    )
 
 
 async def post_messages(

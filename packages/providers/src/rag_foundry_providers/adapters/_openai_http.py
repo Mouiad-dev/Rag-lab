@@ -21,6 +21,7 @@ from rag_foundry_providers.errors import (
     MissingCredentialError,
     ProviderCallError,
     ProviderCallReason,
+    parse_retry_after,
 )
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
@@ -67,6 +68,27 @@ def build_headers(key: SecretStr | None, env_var: str = "the configured API key 
     return headers
 
 
+_QUOTA_CODES = frozenset({"insufficient_quota", "exceeded_current_quota_error"})
+_OVERLOAD_CODES = frozenset({"engine_overloaded_error"})
+
+
+def _rate_limit_reason(body_bytes: bytes) -> ProviderCallReason:
+    """Classify a 429 from fixed error.code / error.type strings only; no body text is copied."""
+    try:
+        body = json.loads(body_bytes) if body_bytes else None
+    except (ValueError, RecursionError):
+        return "rate_limited"
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return "rate_limited"
+    values = {v for v in (error.get("code"), error.get("type")) if isinstance(v, str)}
+    if values & _QUOTA_CODES:
+        return "billing"
+    if values & _OVERLOAD_CODES:
+        return "overloaded"
+    return "rate_limited"
+
+
 def openai_status_error(
     profile_id: str, status: int, body_bytes: bytes = b"", headers: Any = None
 ) -> ProviderCallError | None:
@@ -74,12 +96,16 @@ def openai_status_error(
     if 200 <= status < 300:
         return None
     reason: ProviderCallReason = _STATUS_REASON.get(status, "bad_response")
+    if status == 429:
+        reason = _rate_limit_reason(body_bytes)
     request_id = None
+    retry_after = None
     if headers is not None:
         candidate = headers.get("x-request-id")
         if isinstance(candidate, str) and _REQUEST_ID.match(candidate):
             request_id = candidate
-    return ProviderCallError(profile_id, reason, status=status, request_id=request_id)
+        retry_after = parse_retry_after(headers.get("retry-after"))
+    return ProviderCallError(profile_id, reason, status=status, request_id=request_id, retry_after_s=retry_after)
 
 
 async def post_json(

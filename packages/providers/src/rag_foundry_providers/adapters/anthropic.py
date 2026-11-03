@@ -205,6 +205,11 @@ class AnthropicChatModel:
         self._transport = transport
         self._clock = clock
 
+    @property
+    def default_max_tokens(self) -> int | None:
+        """Output cap used when a request gives none (read-only; used for budget worst-case estimates)."""
+        return self._default_max_tokens
+
     def __repr__(self) -> str:
         return f"AnthropicChatModel(profile={self.profile.id!r})"
 

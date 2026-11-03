@@ -3,6 +3,7 @@
 import asyncio
 import json
 import uuid
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -15,12 +16,14 @@ from rag_foundry_providers import (
     UnboundStageError,
 )
 from rag_foundry_providers.adapters.anthropic import UnsupportedRequestError
+from rag_foundry_providers.budget import RunBudget
 from rag_foundry_providers.config import ProvidersConfig, ProvidersConfigError, parse_providers_config
 from rag_foundry_providers.contract_checks import REGISTRY_CHECKS
 from rag_foundry_providers.errors import MissingCredentialError
 from rag_foundry_providers.pipeline import StageNeed, build_registry, resolve_pipeline
 
 KEY_ENV = "TEST_MOONSHOT_KEY_P24"
+BUDGET = Decimal("1")
 SENTINEL = f"sk-TEST-SENTINEL-{uuid.uuid4()}"
 DIM = 4
 
@@ -75,6 +78,8 @@ PROFILES: list[dict[str, Any]] = [
         "model": "kimi-k3.1-pro",
         "kind": "chat",
         "capabilities": {"streaming": True},
+        "cost_per_mtok_in": "3",
+        "cost_per_mtok_out": "15",
     },
     {
         "id": "lms-chat",
@@ -170,10 +175,10 @@ def test_missing_key_for_bound_profile_names_variable_only(monkeypatch: pytest.M
     monkeypatch.delenv(KEY_ENV, raising=False)
     cfg = _config({"judge": "moon-chat"})
     with pytest.raises(MissingCredentialError) as info:
-        build_registry(cfg, stages=["judge"])
+        build_registry(cfg, stages=["judge"], budget=RunBudget(BUDGET))
     assert KEY_ENV in str(info.value) and SENTINEL not in str(info.value)
     monkeypatch.setenv(KEY_ENV, SENTINEL)
-    reg = build_registry(cfg, stages=["judge"], transports={"moon": _fail_transport()})
+    reg = build_registry(cfg, stages=["judge"], transports={"moon": _fail_transport()}, budget=RunBudget(BUDGET))
     assert reg.chat("moon-chat").profile.id == "moon-chat"
     assert SENTINEL not in repr(reg.chat("moon-chat"))
 
@@ -182,7 +187,7 @@ def test_unsupported_adapter_kind_pair_is_unavailable(monkeypatch: pytest.Monkey
     monkeypatch.setenv("TEST_ANTHROPIC_KEY_P24", SENTINEL)
     cfg = _config({"embedder": "claude-embed"})
     with pytest.raises(ProviderUnavailableError):
-        build_registry(cfg, stages=["embedder"])
+        build_registry(cfg, stages=["embedder"], budget=RunBudget(BUDGET))
 
 
 def test_registry_checks_pass_on_built_registry() -> None:
@@ -210,7 +215,12 @@ def _req(**kw: Any) -> ChatRequest:
 
 def test_moonshot_style_profile_refuses_temperature_before_any_call(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(KEY_ENV, SENTINEL)
-    reg = build_registry(_config({"judge": "moon-chat"}), stages=["judge"], transports={"moon": _fail_transport()})
+    reg = build_registry(
+        _config({"judge": "moon-chat"}),
+        stages=["judge"],
+        transports={"moon": _fail_transport()},
+        budget=RunBudget(BUDGET),
+    )
     with pytest.raises(UnsupportedRequestError):
         asyncio.run(reg.chat("moon-chat").complete(_req(temperature=0.2)))
 
@@ -218,7 +228,9 @@ def test_moonshot_style_profile_refuses_temperature_before_any_call(monkeypatch:
 def test_paid_endpoint_sends_default_cap_4096(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(KEY_ENV, SENTINEL)
     seen: list[httpx.Request] = []
-    reg = build_registry(_config({"judge": "moon-chat"}), stages=["judge"], transports={"moon": _ok_chat(seen)})
+    reg = build_registry(
+        _config({"judge": "moon-chat"}), stages=["judge"], transports={"moon": _ok_chat(seen)}, budget=RunBudget(BUDGET)
+    )
     asyncio.run(reg.chat("moon-chat").complete(_req()))
     payload = json.loads(seen[0].content)
     assert payload["max_completion_tokens"] == 4096 and "max_tokens" not in payload
@@ -249,6 +261,6 @@ def test_unset_supports_temperature_on_non_local_endpoint_refuses_temperature(mo
     cfg = parse_providers_config(
         {"schema_version": 1, "endpoints": endpoints, "profiles": PROFILES, "stages": {"judge": "moon-chat"}}
     )
-    reg = build_registry(cfg, stages=["judge"], transports={"moon": _fail_transport()})
+    reg = build_registry(cfg, stages=["judge"], transports={"moon": _fail_transport()}, budget=RunBudget(BUDGET))
     with pytest.raises(UnsupportedRequestError):
         asyncio.run(reg.chat("moon-chat").complete(_req(temperature=0.2)))

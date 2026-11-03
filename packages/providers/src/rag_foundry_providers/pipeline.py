@@ -4,14 +4,18 @@ No global state, no default profiles and no fallback to another profile. `resolv
 environment variable and constructs no adapter; `build_registry` reads a key only for a bound profile.
 """
 
+import asyncio
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from rag_foundry_providers.budget import BudgetedChatModel, BudgetedEmbeddingModel, RunBudget
 from rag_foundry_providers.capabilities import Capability, ModelKind, ModelProfile
 from rag_foundry_providers.config import Endpoint, ProvidersConfig
-from rag_foundry_providers.errors import ProviderUnavailableError, UnboundStageError
+from rag_foundry_providers.errors import BudgetRequiredError, ProviderUnavailableError, UnboundStageError
+from rag_foundry_providers.ledger import RecordingChatModel, RecordingEmbeddingModel, UsageSink
 from rag_foundry_providers.registry import ProviderRegistry, StageRequirement
+from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel, RetryPolicy, Sleep
 from rag_foundry_providers.usage import Clock
 
 _KIND_CAPABILITY: dict[ModelKind, Capability] = {
@@ -128,10 +132,18 @@ def build_registry(
     stages: Iterable[str],
     transports: Mapping[str, Any] | None = None,
     clock: Clock | None = None,
+    ledger: UsageSink | None = None,
+    budget: RunBudget | None = None,
+    retry: RetryPolicy | None = None,
+    retry_sleep: Sleep = asyncio.sleep,
 ) -> ProviderRegistry:
     """Register every profile; construct and bind adapters only for profiles bound to ``stages``.
 
-    A missing key raises MissingCredentialError (variable name only). Unbound profiles need no key.
+    Chat and embedding adapters are bound as Resilient(Budgeted(Recording(adapter))); Recording needs a
+    ledger and Budgeted needs a budget. A run that binds any non-local profile without a budget raises
+    BudgetRequiredError before any adapter is built or key is read (ADR-0001 P2.5 D5). Rerankers are
+    bound unwrapped. A missing key raises MissingCredentialError (variable name only). Unbound profiles
+    need no key.
     """
     wanted = tuple(stages)
     bound: Mapping[str, str] = config.stages
@@ -142,8 +154,40 @@ def build_registry(
     endpoints = {endpoint.id: endpoint for endpoint in config.endpoints}
     profiles = {profile.id: profile for profile in config.profiles}
     transports = transports or {}
-    for pid in sorted({bound[stage] for stage in wanted}):
+    pids = sorted({bound[stage] for stage in wanted})
+    for pid in pids:
+        # Rerankers are bound unwrapped, so a paid one would bypass the budget. Refused until P5.5.
+        if profiles[pid].kind is ModelKind.RERANKER and profiles[pid].capabilities.local is not True:
+            raise ProviderUnavailableError(pid)
+    paid = tuple(pid for pid in pids if profiles[pid].capabilities.local is not True)
+    if paid and budget is None:
+        raise BudgetRequiredError(paid)
+    policy = retry or RetryPolicy()
+    for pid in pids:
         profile = profiles[pid]
         endpoint = endpoints[profile.provider]
-        registry.bind(pid, _construct(profile, endpoint, transports.get(endpoint.id), clock))
+        adapter = _construct(profile, endpoint, transports.get(endpoint.id), clock)
+        registry.bind(pid, _wrap(adapter, profile.kind, ledger, budget, policy, retry_sleep))
     return registry
+
+
+def _wrap(
+    adapter: Any, kind: ModelKind, ledger: UsageSink | None, budget: RunBudget | None, policy: RetryPolicy, sleep: Sleep
+) -> Any:
+    if kind is ModelKind.CHAT:
+        chat: Any = adapter
+        if ledger is not None:
+            chat = RecordingChatModel(chat, ledger)
+        if budget is not None:
+            chat = BudgetedChatModel(
+                chat, budget, default_max_output_tokens=getattr(adapter, "default_max_tokens", None)
+            )
+        return ResilientChatModel(chat, policy, sleep=sleep)
+    if kind is ModelKind.EMBEDDING:
+        embed: Any = adapter
+        if ledger is not None:
+            embed = RecordingEmbeddingModel(embed, ledger)
+        if budget is not None:
+            embed = BudgetedEmbeddingModel(embed, budget)
+        return ResilientEmbeddingModel(embed, policy, sleep=sleep)
+    return adapter
