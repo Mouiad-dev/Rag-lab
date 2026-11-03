@@ -18,8 +18,9 @@ Design notes (owner decisions 2026-11-02):
   tokens), with a dearer rate above 100,000 tokens that the profile does not carry. Above that
   threshold the cost is None, never the cheaper rate. 1-hour cache writes are also None.
 - `model_context_window_exceeded` maps to finish_reason "length" (the reply was cut short).
-  `refusal` raises ProviderCallError(reason "refused"); its billed usage is not returned.
-- Tools, structured output and vision are not implemented (P2.4); profiles declare them False.
+  `refusal` raises ProviderCallError(reason "refused"); its billed usage, when parsed, is on `.usage`.
+- Tools, structured output and vision are not implemented (tool calling P8.3, structured output P4.4 or
+  P5.4); profiles declare them False.
 """
 
 import json
