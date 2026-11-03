@@ -1,0 +1,5 @@
+A library catalogue lists every item the library holds. Each record points to a shelf, so a reader can find the book without asking.
+
+Subject headings group related items together. A reader who searches for one heading will also see its neighbours.
+
+A library catalogue lists every item the library holds. Each record points to a shelf, so a reader can find the book without asking.

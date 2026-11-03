@@ -1,0 +1,97 @@
+# Local stack: Postgres (pgvector), API and worker. Ollama is opt-in: --profile ollama.
+# Requires a .env (copy .env.example). Images are pinned by exact tag; digest pinning is P10.4.
+name: rag-foundry
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-trixie
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag_foundry}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_foundry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.example to .env and set it}
+    volumes:
+      # PostgreSQL 18 images keep data under a versioned dir inside /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build: .
+    image: rag-foundry-app:local
+    command: ["rag-foundry-api"]
+    environment:
+      RAG_FOUNDRY_API_HOST: 0.0.0.0 # container-internal only; host publish is loopback
+      RAG_FOUNDRY_API_PORT: "8000"
+      RAG_FOUNDRY_ENVIRONMENT: ${RAG_FOUNDRY_ENVIRONMENT:-dev}
+      RAG_FOUNDRY_LOG_LEVEL: ${RAG_FOUNDRY_LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    image: rag-foundry-app:local
+    command: ["rag-foundry-worker", "--heartbeat-file", "/tmp/worker.heartbeat"]
+    environment:
+      RAG_FOUNDRY_ENVIRONMENT: ${RAG_FOUNDRY_ENVIRONMENT:-dev}
+      RAG_FOUNDRY_LOG_LEVEL: ${RAG_FOUNDRY_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "rag-foundry-worker", "--check-heartbeat", "/tmp/worker.heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  ollama:
+    image: ollama/ollama:0.40.13
+    profiles: [ollama]
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pgdata:
+  ollama-models:

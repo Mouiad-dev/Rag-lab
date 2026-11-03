@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-worker"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "rag-foundry-core",
+]
+
+[project.scripts]
+rag-foundry-worker = "rag_foundry_worker.main:main"
+
+[tool.uv.sources]
+rag-foundry-core = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_worker"]

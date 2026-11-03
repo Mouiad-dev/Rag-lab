@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-api"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "rag-foundry-core",
+    "fastapi>=0.162.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+rag-foundry-api = "rag_foundry_api.main:run"
+
+[tool.uv.sources]
+rag-foundry-core = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_api"]

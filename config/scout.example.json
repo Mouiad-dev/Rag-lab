@@ -1,0 +1,27 @@
+{
+  "_note": "Illustrative design contract for ADR-0003, not an executable config yet. Schedule (Mon 06:00 UTC), USD 2 cap per run and enabled-by-default confirmed by the maintainer on 2026-10-26. propose_only = writes a report and proposed entries; never edits the catalogue, plan or code.",
+  "schema_version": 1,
+  "enabled": true,
+  "schedule_cron": "0 6 * * 1",
+  "timezone": "UTC",
+  "mode": "propose_only",
+  "model_profile": "claude-opus",
+  "triage_model_profile": null,
+  "fallback_without_model": "keyword_digest",
+  "budget": {
+    "max_usd_per_run": 2.0,
+    "max_input_tokens_per_run": 400000,
+    "max_output_tokens_per_run": 40000,
+    "max_fetched_items": 300,
+    "max_llm_triaged_items": 40,
+    "max_proposals": 10
+  },
+  "sources": {
+    "arxiv": {"categories": ["cs.IR", "cs.CL", "cs.AI"], "query_terms": ["retrieval-augmented", "RAG", "GraphRAG", "knowledge graph", "reranking", "chunking", "long context", "KV cache"], "lookback_days": 8, "min_request_interval_seconds": 3},
+    "github": {"topics": ["rag", "graphrag", "retrieval-augmented-generation"], "min_stars": 100, "lookback_days": 8},
+    "feeds": {"allowlist": []}
+  },
+  "dedup": {"keys": ["canonical_url", "arxiv_id", "doi", "github_repo", "title_hash"], "near_duplicate_similarity": 0.9, "compare_against": ["catalogue", "previous_findings", "rejected"]},
+  "output": {"store": "app_database", "report_formats": ["markdown", "json"], "proposal_catalog_status": "proposed", "require_citation_per_claim": true},
+  "allowed_outbound_domains": ["export.arxiv.org", "api.github.com"]
+}

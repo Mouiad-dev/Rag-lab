@@ -1,0 +1,243 @@
+{
+  "$defs": {
+    "PageRegion": {
+      "additionalProperties": false,
+      "description": "Normalized [0,1] rectangle with top-left origin in the stored upright page view.",
+      "properties": {
+        "page_index": {
+          "minimum": 0,
+          "title": "Page Index",
+          "type": "integer"
+        },
+        "x0": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X0",
+          "type": "number"
+        },
+        "x1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X1",
+          "type": "number"
+        },
+        "y0": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y0",
+          "type": "number"
+        },
+        "y1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "page_index",
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "PageRegion",
+      "type": "object"
+    },
+    "Precision": {
+      "enum": [
+        "exact_text",
+        "exact_region",
+        "approximate_region",
+        "page_only",
+        "unavailable"
+      ],
+      "title": "Precision",
+      "type": "string"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Provider-qualified pointer to an immutable document version and extraction view.",
+      "properties": {
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_version_id": {
+          "minLength": 1,
+          "title": "Document Version Id",
+          "type": "string"
+        },
+        "extraction_view_id": {
+          "minLength": 1,
+          "title": "Extraction View Id",
+          "type": "string"
+        },
+        "provider_namespace": {
+          "minLength": 1,
+          "title": "Provider Namespace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_namespace",
+        "document_id",
+        "document_version_id",
+        "extraction_view_id"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "TextRange": {
+      "additionalProperties": false,
+      "description": "Zero-based, half-open range of Unicode code points in canonical block text.\n\nNot UTF-8 bytes and not UTF-16 code units.",
+      "properties": {
+        "end": {
+          "title": "End",
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TextRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Stable reference to an exact span or region within a pinned extraction view.\n\nOwned by the document/extraction version; carries no chunk or index ID. Unknown fields are\nrejected in v1; consumer adapters may relax this later under REUSE_AND_INTEGRATION section 6.",
+  "properties": {
+    "anchor_id": {
+      "minLength": 1,
+      "title": "Anchor Id",
+      "type": "string"
+    },
+    "block_id": {
+      "minLength": 1,
+      "title": "Block Id",
+      "type": "string"
+    },
+    "contract_version": {
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "exact": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exact"
+    },
+    "page_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page Index"
+    },
+    "page_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page Label"
+    },
+    "precision": {
+      "$ref": "#/$defs/Precision"
+    },
+    "prefix": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prefix"
+    },
+    "regions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PageRegion"
+      },
+      "title": "Regions",
+      "type": "array"
+    },
+    "section_path": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Section Path",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceRef"
+    },
+    "suffix": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Suffix"
+    },
+    "text_range": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextRange"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "anchor_id",
+    "source",
+    "block_id",
+    "precision"
+  ],
+  "title": "SourceAnchor",
+  "type": "object"
+}

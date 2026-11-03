@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-providers"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.14.2",
+]
+
+[project.optional-dependencies]
+ollama = ["httpx==0.28.1"]
+anthropic = ["httpx==0.28.1"]
+openai_compatible = ["httpx==0.28.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_providers"]

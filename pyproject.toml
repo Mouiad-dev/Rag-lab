@@ -1,0 +1,33 @@
+[tool.uv]
+required-version = ">=0.7.9"
+
+[tool.uv.workspace]
+members = ["packages/core", "packages/contracts", "packages/techniques", "packages/providers", "apps/api", "apps/worker"]
+
+[tool.uv.sources]
+rag-foundry-core = { workspace = true }
+rag-foundry-contracts = { workspace = true }
+rag-foundry-techniques = { workspace = true }
+rag-foundry-providers = { workspace = true }
+rag-foundry-api = { workspace = true }
+rag-foundry-worker = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-contracts", "rag-foundry-techniques", "rag-foundry-providers[ollama]", "rag-foundry-api", "rag-foundry-worker"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".claude", "tests/hooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--strict-markers"]
+markers = ["live: opt-in test that calls a real local or remote provider; skipped unless explicitly enabled"]
+
+[tool.ruff.format]
+exclude = ["*.md"]

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-techniques"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.14.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_techniques"]

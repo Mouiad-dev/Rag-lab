@@ -1,0 +1,266 @@
+[
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-en-1",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-en",
+      "document_version_id": "docv-en-1",
+      "extraction_view_id": "xv-en-1"
+    },
+    "block_id": "p1",
+    "section_path": [],
+    "text_range": {
+      "start": 0,
+      "end": 132
+    },
+    "exact": "A library catalogue lists every item the library holds. Each record points to a shelf, so a reader can find the book without asking.",
+    "prefix": null,
+    "suffix": null,
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-en-2",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-en",
+      "document_version_id": "docv-en-1",
+      "extraction_view_id": "xv-en-1"
+    },
+    "block_id": "p1",
+    "section_path": [],
+    "text_range": {
+      "start": 68,
+      "end": 85
+    },
+    "exact": "points to a shelf",
+    "prefix": " record ",
+    "suffix": ", so a r",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-en-3",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-en",
+      "document_version_id": "docv-en-1",
+      "extraction_view_id": "xv-en-1"
+    },
+    "block_id": "p2",
+    "section_path": [],
+    "text_range": {
+      "start": 0,
+      "end": 16
+    },
+    "exact": "Subject headings",
+    "prefix": null,
+    "suffix": " group r",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-en-4",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-en",
+      "document_version_id": "docv-en-1",
+      "extraction_view_id": "xv-en-1"
+    },
+    "block_id": "p3",
+    "section_path": [],
+    "text_range": {
+      "start": 0,
+      "end": 132
+    },
+    "exact": "A library catalogue lists every item the library holds. Each record points to a shelf, so a reader can find the book without asking.",
+    "prefix": null,
+    "suffix": null,
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-en-5",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-en",
+      "document_version_id": "docv-en-1",
+      "extraction_view_id": "xv-en-1"
+    },
+    "block_id": "p3",
+    "section_path": [],
+    "text_range": {
+      "start": 68,
+      "end": 85
+    },
+    "exact": "points to a shelf",
+    "prefix": " record ",
+    "suffix": ", so a r",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-ar-1",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-ar",
+      "document_version_id": "docv-ar-1",
+      "extraction_view_id": "xv-ar-1"
+    },
+    "block_id": "p1",
+    "section_path": [],
+    "text_range": {
+      "start": 0,
+      "end": 114
+    },
+    "exact": "يَحْتَوِي فَهْرِسُ المَكْتَبَةِ عَلَى بَطَاقَةٍ لِكُلِّ كِتَابٍ، وَتُبَيِّنُ البَطَاقَةُ مَكَانَهُ عَلَى الرَّفِّ.",
+    "prefix": null,
+    "suffix": null,
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-ar-2",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-ar",
+      "document_version_id": "docv-ar-1",
+      "extraction_view_id": "xv-ar-1"
+    },
+    "block_id": "p1",
+    "section_path": [],
+    "text_range": {
+      "start": 10,
+      "end": 31
+    },
+    "exact": "فَهْرِسُ المَكْتَبَةِ",
+    "prefix": "حْتَوِي ",
+    "suffix": " عَلَى ب",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-ar-3",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-ar",
+      "document_version_id": "docv-ar-1",
+      "extraction_view_id": "xv-ar-1"
+    },
+    "block_id": "p2",
+    "section_path": [],
+    "text_range": {
+      "start": 22,
+      "end": 45
+    },
+    "exact": "بالعنوان أو باسم المؤلف",
+    "prefix": "أن يبحث ",
+    "suffix": " أو بالم",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-mixed-1",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-mixed",
+      "document_version_id": "docv-mixed-1",
+      "extraction_view_id": "xv-mixed-1"
+    },
+    "block_id": "p1",
+    "section_path": [],
+    "text_range": {
+      "start": 0,
+      "end": 82
+    },
+    "exact": "فهرس المكتبة (library catalogue) يضم ٣٠٠ كتاب في القسم A و 120 كتابا في القسم B 📘.",
+    "prefix": null,
+    "suffix": null,
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-mixed-2",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-mixed",
+      "document_version_id": "docv-mixed-1",
+      "extraction_view_id": "xv-mixed-1"
+    },
+    "block_id": "p1",
+    "section_path": [],
+    "text_range": {
+      "start": 72,
+      "end": 81
+    },
+    "exact": "القسم B 📘",
+    "prefix": "تابا في ",
+    "suffix": ".",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  },
+  {
+    "contract_version": "1.0",
+    "anchor_id": "xa-mixed-3",
+    "source": {
+      "provider_namespace": "rag-foundry-fixtures",
+      "document_id": "doc-mixed",
+      "document_version_id": "docv-mixed-1",
+      "extraction_view_id": "xv-mixed-1"
+    },
+    "block_id": "p2",
+    "section_path": [],
+    "text_range": {
+      "start": 12,
+      "end": 22
+    },
+    "exact": "الرقم ISBN",
+    "prefix": " البحث ب",
+    "suffix": " أو بالع",
+    "page_index": null,
+    "page_label": null,
+    "regions": [],
+    "precision": "exact_text",
+    "warnings": []
+  }
+]

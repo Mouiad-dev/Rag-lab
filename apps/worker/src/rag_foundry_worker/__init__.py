@@ -1,0 +1,1 @@
+"""RAG Foundry worker."""
