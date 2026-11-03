@@ -1,36 +1,35 @@
 {
-  "_note": "Illustrative design contract for ADR-0001, not an executable config yet. Secrets are never stored here: api_key_env names an environment variable. Model IDs and costs must be verified against provider docs before use. Local defaults (gemma4:e4b, bge-m3) chosen 2026-10-26 for low RAM + Arabic/English; re-benchmark at P2.2. Alternatives: docs/plan/FREE_MODELS.md.",
   "schema_version": 1,
-  "providers": [
-    {"id": "ollama", "adapter": "litellm", "base_url": "http://localhost:11434", "api_key_env": null, "local": true},
-    {"id": "lmstudio", "adapter": "litellm_openai_compatible", "base_url": "http://localhost:1234/v1", "api_key_env": null, "local": true},
-    {"id": "vllm", "adapter": "litellm_openai_compatible", "base_url": "http://localhost:8000/v1", "api_key_env": null, "local": true},
-    {"id": "anthropic", "adapter": "litellm", "api_key_env": "ANTHROPIC_API_KEY", "local": false},
-    {"id": "openai", "adapter": "litellm", "api_key_env": "OPENAI_API_KEY", "local": false},
-    {"id": "google", "adapter": "litellm", "api_key_env": "GEMINI_API_KEY", "local": false},
-    {"id": "mistral", "adapter": "litellm", "api_key_env": "MISTRAL_API_KEY", "local": false},
-    {"id": "moonshot", "adapter": "litellm_openai_compatible", "base_url": "TO_BE_VERIFIED", "api_key_env": "MOONSHOT_API_KEY", "local": false}
+  "note": "Loadable example for load_providers_config (P2.4-02). Secrets are never stored here: api_key_env names an environment variable. Rates are USD per million tokens as JSON strings (ADR-0001, Verified 2026-11-02). anthropic-haiku uses the flat rates valid up to 100,000 prompt tokens; above that the adapter returns cost None. vLLM uses port 8001 on purpose: 8000 is the RAG Foundry API port. lmstudio, vllm and moonshot are endpoints only until a model is chosen (moonshot has one profile); no stage is bound to them by default. Alternatives: docs/plan/FREE_MODELS.md.",
+  "endpoints": [
+    {"id": "fake", "adapter": "fake", "local": true},
+    {"id": "ollama", "adapter": "ollama", "base_url": "http://127.0.0.1:11434", "local": true},
+    {"id": "anthropic", "adapter": "anthropic", "api_key_env": "ANTHROPIC_API_KEY", "local": false},
+    {"id": "lmstudio", "adapter": "openai_compatible", "base_url": "http://localhost:1234/v1", "local": true, "max_tokens_field": "max_tokens"},
+    {"id": "vllm", "adapter": "openai_compatible", "base_url": "http://127.0.0.1:8001/v1", "local": true},
+    {"id": "moonshot", "adapter": "openai_compatible", "base_url": "https://api.moonshot.ai/v1", "api_key_env": "MOONSHOT_API_KEY", "local": false,
+     "max_tokens_field": "max_completion_tokens", "supports_temperature": false, "default_max_tokens": 4096}
   ],
-  "model_profiles": [
+  "profiles": [
+    {"id": "fake-chat", "provider": "fake", "model": "fake-chat", "kind": "chat",
+     "capabilities": {"streaming": true, "local": true}},
     {"id": "local-chat", "provider": "ollama", "model": "gemma4:e4b", "kind": "chat",
-     "capabilities": {"tool_calling": false, "structured_output": true, "vision": false, "streaming": true, "context_window": null}},
+     "capabilities": {"streaming": true, "local": true}},
     {"id": "local-embed", "provider": "ollama", "model": "bge-m3", "kind": "embedding",
-     "capabilities": {"embedding_dim": 1024, "token_embeddings": false, "multivector": false}},
-    {"id": "claude-opus", "provider": "anthropic", "model": "claude-opus-5-5", "kind": "chat",
-     "capabilities": {"tool_calling": true, "structured_output": true, "vision": true, "streaming": true, "context_window": null},
-     "cost_per_mtok_in": null, "cost_per_mtok_out": null},
-    {"id": "claude-sonnet", "provider": "anthropic", "model": "claude-sonnet-5-5", "kind": "chat",
-     "capabilities": {"tool_calling": true, "structured_output": true, "vision": true, "streaming": true, "context_window": null},
-     "cost_per_mtok_in": null, "cost_per_mtok_out": null},
-    {"id": "kimi", "provider": "moonshot", "model": "TO_BE_VERIFIED_KIMI_K_SERIES", "kind": "chat",
-     "capabilities": {"tool_calling": null, "structured_output": null, "streaming": true, "context_window": null}}
+     "capabilities": {"embedding_dim": 1024, "token_embeddings": false, "multivector": false, "local": true}},
+    {"id": "anthropic-haiku", "provider": "anthropic", "model": "claude-haiku-5-5", "kind": "chat",
+     "capabilities": {"streaming": true, "context_window": 1000000, "max_output_tokens": 128000},
+     "cost_per_mtok_in": "0.10", "cost_per_mtok_out": "0.50",
+     "cost_per_mtok_cache_read": "0.01", "cost_per_mtok_cache_write": "0.125"},
+    {"id": "kimi-k3-1-pro", "provider": "moonshot", "model": "kimi-k3.1-pro", "kind": "chat",
+     "capabilities": {"streaming": true, "context_window": 1048576},
+     "cost_per_mtok_in": "2.00", "cost_per_mtok_out": "10.00",
+     "cost_per_mtok_cache_read": "0.20", "cost_per_mtok_cache_write": "2.00"}
   ],
-  "pipeline_defaults": {
+  "stages": {
     "generator": "local-chat",
-    "embedder": "local-embed",
-    "reranker": null,
     "query_transform": "local-chat",
     "judge": "local-chat",
-    "scout": "claude-opus"
+    "embedder": "local-embed"
   }
 }

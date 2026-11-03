@@ -178,6 +178,7 @@ class AnthropicChatModel:
         profile: ModelProfile,
         *,
         api_base: str = "https://api.anthropic.com",
+        api_key_env: str = "ANTHROPIC_API_KEY",
         timeout_s: float = 60.0,
         default_max_tokens: int | None = None,
         transport: Any = None,
@@ -193,7 +194,7 @@ class AnthropicChatModel:
         if default_max_tokens is not None and default_max_tokens <= 0:
             raise ValueError("default_max_tokens must be > 0")
         self.profile = profile
-        self._key: SecretStr = read_api_key()
+        self._key: SecretStr = read_api_key(api_key_env)
         self._api_base = api_base
         self._timeout_s = timeout_s
         self._info = _PRICES.get(profile.model)
@@ -268,7 +269,7 @@ class AnthropicChatModel:
                     raise ValueError("bad cache_creation")
                 five = _count(detail.get("ephemeral_5m_input_tokens")) or 0
                 one = _count(detail.get("ephemeral_1h_input_tokens")) or 0
-        except ValueError:
+        except (ValueError, RecursionError):
             raise self._bad() from None
         if tokens_in is None or tokens_out is None:
             raise self._bad()  # never estimate a paid call
@@ -420,7 +421,7 @@ class AnthropicChatModel:
         def decode(data_lines: list[str]) -> Any:
             try:
                 return json.loads("\n".join(data_lines))
-            except ValueError:
+            except (ValueError, RecursionError):
                 raise self._bad() from None
 
         try:

@@ -316,7 +316,7 @@ class OllamaChatModel:
                         continue
                     try:
                         obj = json.loads(line)
-                    except ValueError as exc:
+                    except (ValueError, RecursionError) as exc:
                         raise self._bad() from exc
                     if not isinstance(obj, dict) or "error" in obj:
                         raise self._bad()

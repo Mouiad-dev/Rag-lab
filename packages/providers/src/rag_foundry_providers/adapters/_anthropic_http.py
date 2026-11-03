@@ -5,13 +5,14 @@ Authorization header. httpx is imported lazily.
 """
 
 import json
-import os
 import re
 from types import ModuleType
 from typing import Any
 
 from pydantic import SecretStr
 
+from rag_foundry_providers.adapters._keys import _KEY_CHARS
+from rag_foundry_providers.adapters._keys import read_api_key as read_api_key  # re-export, old import path
 from rag_foundry_providers.adapters._ollama_http import map_http_error
 from rag_foundry_providers.errors import (
     AdapterDependencyError,
@@ -24,7 +25,6 @@ from rag_foundry_providers.errors import (
 ANTHROPIC_VERSION = "2026-10-21"
 MESSAGES_PATH = "/v1/messages"
 
-_KEY_CHARS = re.compile(r"[!-~]+")
 _REQUEST_ID = re.compile(r"^req_[A-Za-z0-9_]{1,128}$")
 
 # Source: https://platform.claude.com/docs/en/api/errors (retrieved 2026-11-02).
@@ -49,18 +49,6 @@ def _load_httpx() -> ModuleType:
     except ImportError as exc:
         raise AdapterDependencyError("anthropic") from exc
     return httpx
-
-
-def read_api_key(env_var: str = "ANTHROPIC_API_KEY") -> SecretStr:
-    """Read the key from os.environ at call time.
-
-    Empty, whitespace-only or malformed values (anything but printable ASCII without spaces
-    after strip) raise MissingCredentialError naming only the variable, never the value.
-    """
-    value = os.environ.get(env_var, "").strip()
-    if not value or _KEY_CHARS.fullmatch(value) is None:
-        raise MissingCredentialError(env_var)
-    return SecretStr(value)
 
 
 def build_headers(key: SecretStr) -> dict[str, str]:
@@ -95,7 +83,7 @@ def anthropic_status_error(
         return None
     try:
         body = json.loads(body_bytes) if body_bytes else None
-    except ValueError:
+    except (ValueError, RecursionError):
         body = None
     reason: ProviderCallReason = _STATUS_REASON.get(status, "bad_response")
     err_type = (
@@ -136,7 +124,7 @@ async def post_messages(
     if failure is None:
         try:
             body = json.loads(response.content)
-        except ValueError:
+        except (ValueError, RecursionError):
             body = None
         if not isinstance(body, dict):
             failure = ProviderCallError(profile_id, "bad_response", status=status)

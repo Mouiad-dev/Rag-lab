@@ -70,6 +70,16 @@ class MissingCapabilityError(ProviderError):
         super().__init__("; ".join(p.describe() for p in problems))
 
 
+class UnboundStageError(ProviderError):
+    """A pipeline needs stages that the providers config does not bind. Stage names only."""
+
+    def __init__(self, stages: tuple[str, ...]) -> None:
+        if not stages:
+            raise ValueError("UnboundStageError needs at least one stage")
+        self.stages = tuple(sorted(stages))
+        super().__init__("providers config does not bind stage(s): " + ", ".join(f"'{s}'" for s in self.stages))
+
+
 class AdapterDependencyError(ProviderError):
     """An adapter needs an optional dependency that is not installed."""
 

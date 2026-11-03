@@ -68,3 +68,27 @@ embeddings API, so there is no embedding adapter.
 ```powershell
 $k = Read-Host -AsSecureString 'Anthropic key'; $env:ANTHROPIC_API_KEY = [System.Net.NetworkCredential]::new('', $k).Password; $env:RAG_LIVE_ANTHROPIC = '1'; uv run pytest tests/live/test_anthropic_live.py -m live -v -s; Remove-Item Env:ANTHROPIC_API_KEY, Env:RAG_LIVE_ANTHROPIC; Remove-Variable k
 ```
+
+## Config and per-stage selection (P2.4)
+
+- File format: JSON, `schema_version` 1 (`config/providers.example.json` is loadable; copy it to `config/providers.json`).
+  `load_providers_config(path)` validates strictly (no unknown keys, no duplicate keys, at most 1 MiB) and its errors never
+  echo input values. The file has `endpoints` (id, adapter, `base_url`, `api_key_env`, `local`), `profiles` (model profiles;
+  rates are JSON strings such as `"0.10"`) and `stages`.
+- Adapters: `fake`, `ollama`, `anthropic`, `openai_compatible`. `api_key_env` holds only the NAME of an environment
+  variable; the key is read when the adapter is built, and only for profiles bound to a stage the pipeline uses. A key
+  requires an https `base_url` unless the host is loopback.
+- OpenAI-compatible endpoints (LM Studio, vLLM, Moonshot, OpenAI) use the same adapter (`/chat/completions`,
+  `/embeddings`). The key is optional for local servers and required for paid ones.
+- Stages are a closed set: `generator`, `embedder`, `reranker`, `query_transform`, `judge`, `chunk_llm`, `scout`.
+- `resolve_pipeline(config, {"generator": StageNeed("chat", {"tool_calling"})})` rejects a pipeline before any adapter is
+  built or key is read: unbound stages raise `UnboundStageError`; wrong kind or missing capabilities raise one
+  `MissingCapabilityError` listing every gap. `build_registry(config, stages=[...])` then binds adapters for those
+  stages only. There is no fallback to another profile.
+- Not implemented yet: tool calling (P8.3), structured output (first step that needs it, P4.4 or P5.4) and vision. A profile
+  cannot declare them `True`. Retries and budgets come in P2.5.
+- OpenAI-compatible endpoint settings (on the endpoint): `max_tokens_field` (`max_tokens` for LM Studio, default
+  `max_completion_tokens`), `supports_temperature` (unset means true on a local endpoint and false on a non-local one; a
+  request that sets `temperature` against a false endpoint raises `UnsupportedRequestError` before any call) and
+  `default_max_tokens` (output cap when a request gives none). A non-local `openai_compatible` endpoint must set
+  `default_max_tokens` (owner decision: 4096 for Moonshot).

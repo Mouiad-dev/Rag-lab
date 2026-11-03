@@ -9,6 +9,7 @@ from rag_foundry_providers.errors import (
     ProfileKindError,
     ProviderError,
     ProviderUnavailableError,
+    UnboundStageError,
     UnknownProfileError,
 )
 from rag_foundry_providers.fake import (
@@ -68,6 +69,7 @@ __all__ = [
     "TokenSource",
     "ToolCall",
     "ToolSpec",
+    "UnboundStageError",
     "UnknownProfileError",
     "Usage",
     "UsageLedger",

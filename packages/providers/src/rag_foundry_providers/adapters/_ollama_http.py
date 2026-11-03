@@ -81,7 +81,7 @@ async def post_json(
         raise error
     try:
         body = json.loads(response.content)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:
         raise ProviderCallError(profile_id, "bad_response", status=status) from exc
     if not isinstance(body, dict):
         raise ProviderCallError(profile_id, "bad_response", status=status)
