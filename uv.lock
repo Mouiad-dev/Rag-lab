@@ -9,6 +9,7 @@ members = [
     "rag-foundry-core",
     "rag-foundry-domain",
     "rag-foundry-providers",
+    "rag-foundry-storage",
     "rag-foundry-techniques",
     "rag-foundry-worker",
 ]
@@ -21,6 +22,7 @@ dev = [
     { name = "rag-foundry-core", editable = "packages/core" },
     { name = "rag-foundry-domain", editable = "packages/domain" },
     { name = "rag-foundry-providers", extras = ["ollama"], editable = "packages/providers" },
+    { name = "rag-foundry-storage", editable = "packages/storage" },
     { name = "rag-foundry-techniques", editable = "packages/techniques" },
     { name = "rag-foundry-worker", editable = "apps/worker" },
     { name = "ruff", specifier = ">=0.17" },
@@ -437,6 +439,17 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.14.2" },
 ]
 provides-extras = ["ollama", "anthropic", "openai-compatible"]
+
+[[package]]
+name = "rag-foundry-storage"
+version = "0.0.0"
+source = { editable = "packages/storage" }
+dependencies = [
+    { name = "rag-foundry-domain" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "rag-foundry-domain", editable = "packages/domain" }]
 
 [[package]]
 name = "rag-foundry-techniques"

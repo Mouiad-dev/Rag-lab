@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -91,6 +92,31 @@ def test_ollama_base_url_user_info_not_echoed(monkeypatch):
 def test_invalid_values_rejected(kwargs):
     with pytest.raises(ValidationError):
         Settings(**kwargs)
+
+
+def test_object_store_defaults():
+    s = load_settings()
+    assert s.object_store_root == Path("var/objects")
+    assert s.max_upload_bytes == 100 * 1024 * 1024
+
+
+def test_object_store_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("RAG_FOUNDRY_OBJECT_STORE_ROOT", str(tmp_path))
+    monkeypatch.setenv("RAG_FOUNDRY_MAX_UPLOAD_BYTES", "1024")
+    s = load_settings()
+    assert s.object_store_root == tmp_path
+    assert s.max_upload_bytes == 1024
+
+
+@pytest.mark.parametrize("value", [0, -1, 1024**3 + 1])
+def test_max_upload_bytes_out_of_bounds(value):
+    with pytest.raises(ValidationError):
+        Settings(max_upload_bytes=value)
+
+
+@pytest.mark.parametrize("value", [1, 1024**3])
+def test_max_upload_bytes_bounds_accepted(value):
+    assert Settings(max_upload_bytes=value).max_upload_bytes == value
 
 
 def test_frozen():

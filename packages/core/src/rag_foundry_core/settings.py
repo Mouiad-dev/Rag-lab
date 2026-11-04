@@ -16,6 +16,7 @@ environment variables, so ``load_settings()`` checks them itself and raises
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -40,6 +41,10 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = Field(5.0, gt=0)
     # Not a secret: a plain str. URL user info, query and fragment are rejected so no credential can hide here.
     ollama_base_url: str = "http://127.0.0.1:11434"
+
+    # ADR-0009 D4 and D6.
+    object_store_root: Path = Path("var/objects")
+    max_upload_bytes: int = Field(100 * 1024 * 1024, ge=1, le=1024**3)
 
     @field_validator("ollama_base_url")
     @classmethod
