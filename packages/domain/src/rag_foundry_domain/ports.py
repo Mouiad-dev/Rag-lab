@@ -6,6 +6,7 @@ from typing import Annotated, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from rag_foundry_domain.documents import Document, DocumentVersion, IntakeOutcome, NewVersion, Scope, Sha256Hex
+from rag_foundry_domain.extraction import ExtractionKey, ExtractionOutcome, ExtractionView, NewExtraction
 
 
 class StagedObject(BaseModel):
@@ -55,4 +56,21 @@ class DocumentRepository(Protocol):
 
     async def list_versions(self, scope: Scope, document_id: str) -> list[DocumentVersion]:
         """Ascending by version number."""
+        ...
+
+
+@runtime_checkable
+class ExtractionRepository(Protocol):
+    """Unknown, malformed and out-of-scope IDs raise the same NotFoundError (find_view returns None)."""
+
+    async def find_view(self, scope: Scope, key: ExtractionKey) -> ExtractionView | None: ...
+
+    async def create_view_or_get(self, scope: Scope, new: NewExtraction) -> ExtractionOutcome:
+        """The version must exist in scope, else NotFoundError. Dedup by identity key is atomic."""
+        ...
+
+    async def get_view(self, scope: Scope, view_id: str) -> ExtractionView: ...
+
+    async def list_views(self, scope: Scope, document_version_id: str) -> list[ExtractionView]:
+        """Ordered by created_at, then id."""
         ...

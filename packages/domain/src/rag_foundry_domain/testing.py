@@ -22,7 +22,13 @@ from rag_foundry_domain.documents import (
     new_id,
 )
 from rag_foundry_domain.errors import NotFoundError
-from rag_foundry_domain.ports import DocumentRepository
+from rag_foundry_domain.extraction import (
+    ExtractionKey,
+    ExtractionOutcome,
+    ExtractionView,
+    NewExtraction,
+)
+from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository
 
 Clock = Callable[[], datetime]
 
@@ -399,4 +405,241 @@ REPOSITORY_CHECKS = (
     check_concurrent_same_bytes_dedup,
     check_version_id_under_other_document_not_found,
     check_malformed_ids_not_found,
+)
+
+
+# ---------------------------------------------------------------- extraction repository
+
+
+class ExtractionRepoFactory(Protocol):
+    """Returns an empty (document repository, extraction repository) pair in which exactly `scopes`
+    exist. The extraction repository must see versions created through the document repository."""
+
+    def __call__(self, scopes: Sequence[Scope]) -> Awaitable[tuple[DocumentRepository, ExtractionRepository]]: ...
+
+
+class InMemoryExtractionRepository:
+    """Reference implementation. A lock makes dedup atomic within one event loop."""
+
+    def __init__(self, documents: InMemoryDocumentRepository, clock: Clock | None = None) -> None:
+        self._documents = documents
+        self._clock = clock or _MonotonicUtcClock()
+        self._views: list[ExtractionView] = []
+        self._lock = asyncio.Lock()
+
+    # Hooks: small seams so tests can build deliberately broken repositories.
+    def _in_scope(self, scope: Scope) -> list[ExtractionView]:
+        return [v for v in self._views if (v.tenant_id, v.project_id) == (scope.tenant_id, scope.project_id)]
+
+    def _match(self, scope: Scope, key: ExtractionKey) -> ExtractionView | None:
+        return next((v for v in self._in_scope(scope) if v.key == key), None)
+
+    @staticmethod
+    def _order(views: list[ExtractionView]) -> list[ExtractionView]:
+        return sorted(views, key=lambda v: (v.created_at, v.id))
+
+    def _require_version(self, scope: Scope, version_id: str) -> None:
+        for v in self._documents._versions:
+            if v.id == version_id and (v.tenant_id, v.project_id) == (scope.tenant_id, scope.project_id):
+                return
+        raise NotFoundError()
+
+    async def find_view(self, scope: Scope, key: ExtractionKey) -> ExtractionView | None:
+        return self._match(scope, key)
+
+    async def create_view_or_get(self, scope: Scope, new: NewExtraction) -> ExtractionOutcome:
+        async with self._lock:
+            await self._documents.get_version(scope, new.document_id, new.document_version_id)
+            found = self._match(scope, new.key)
+            if found is not None:
+                return ExtractionOutcome(view=found, created=False)
+            view = ExtractionView(
+                **new.model_dump(),
+                id=new_id(),
+                tenant_id=scope.tenant_id,
+                project_id=scope.project_id,
+                created_at=self._clock(),
+            )
+            self._views.append(view)
+            return ExtractionOutcome(view=view, created=True)
+
+    async def get_view(self, scope: Scope, view_id: str) -> ExtractionView:
+        for v in self._in_scope(scope):
+            if v.id == view_id:
+                return v
+        raise NotFoundError()
+
+    async def list_views(self, scope: Scope, document_version_id: str) -> list[ExtractionView]:
+        self._require_version(scope, document_version_id)
+        return self._order([v for v in self._in_scope(scope) if v.document_version_id == document_version_id])
+
+
+def make_new_extraction(
+    version: DocumentVersion,
+    *,
+    tag: str = "x",
+    extractor: str = "plain-text",
+    extractor_version: str = "1",
+    profile_id: str = "canonical-v1",
+    unicode_version: str = "15.1.0",
+) -> NewExtraction:
+    canonical = hashlib.sha256(f"canonical:{tag}".encode()).hexdigest()
+    payload = hashlib.sha256(f"payload:{tag}".encode()).hexdigest()
+    return NewExtraction(
+        document_id=version.document_id,
+        document_version_id=version.id,
+        extractor=extractor,
+        extractor_version=extractor_version,
+        profile_id=profile_id,
+        unicode_version=unicode_version,
+        canonical_sha256=canonical,
+        char_count=10,
+        block_count=1,
+        payload_sha256=payload,
+        payload_key=f"extractions/{payload[:2]}/{payload}",
+    )
+
+
+async def _extraction_setup(
+    factory: ExtractionRepoFactory, scopes: Sequence[Scope]
+) -> tuple[DocumentRepository, ExtractionRepository, list[DocumentVersion]]:
+    docs, repo = await factory(scopes)
+    versions = []
+    for i, scope in enumerate(scopes):
+        out = await docs.create_document_or_get(scope, make_new_version(f"doc{i}"), display_name="a")
+        versions.append(out.version)
+    return docs, repo, versions
+
+
+async def check_extraction_same_key_dedup(factory: ExtractionRepoFactory) -> None:
+    scope = make_scope()
+    _, repo, (ver,) = await _extraction_setup(factory, [scope])
+    first = await repo.create_view_or_get(scope, make_new_extraction(ver))
+    again = await repo.create_view_or_get(scope, make_new_extraction(ver, tag="other-payload"))
+    if not first.created:
+        _fail("first create must report created=True")
+    if again.created or again.view.id != first.view.id:
+        _fail("the same identity key must return the existing view with created=False")
+    found = await repo.find_view(scope, first.view.key)
+    if found is None or found.id != first.view.id:
+        _fail("find_view must find a created view by its key")
+    if len(await repo.list_views(scope, ver.id)) != 1:
+        _fail("dedup must not add a view")
+
+
+async def check_extraction_changed_key_new_view(factory: ExtractionRepoFactory) -> None:
+    scope = make_scope()
+    _, repo, (ver,) = await _extraction_setup(factory, [scope])
+    base = await repo.create_view_or_get(scope, make_new_extraction(ver))
+    other_version = await repo.create_view_or_get(scope, make_new_extraction(ver, extractor_version="2"))
+    other_profile = await repo.create_view_or_get(scope, make_new_extraction(ver, profile_id="other-profile"))
+    other_unicode = await repo.create_view_or_get(scope, make_new_extraction(ver, unicode_version="99.0.0"))
+    ids = {base.view.id, other_version.view.id, other_profile.view.id, other_unicode.view.id}
+    if len(ids) != 4 or not (other_version.created and other_profile.created and other_unicode.created):
+        _fail("a changed extractor_version, profile_id or unicode_version must create a new view")
+    if await repo.find_view(scope, base.view.key) is None:
+        _fail("old views must stay valid after a new view is created")
+
+
+async def check_extraction_cross_scope_not_found(factory: ExtractionRepoFactory) -> None:
+    scope, other_tenant = make_scope(), make_scope()
+    other_project = Scope(tenant_id=scope.tenant_id, project_id=new_id())
+    _, repo, (ver, *_) = await _extraction_setup(factory, [scope, other_tenant, other_project])
+    out = await repo.create_view_or_get(scope, make_new_extraction(ver))
+    unknown = await _expect_not_found(repo.get_view(scope, new_id()), "unknown view")
+    for label, other in (("tenant", other_tenant), ("project", other_project)):
+        messages = [
+            await _expect_not_found(repo.get_view(other, out.view.id), f"get_view across {label}"),
+            await _expect_not_found(repo.list_views(other, ver.id), f"list_views across {label}"),
+            await _expect_not_found(
+                repo.create_view_or_get(other, make_new_extraction(ver)), f"create_view across {label}"
+            ),
+        ]
+        if any(m != unknown for m in messages):
+            _fail(f"out-of-scope ({label}) errors must be indistinguishable from unknown IDs")
+        if await repo.find_view(other, out.view.key) is not None:
+            _fail(f"find_view across {label} must return None")
+    if len(await repo.list_views(scope, ver.id)) != 1:
+        _fail("a refused cross-scope write must not change the version's views")
+
+
+async def check_extraction_unknown_and_malformed_ids(factory: ExtractionRepoFactory) -> None:
+    scope = make_scope()
+    docs, repo, (ver,) = await _extraction_setup(factory, [scope])
+    out = await repo.create_view_or_get(scope, make_new_extraction(ver))
+    unknown = await _expect_not_found(repo.get_view(scope, new_id()), "unknown view")
+    bad = "not-a-uuid"
+    ghost = ver.model_copy(update={"id": new_id()})
+    bad_new = make_new_extraction(ver).model_copy(update={"document_version_id": bad})
+    bad_key = out.view.key.model_copy(update={"document_version_id": bad})
+    other_doc = (await docs.create_document_or_get(scope, make_new_version("other-doc"), display_name="b")).document
+    wrong_owner = make_new_extraction(ver).model_copy(update={"document_id": other_doc.id})
+    messages = [
+        await _expect_not_found(repo.create_view_or_get(scope, wrong_owner), "create_view with a foreign document ID"),
+        await _expect_not_found(repo.get_view(scope, bad), "get_view with a malformed ID"),
+        await _expect_not_found(repo.list_views(scope, bad), "list_views with a malformed ID"),
+        await _expect_not_found(repo.list_views(scope, new_id()), "list_views with an unknown ID"),
+        await _expect_not_found(
+            repo.create_view_or_get(scope, make_new_extraction(ghost)), "create_view with an unknown version"
+        ),
+        await _expect_not_found(repo.create_view_or_get(scope, bad_new), "create_view with a malformed version ID"),
+    ]
+    if any(m != unknown for m in messages):
+        _fail("unknown and malformed IDs must look the same")
+    if await repo.find_view(scope, out.view.key.model_copy(update={"document_version_id": new_id()})) is not None:
+        _fail("find_view with an unknown version must return None")
+    if await repo.find_view(scope, bad_key) is not None:
+        _fail("find_view with a malformed version ID must return None")
+    if len(await repo.list_views(scope, ver.id)) != 1:
+        _fail("a refused create must store nothing")
+
+
+async def check_extraction_concurrent_creates(factory: ExtractionRepoFactory) -> None:
+    scope = make_scope()
+    _, repo, (ver,) = await _extraction_setup(factory, [scope])
+    outcomes = await asyncio.gather(*(repo.create_view_or_get(scope, make_new_extraction(ver)) for _ in range(10)))
+    if sum(o.created for o in outcomes) != 1 or len({o.view.id for o in outcomes}) != 1:
+        _fail("concurrent creates of the same key must produce exactly one view")
+    if len(await repo.list_views(scope, ver.id)) != 1:
+        _fail("concurrent creates of the same key must leave one stored view")
+
+
+async def check_extraction_list_order(factory: ExtractionRepoFactory) -> None:
+    scope = make_scope()
+    _, repo, (ver,) = await _extraction_setup(factory, [scope])
+    created = []
+    for i in range(4):
+        created.append((await repo.create_view_or_get(scope, make_new_extraction(ver, extractor_version=str(i)))).view)
+        await asyncio.sleep(_PAUSE)
+    expected = [v.id for v in sorted(created, key=lambda v: (v.created_at, v.id))]
+    got = [v.id for v in await repo.list_views(scope, ver.id)]
+    if got != expected or got != [v.id for v in created]:
+        _fail("list_views must be ordered by created_at, then id")
+
+
+async def check_extraction_records_frozen(factory: ExtractionRepoFactory) -> None:
+    scope = make_scope()
+    _, repo, (ver,) = await _extraction_setup(factory, [scope])
+    out = await repo.create_view_or_get(scope, make_new_extraction(ver))
+    for record, field, value in (
+        (out, "created", False),
+        (out.view, "profile_id", "changed"),
+        (out.view, "canonical_sha256", "0" * 64),
+        (out.view, "char_count", 99),
+    ):
+        try:
+            setattr(record, field, value)
+        except (ValidationError, TypeError, AttributeError):
+            continue
+        _fail(f"{type(record).__name__}.{field} must be immutable")
+
+
+EXTRACTION_REPOSITORY_CHECKS = (
+    check_extraction_same_key_dedup,
+    check_extraction_changed_key_new_view,
+    check_extraction_cross_scope_not_found,
+    check_extraction_unknown_and_malformed_ids,
+    check_extraction_concurrent_creates,
+    check_extraction_list_order,
+    check_extraction_records_frozen,
 )

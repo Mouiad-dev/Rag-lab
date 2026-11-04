@@ -54,3 +54,31 @@ class NotFoundError(IntakeError):
 class ObjectStoreError(IntakeError):
     def __init__(self, message: str | None = None) -> None:
         super().__init__("object_store_error", message or "object store failure")
+
+
+class ExtractionError(IntakeError):
+    """Typed extraction failure. Codes: no_text_layer, pdf_encrypted, pdf_malformed, too_many_pages,
+    text_too_long, integrity_mismatch, unsupported_extractor (and alignment_failed, via
+    ExtractionAlignmentError). Messages never carry content or paths."""
+
+    CODES = (
+        "no_text_layer",
+        "pdf_encrypted",
+        "pdf_malformed",
+        "too_many_pages",
+        "text_too_long",
+        "integrity_mismatch",
+        "unsupported_extractor",
+    )
+
+    def __init__(self, code: str, message: str | None = None) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown extraction error code")
+        super().__init__(code, message)
+
+
+class ExtractionAlignmentError(ExtractionError):
+    """Text could not be aligned to the source; never guessed."""
+
+    def __init__(self, message: str | None = None) -> None:
+        IntakeError.__init__(self, "alignment_failed", message or "text could not be aligned to the source")
