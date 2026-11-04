@@ -52,6 +52,10 @@ docker compose down                    # stops; the pgdata volume is kept (down 
 - All published ports bind to `127.0.0.1` only. Do not change them to `0.0.0.0`.
 - The optional `docker compose --profile ollama up -d --wait ollama` starts a local Ollama server. It pulls the `ollama/ollama` image (about 1.5-3 GB) but no models.
 - Never commit `.env` or paste its contents into issues or logs.
+- DB tests: set `POSTGRES_TEST_PASSWORD` in `.env`, then start the throwaway DB with `docker compose --profile test up -d --wait testdb`.
+- Export `RAGF_TEST_DATABASE_URL` (see `.env.example`) and run `uv run pytest -m db`.
+- Stop it with `docker compose --profile test rm -sf testdb`.
+- Its data is gone after that; the dev stack is untouched.
 
 ## Proposing a technique
 

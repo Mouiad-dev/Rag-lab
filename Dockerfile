@@ -29,6 +29,8 @@ RUN uv sync --locked --no-dev --all-packages --no-editable
 FROM python:3.12.16-slim-trixie AS runtime
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
+# Object store root; a named volume mounted here inherits this owner.
+RUN mkdir -p /data/objects && chown 10001:10001 /data/objects
 COPY --from=build --chown=root:root /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \

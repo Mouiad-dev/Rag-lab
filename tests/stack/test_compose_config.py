@@ -53,7 +53,17 @@ def test_no_bind_mounts_or_docker_socket(full):
 
 def test_every_service_has_healthcheck(full):
     for name, svc in full["services"].items():
+        if name == "migrate":  # one-shot job; gated by service_completed_successfully instead
+            continue
         assert svc.get("healthcheck"), name
+
+
+def test_migrate_is_a_gated_one_shot_job(full):
+    # Keeps the healthcheck exemption above from hiding a long-running service.
+    assert full["services"]["migrate"].get("restart") == "no"
+    for name in ("api", "worker"):
+        dep = full["services"][name]["depends_on"]["migrate"]
+        assert dep["condition"] == "service_completed_successfully", name
 
 
 def test_images_have_explicit_non_latest_tags(full):

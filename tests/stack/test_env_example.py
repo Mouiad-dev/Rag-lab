@@ -7,7 +7,7 @@ from rag_foundry_core.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFIX = "RAG_FOUNDRY_"
-ALLOWLIST = {"POSTGRES_USER", "POSTGRES_DB", "POSTGRES_PASSWORD", "API_HOST_PORT"}
+ALLOWLIST = {"POSTGRES_USER", "POSTGRES_DB", "POSTGRES_PASSWORD", "POSTGRES_TEST_PASSWORD", "API_HOST_PORT"}
 SECRET_KEY_RE = re.compile(r"PASSWORD|SECRET|TOKEN|KEY")
 SECRET_SHAPES = [re.compile(p) for p in (r"sk-", r"ghp_", r"AKIA", r"[A-Za-z0-9+/]{32,}={0,2}")]
 
