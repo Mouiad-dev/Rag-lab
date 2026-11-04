@@ -53,3 +53,24 @@ Sources: PyPI JSON API (release dates, `requires_python`, classifiers, `vulnerab
 
 APIs confirmed against the installed versions: `sqlalchemy.ext.asyncio.create_async_engine` and `async_sessionmaker`; `sqlalchemy.dialects.postgresql.psycopg` (driver `psycopg`, async dialect `PGDialectAsync_psycopg`, URL `postgresql+psycopg://`); `alembic.config.Config()` built in code, `alembic.command.upgrade` and `downgrade`; `alembic` 1.20.0 requires `SQLAlchemy>=2.0`; SQLAlchemy 2.1.6 `postgresql-psycopgbinary` extra accepts `psycopg[binary]>=3.0.7`. No API mismatch found. psycopg async cannot run on the Windows ProactorEventLoop; `env.py` and the tests use `SelectorEventLoop` on Windows.
 Not yet evidenced: the migration and repository against a real PostgreSQL (task 06: local `testdb` and CI).
+
+### D1 pin verification (task P3.1-05, 2026-11-05)
+Sources: PyPI JSON API (release dates, `requires_python`, classifiers, `vulnerabilities`), the GitHub advisory database (`api.github.com/advisories?ecosystem=pip&affects=python-multipart`), OSV (`api.osv.dev` query for 0.0.32) and the installed packages. Rule: release at least two weeks old (before 2026-10-22), no advisory that affects it.
+
+Pinned: `python-multipart==0.0.32`, released 2026-06-04, `requires_python >=3.11`, Python 3.12 classifier. Skipped: 0.0.33 (2026-10-31, under 2 weeks). PyPI `vulnerabilities` is empty and OSV returns none for 0.0.32.
+
+Past advisories (all fixed before 0.0.32):
+
+| Advisory | CVE | Severity | Affected | First fixed |
+|---|---|---|---|---|
+| GHSA-2jv5-9r88-3w3p | CVE-2024-24762 | high | <= 0.0.6 | 0.0.7 |
+| GHSA-59g5-xgcq-4qw3 | CVE-2024-53981 | high | < 0.0.18 | 0.0.18 |
+| GHSA-wp53-j4wj-2cfg | CVE-2026-24486 | high | < 0.0.22 | 0.0.22 |
+| GHSA-mj87-hwqh-73pj | CVE-2026-40347 | medium | < 0.0.26 | 0.0.26 |
+| GHSA-pp6c-gr5w-3c5g | CVE-2026-42561 | high | < 0.0.27 | 0.0.27 |
+| GHSA-5rvq-cxj2-64vf | CVE-2026-53539 | high | < 0.0.30 | 0.0.30 |
+| GHSA-6jv3-5f52-599m | CVE-2026-53538 | low | < 0.0.30 | 0.0.30 |
+| GHSA-vffw-93wf-4j4q | CVE-2026-53537 | low | < 0.0.30 | 0.0.30 |
+| GHSA-v9pg-7xvm-68hf | CVE-2026-53540 | low | < 0.0.31 | 0.0.31 |
+
+Starlette 1.10.0 (locked): `Request.form(*, max_files=1000, max_fields=1000, max_part_size=1 MiB)` exists. Too many files or fields, an oversized field/header part and a malformed multipart body raise `MultiPartException`, which `Request.form` turns into `HTTPException(400)`; the upload route maps that 400 to 422. File parts are spooled to `SpooledTemporaryFile` (1 MiB in memory, then a temp file on disk); `max_part_size` does not cap file bytes, so the size limit is the ASGI middleware plus `IntakeService`. A non-multipart body yields an empty form (missing `file`, 422); urlencoded bodies with fields hit `max_fields=0` (400, mapped to 422).

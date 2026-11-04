@@ -8,8 +8,12 @@ version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "rag-foundry-core",
+    "rag-foundry-domain",
+    "rag-foundry-ingestion",
+    "rag-foundry-storage[sql]",
     "fastapi>=0.162.0",
     "uvicorn>=0.54.0",
+    "python-multipart==0.0.32",
 ]
 
 [project.scripts]
@@ -17,6 +21,9 @@ rag-foundry-api = "rag_foundry_api.main:run"
 
 [tool.uv.sources]
 rag-foundry-core = { workspace = true }
+rag-foundry-domain = { workspace = true }
+rag-foundry-ingestion = { workspace = true }
+rag-foundry-storage = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rag_foundry_api"]
