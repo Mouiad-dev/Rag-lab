@@ -123,3 +123,24 @@ def test_frozen():
     s = load_settings()
     with pytest.raises(ValidationError):
         s.api_port = 1
+
+
+def test_database_url_defaults_to_none_and_is_secret():
+    assert Settings().database_url is None
+    s = Settings(database_url="postgresql+psycopg://u:pw-secret@host:5432/db")
+    assert "pw-secret" not in repr(s) and "pw-secret" not in str(s)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://u:pw-secret@h/db",
+        "mysql://u:pw-secret@h/db",
+        "postgresql+psycopg://u:pw-secret@h:99999999/db",
+        "postgresql+psycopg://u:pw secret@h/db",
+    ],
+)
+def test_database_url_rejects_bad_values_without_echo(url):
+    with pytest.raises(ValidationError) as exc:
+        Settings(database_url=url)
+    assert "pw-secret" not in str(exc.value) and "pw secret" not in str(exc.value)

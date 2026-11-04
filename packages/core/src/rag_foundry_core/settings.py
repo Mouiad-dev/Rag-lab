@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,6 +45,29 @@ class Settings(BaseSettings):
     # ADR-0009 D4 and D6.
     object_store_root: Path = Path("var/objects")
     max_upload_bytes: int = Field(100 * 1024 * 1024, ge=1, le=1024**3)
+
+    # ADR-0009 D2. A secret: never logged or echoed. Only the psycopg 3 SQLAlchemy dialect is accepted.
+    database_url: SecretStr | None = None
+
+    @field_validator("database_url")
+    @classmethod
+    def _validate_database_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return value
+        raw = value.get_secret_value()
+        # Messages never include the input: the URL may carry a password.
+        if any(c.isspace() or ord(c) < 0x20 or ord(c) == 0x7F for c in raw):
+            raise ValueError("database_url must not contain whitespace or control characters")
+        if not raw.startswith("postgresql+psycopg://"):
+            raise ValueError("database_url must use the postgresql+psycopg:// scheme")
+        try:
+            parts = urlsplit(raw)
+            _ = parts.port
+        except ValueError:
+            raise ValueError("database_url is not a valid URL") from None
+        if not parts.hostname and not parts.query:
+            raise ValueError("database_url must name a host")
+        return value
 
     @field_validator("ollama_base_url")
     @classmethod

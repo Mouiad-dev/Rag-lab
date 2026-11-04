@@ -16,7 +16,7 @@ rag-foundry-api = { workspace = true }
 rag-foundry-worker = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-contracts", "rag-foundry-domain", "rag-foundry-storage", "rag-foundry-ingestion", "rag-foundry-techniques", "rag-foundry-providers[ollama]", "rag-foundry-api", "rag-foundry-worker"]
+dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-contracts", "rag-foundry-domain", "rag-foundry-storage[sql]", "rag-foundry-ingestion", "rag-foundry-techniques", "rag-foundry-providers[ollama]", "rag-foundry-api", "rag-foundry-worker"]
 
 [tool.ruff]
 target-version = "py312"
@@ -30,7 +30,10 @@ select = ["E", "F", "W", "I", "UP", "B"]
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib", "--strict-markers"]
-markers = ["live: opt-in test that calls a real local or remote provider; skipped unless explicitly enabled"]
+markers = [
+    "live: opt-in test that calls a real local or remote provider; skipped unless explicitly enabled",
+    "db: needs a real PostgreSQL via RAGF_TEST_DATABASE_URL; skipped when unset",
+]
 
 [tool.ruff.format]
 exclude = ["*.md"]

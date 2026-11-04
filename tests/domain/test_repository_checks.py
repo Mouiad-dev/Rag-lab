@@ -114,6 +114,18 @@ class _VersionAnyDocument(InMemoryDocumentRepository):
         raise NotFoundError()
 
 
+class _MalformedIdRaises(InMemoryDocumentRepository):
+    def _require_document(self, scope, document_id):
+        if document_id == "not-a-uuid":
+            raise ValueError("invalid input syntax for type uuid")
+        return super()._require_document(scope, document_id)
+
+    async def get_version(self, scope, document_id, version_id):
+        if version_id == "not-a-uuid":
+            raise ValueError("invalid input syntax for type uuid")
+        return await super().get_version(scope, document_id, version_id)
+
+
 class _MutableDocument(Document):
     model_config = ConfigDict(frozen=False, extra="forbid")
 
@@ -146,6 +158,7 @@ BROKEN = {
     "check_dedup_tie_break_lowest_version_id": _TieBreakReversed,
     "check_concurrent_same_bytes_dedup": _RacyDedup,
     "check_version_id_under_other_document_not_found": _VersionAnyDocument,
+    "check_malformed_ids_not_found": _MalformedIdRaises,
 }
 
 

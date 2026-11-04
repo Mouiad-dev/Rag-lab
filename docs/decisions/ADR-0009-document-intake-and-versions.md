@@ -40,4 +40,16 @@ Decisions D1-D12, all decided by owner 2026-11-05:
 - Deletion, extraction and ingestion are out of scope here.
 
 ## Evidence
-Offline tests: `tests/domain` run the repository checks on the in-memory repository and on deliberately broken ones. Library pins for D1 and D2 are verified in tasks 04 and 05, not here.
+Offline tests: `tests/domain` run the repository checks on the in-memory repository and on deliberately broken ones. The D1 pin is verified in task 05.
+
+### D2 pin verification (task P3.1-04, 2026-11-05)
+Sources: PyPI JSON API (release dates, `requires_python`, classifiers, `vulnerabilities`), the GitHub advisory database (`api.github.com/advisories?ecosystem=pip&affects=<pkg>`), and the installed packages (APIs imported after `uv sync --locked`). Rule: release at least two weeks old (before 2026-10-22), no advisory that affects it.
+
+| Package | Pinned | Released | Newer releases skipped | Python | Advisories |
+|---|---|---|---|---|---|
+| SQLAlchemy[asyncio] | 2.1.6 | 2026-10-21 | 2.1.7, 2.1.8, 2.0.56, 2.0.57 (under 2 weeks) | >=3.11, 3.12 classifier | PyPI: none. GHSA lists only GHSA-hfg2-wf6j-x53p, GHSA-887w-45rq-vxgf, GHSA-38fc-9xqv-7f7q, fixed in 0.7.0b4, 1.3.0b3, 1.2.19; none affect 2.1.6 |
+| alembic | 1.20.0 | 2026-09-11 | 1.20.1 (2026-10-22, exactly 14 days) | >=3.10, 3.12 classifier | none (PyPI, GHSA) |
+| psycopg[binary] | 3.3.6 (psycopg and psycopg-binary) | 2026-09-18 | 3.3.7, 3.3.8 (under 2 weeks) | >=3.10, 3.12 classifier | none (PyPI, GHSA) |
+
+APIs confirmed against the installed versions: `sqlalchemy.ext.asyncio.create_async_engine` and `async_sessionmaker`; `sqlalchemy.dialects.postgresql.psycopg` (driver `psycopg`, async dialect `PGDialectAsync_psycopg`, URL `postgresql+psycopg://`); `alembic.config.Config()` built in code, `alembic.command.upgrade` and `downgrade`; `alembic` 1.20.0 requires `SQLAlchemy>=2.0`; SQLAlchemy 2.1.6 `postgresql-psycopgbinary` extra accepts `psycopg[binary]>=3.0.7`. No API mismatch found. psycopg async cannot run on the Windows ProactorEventLoop; `env.py` and the tests use `SelectorEventLoop` on Windows.
+Not yet evidenced: the migration and repository against a real PostgreSQL (task 06: local `testdb` and CI).

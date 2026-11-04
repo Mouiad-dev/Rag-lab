@@ -260,13 +260,15 @@ async def check_version_numbers_sequential(factory: RepoFactory) -> None:
 
 async def check_cross_scope_reads_not_found(factory: RepoFactory) -> None:
     scope = make_scope()
-    other_tenant = Scope(tenant_id=new_id(), project_id=scope.project_id)
+    other_tenant = make_scope()
     other_project = Scope(tenant_id=scope.tenant_id, project_id=new_id())
+    # A project ID belongs to one tenant, so this forged pair is never seeded; it must still read nothing.
+    forged = Scope(tenant_id=other_tenant.tenant_id, project_id=scope.project_id)
     repo = await factory([scope, other_tenant, other_project])
     out = await repo.create_document_or_get(scope, make_new_version("x"), display_name="a")
     doc_id, ver_id = out.document.id, out.version.id
     unknown = await _expect_not_found(repo.get_document(scope, new_id()), "unknown document")
-    for label, other in (("tenant", other_tenant), ("project", other_project)):
+    for label, other in (("tenant", other_tenant), ("forged tenant", forged), ("project", other_project)):
         messages = [
             await _expect_not_found(repo.get_document(other, doc_id), f"get_document across {label}"),
             await _expect_not_found(repo.get_version(other, doc_id, ver_id), f"get_version across {label}"),
@@ -362,6 +364,27 @@ async def check_version_id_under_other_document_not_found(factory: RepoFactory) 
         _fail("a version ID under the wrong document must look like an unknown ID")
 
 
+async def check_malformed_ids_not_found(factory: RepoFactory) -> None:
+    scope = make_scope()
+    repo = await factory([scope])
+    out = await repo.create_document_or_get(scope, make_new_version("x"), display_name="a")
+    unknown = await _expect_not_found(repo.get_document(scope, new_id()), "unknown document")
+    bad = "not-a-uuid"
+    messages = [
+        await _expect_not_found(repo.get_document(scope, bad), "get_document with a malformed ID"),
+        await _expect_not_found(repo.list_versions(scope, bad), "list_versions with a malformed ID"),
+        await _expect_not_found(
+            repo.get_version(scope, bad, out.version.id), "get_version with a malformed document ID"
+        ),
+        await _expect_not_found(
+            repo.get_version(scope, out.document.id, bad), "get_version with a malformed version ID"
+        ),
+        await _expect_not_found(repo.add_version_or_get(scope, bad, make_new_version("z")), "add_version malformed ID"),
+    ]
+    if any(m != unknown for m in messages):
+        _fail("malformed IDs must look like unknown IDs")
+
+
 REPOSITORY_CHECKS = (
     check_same_bytes_dedup_within_project,
     check_earliest_version_wins,
@@ -375,4 +398,5 @@ REPOSITORY_CHECKS = (
     check_dedup_tie_break_lowest_version_id,
     check_concurrent_same_bytes_dedup,
     check_version_id_under_other_document_not_found,
+    check_malformed_ids_not_found,
 )
