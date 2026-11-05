@@ -10,6 +10,10 @@ dependencies = [
     "rag-foundry-domain",
 ]
 
+[project.optional-dependencies]
+html = ["selectolax==1.0.1"]
+pdf = ["pypdfium2==5.14.0"]
+
 [tool.uv.sources]
 rag-foundry-domain = { workspace = true }
 
