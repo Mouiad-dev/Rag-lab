@@ -318,7 +318,8 @@ def test_same_bytes_twice_give_equal_results():
 
 def test_pathological_inputs_finish_quickly():
     # The pinned parser is quadratic on one huge run of '<' or on tens of thousands of nested elements, so each
-    # input here is about 1 MiB in total but built from bounded pathological parts (see the task Result).
+    # input here is about 1 MiB in total. Inputs with a long '<' run or very deep nesting now fail fast with
+    # `html_too_complex` (the cost guard); the others still go through the parser and must stay quick.
     mixed = ("x" + "<" * 100_000 + "<div>" * 8_000 + "deep" + "</div>" * 8_000 + "<3" * 50_000) * 2
     cases = [
         mixed,
@@ -335,3 +336,110 @@ def test_pathological_inputs_finish_quickly():
             pass  # a typed failure is fine; running long or crashing is not
         assert time.perf_counter() - t0 < 5, src[:12]
     assert all(len(c) >= 500_000 for c in cases)
+
+
+# -- parse-cost guard (html_too_complex) ----------------------------------------------------------------------
+
+
+def _guard_raises(src: str) -> bool:
+    try:
+        html_mod._check_complexity(src)
+    except ExtractionError as e:
+        assert e.code == "html_too_complex"
+        return True
+    return False
+
+
+def test_guard_lt_run_boundary():
+    assert not _guard_raises("a" + "<" * 255 + " b")
+    assert _guard_raises("text " + "<" * 256 + " more")
+
+
+def test_guard_depth_boundary():
+    assert not _guard_raises("<div>" * 4096 + "x")
+    assert _guard_raises("<div>" * 4097 + "x")
+    assert not _guard_raises(("<div>" * 4096 + "x" + "</div>" * 4096) * 3)
+
+
+def test_guard_uncounted_constructs():
+    for piece in ("<br>", "<img src=a>", "<p>x", "<li>x", "<td>x"):
+        assert not _guard_raises(piece * 10_000), piece
+    assert not _guard_raises("<svg>" + "<path d='1'/>" * 10_000 + "</svg>")
+    for tag in ("script", "textarea"):
+        assert not _guard_raises(f"<{tag}>" + "<div>" * 5_000 + f"</{tag}>"), tag
+    assert not _guard_raises("<!--" + "<div>" * 5_000 + "-->")
+    assert _guard_raises("<div/>" * 4097)
+
+
+def test_guard_gives_no_negative_depth_credit():
+    assert _guard_raises("</div>" * 5000 + "<div>" * 4097)
+
+
+def test_guard_rejects_before_parser_on_large_input(monkeypatch):
+    def boom(*args, **kwargs):
+        raise AssertionError("parser must not be called")
+
+    monkeypatch.setattr(html_mod, "LexborHTMLParser", boom)
+    big = ExtractionLimits(max_chars=6 * 2**20)
+    for src in ("<" * (5 * 2**20), "<div>" * 2**20):
+        t0 = time.perf_counter()
+        with pytest.raises(ExtractionError) as e:
+            html_mod.EXTRACTOR.extract(src.encode(), text_encoding=None, limits=big)
+        assert e.value.code == "html_too_complex"
+        assert time.perf_counter() - t0 < 1
+    with pytest.raises(ExtractionError) as e:
+        html_mod.EXTRACTOR.extract(("<div>" * 999_000).encode(), text_encoding=None, limits=LIMITS)
+    assert e.value.code == "html_too_complex"
+
+
+def test_guard_sees_decoded_text_and_same_object(monkeypatch):
+    seen: list[str] = []
+    real = html_mod._check_complexity
+
+    def spy(src):
+        seen.append(src)
+        return real(src)
+
+    monkeypatch.setattr(html_mod, "_check_complexity", spy)
+    with pytest.raises(ExtractionError) as e:
+        html_mod.EXTRACTOR.extract(b"\xef\xbb\xbf" + b"<" * 256, text_encoding="utf-8-sig", limits=LIMITS)
+    assert e.value.code == "html_too_complex"
+
+    parsed: list[str] = []
+    real_parser = html_mod.LexborHTMLParser
+
+    def parser_spy(src, *args, **kwargs):
+        parsed.append(src)
+        return real_parser(src, *args, **kwargs)
+
+    monkeypatch.setattr(html_mod, "LexborHTMLParser", parser_spy)
+    seen.clear()
+    html_mod.EXTRACTOR.extract(b"<p>hi</p>", text_encoding=None, limits=LIMITS)
+    assert len(seen) == 1 and len(parsed) == 1 and seen[0] is parsed[0]
+
+
+def test_guard_is_linear_on_balanced_input():
+    src = "<div>a</div>" * 400_000
+    t0 = time.perf_counter()
+    html_mod._check_complexity(src)
+    assert time.perf_counter() - t0 < 5
+
+
+def test_guard_foreign_content_bypasses_are_closed():
+    d5 = "<div>" * 5000
+    for src in (
+        "<svg><style>" + d5,
+        "<math><textarea>" + d5,
+        "<svg><title>" + d5,
+        "<svg>" + "<div/>" * 5000,
+        "<math>" + "<p/><div/>" * 5000,
+        "<svg><desc>" + "<g/>" * 10 + "<foo/>" * 5000,
+        "<svg></math><style>" + d5,
+        "<svg><math></svg>" + "<div/>" * 5000,
+        "<div><svg></div>" + "<section/>" * 5000,
+        "<svg></p>" + "<section/>" * 5000,
+        "<table><svg></table>" + "<article/>" * 5000,
+    ):
+        assert _guard_raises(src), src[:30]
+    assert not _guard_raises("<svg>" + "<path d='1'/>" * 10_000 + "</svg>")
+    assert not _guard_raises("<svg><title>t</title>" + "<path d='1'/>" * 300 + "</svg>")

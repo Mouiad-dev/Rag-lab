@@ -58,7 +58,7 @@ class ObjectStoreError(IntakeError):
 
 class ExtractionError(IntakeError):
     """Typed extraction failure. Codes: no_text_layer, pdf_encrypted, pdf_malformed, too_many_pages,
-    text_too_long, integrity_mismatch, unsupported_extractor (and alignment_failed, via
+    text_too_long, integrity_mismatch, unsupported_extractor, html_too_complex (and alignment_failed, via
     ExtractionAlignmentError). Messages never carry content or paths."""
 
     CODES = (
@@ -69,6 +69,7 @@ class ExtractionError(IntakeError):
         "text_too_long",
         "integrity_mismatch",
         "unsupported_extractor",
+        "html_too_complex",
     )
 
     def __init__(self, code: str, message: str | None = None) -> None:

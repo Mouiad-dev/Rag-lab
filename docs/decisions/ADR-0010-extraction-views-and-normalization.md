@@ -26,6 +26,8 @@ Decisions D1-D12, all decided by owner 2026-11-05:
 - D9 The Arabic PDF test is skipped until the owner supplies a license-clean fixture (known gap).
 - D10 Dedup by identity key.
 - D11 Limits: 2,000 pages and 5,000,000 code points (worst-case offset map about 5M segments x 40 B = 200 MB; typical far less since identity runs merge). Encrypted PDFs (needing a user password) and PDFs without a text layer are typed errors. Empty pages are warnings.
+  Amended 2026-11-06 (owner): HTML is rejected with `html_too_complex` before parsing when it has a run of 256+ `<` or an estimated nesting depth above 4096 (start minus end tags; void, optional-end and foreign self-closing tags not counted; comments and raw-text content skipped). Reason: Lexbor is quadratic on these (1 MiB `<` run 5.5 s, 60k nested divs 4.5 s). The estimate can be wrong in both directions; it is a cost guard, not a validator. Raw-text skipping applies only outside svg/math; HTML breakout tags end foreign self-closing exemptions.
+  Known limits: an svg with `<title>`/`<desc>` (or MathML `mi`/`mo`/`mn`/`ms`/`mtext`/`annotation-xml`) followed by more than 4096 self-closing elements is rejected (measured false positive). Probable false positives: plain `<font>` inside svg ends the exemption; after any svg/math root, raw-text content is no longer skipped, so a later large inline script with many tag-like strings can count toward depth. Thresholds and the breakout/integration-point lists match pinned selectolax 1.0.1 / Lexbor; re-measure when the pin changes.
 - D12 Views record `unicodedata.unidata_version`. A Python upgrade creates new views. Tests never hard-code it.
 
 ## Alternatives
@@ -41,4 +43,4 @@ Decisions D1-D12, all decided by owner 2026-11-05:
 - Not yet evidenced: any extractor, the SQL repository and real PDFs (tasks 02-07).
 
 ## Evidence
-Offline tests: `tests/domain` run the checks on the in-memory repository and on deliberately broken ones. Library pins (D1, D2) are verified in tasks 03 and 04.
+Offline tests: `tests/domain` run the checks on the in-memory repository and on deliberately broken ones. Library pins (D1, D2) are verified in tasks 03 and 04. `html_too_complex` (D11 amendment): `tests/ingestion/test_extract_html.py` `test_guard_*`.

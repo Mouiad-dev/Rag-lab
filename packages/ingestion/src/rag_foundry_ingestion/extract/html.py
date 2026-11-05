@@ -7,6 +7,9 @@ are never guessed. No network, no script execution, no external entities (the pa
 Known limits (all fail with `alignment_failed`, never mis-align): `<template>` content, any text in svg/math when
 the source contains `<![CDATA[` anywhere (the check is global), any foster-parented text (parser-moved
 table content), and any construct the parser rewrites.
+
+Cost guard: before parsing, `_check_complexity` rejects a run of 256+ '<' or an estimated nesting depth above 4096
+with `html_too_complex` (Lexbor is quadratic on these); accepted documents are unchanged.
 """
 
 import html as _html
@@ -63,6 +66,23 @@ _COMMENT_END = re.compile(r"--!?>")
 _MARKUP_START = re.compile(r"<(?:[A-Za-z!?]|/.)", re.DOTALL)
 _RAW_END: dict[str, re.Pattern[str]] = {}
 
+# Parse-cost guard (owner-approved 2026-11-06): Lexbor is quadratic on long '<' runs and very deep nesting.
+_MAX_LT_RUN = 256
+_MAX_DEPTH = 4096
+_VOID_TAGS = frozenset(
+    "area base basefont bgsound br col embed frame hr img input keygen link meta param source track wbr".split()
+)
+_OPTIONAL_END_TAGS = frozenset(
+    "html head body p li dt dd option optgroup tr td th thead tbody tfoot colgroup caption rb rt rtc rp".split()
+)
+_UNCOUNTED_TAGS = _VOID_TAGS | _OPTIONAL_END_TAGS
+# HTML start tags that end foreign (svg/math) content, and foreign elements that switch back to HTML parsing.
+_BREAKOUT_TAGS = frozenset(
+    "b big blockquote body br center code dd div dl dt em embed font h1 h2 h3 h4 h5 h6 head hr i img li listing "
+    "menu meta nobr ol p pre ruby s small span strong strike sub sup table tt u ul var".split()
+)
+_INTEGRATION_TAGS = frozenset("foreignobject desc title annotation-xml mi mo mn ms mtext".split())
+
 
 def _raw_end(name: str) -> re.Pattern[str]:
     pat = _RAW_END.get(name)
@@ -73,6 +93,122 @@ def _raw_end(name: str) -> re.Pattern[str]:
 
 def _ascii_letter(ch: str) -> bool:
     return "a" <= ch <= "z" or "A" <= ch <= "Z"
+
+
+def _tag_end(s: str, pos: int, end_tag: bool) -> tuple[int, str]:
+    """End of the tag token at `pos` (quotes only count in attribute values) and its lower-case name."""
+    n = len(s)
+    j = pos + (2 if end_tag else 1)
+    m = _TAG_NAME.match(s, j)
+    assert m is not None
+    name = m.group().lower()
+    j = m.end()
+    while True:
+        j = _SKIP_WS_SLASH.match(s, j).end()  # type: ignore[union-attr]
+        if j >= n:
+            return n, name
+        if s[j] == ">":
+            return j + 1, name
+        j = _ATTR_REST.match(s, j + 1).end()  # type: ignore[union-attr]
+        k = _SKIP_WS.match(s, j).end()  # type: ignore[union-attr]
+        if k < n and s[k] == "=":
+            k = _SKIP_WS.match(s, k + 1).end()  # type: ignore[union-attr]
+            if k < n and s[k] in "\"'":
+                e = s.find(s[k], k + 1)
+                if e < 0:
+                    return n, name
+                j = e + 1
+            else:
+                j = _UNQUOTED.match(s, k).end()  # type: ignore[union-attr]
+
+
+def _check_complexity(src: str) -> None:
+    """Cost guard: raise `html_too_complex` for inputs on which the pinned parser is quadratic.
+
+    Linear time: `in`, `str.find` and the anchored, non-nested patterns above. The depth is an estimate (start
+    minus end tags), so it can be wrong in both directions; it is not a validator.
+    """
+
+    def too_complex() -> ExtractionError:
+        return ExtractionError("html_too_complex", "HTML structure is too complex to parse")
+
+    if "<" * _MAX_LT_RUN in src:
+        raise too_complex()
+    n = len(src)
+    pos = 0
+    depth = 0
+    foreign: list[tuple[str, int]] = []  # open svg/math roots and their counted depth
+    open_roots = {"svg": 0, "math": 0}
+    seen_foreign = False  # sticky: raw-text skipping is off after any svg/math root (over-counting is safe)
+    no_selfclose = False  # sticky: an integration point was entered, so `/>` is never treated as closing
+    while True:
+        pos = src.find("<", pos)
+        if pos < 0 or pos + 1 >= n:
+            return
+        nxt = src[pos + 1]
+        if nxt == "!":
+            if src.startswith("<!--", pos):
+                if src.startswith(">", pos + 4):
+                    pos += 5
+                elif src.startswith("->", pos + 4):
+                    pos += 6
+                else:
+                    m = _COMMENT_END.search(src, pos + 4)
+                    if m is None:
+                        return
+                    pos = m.end()
+            else:
+                e = src.find(">", pos + 2)
+                if e < 0:
+                    return
+                pos = e + 1
+        elif nxt == "?" or (nxt == "/" and pos + 2 < n and not _ascii_letter(src[pos + 2])):
+            e = src.find(">", pos + 2)
+            if e < 0:
+                return
+            pos = e + 1
+        elif nxt == "/":
+            if pos + 2 >= n:
+                return
+            pos, name = _tag_end(src, pos, True)
+            if name in {"p", "br"}:
+                foreign.clear()
+                open_roots["svg"] = open_roots["math"] = 0
+            if name in _UNCOUNTED_TAGS:
+                continue
+            depth = max(0, depth - 1)
+            while foreign and foreign[-1][1] > depth:  # amortized linear: every push is popped once
+                top, _ = foreign.pop()
+                open_roots[top] -= 1
+        elif _ascii_letter(nxt):
+            end, name = _tag_end(src, pos, False)
+            pos = end
+            foreign_root = name in _FOREIGN_TAGS
+            if foreign_root:
+                seen_foreign = True
+            elif foreign:
+                if name in _BREAKOUT_TAGS:
+                    foreign.clear()
+                    open_roots["svg"] = open_roots["math"] = 0
+                elif name in _INTEGRATION_TAGS:
+                    no_selfclose = True
+            if name in _UNCOUNTED_TAGS:
+                continue
+            if (foreign or foreign_root) and not no_selfclose and src[end - 2 : end] == "/>" and end - 2 > 0:
+                continue
+            depth += 1
+            if foreign_root:
+                foreign.append((name, depth))
+                open_roots[name] += 1
+            if depth > _MAX_DEPTH:
+                raise too_complex()
+            if name in _RAW_TEXT_TAGS and not seen_foreign:
+                m = _raw_end(name).search(src, end)
+                if m is None:
+                    return
+                pos = m.start()
+        else:
+            pos += 1
 
 
 class _Aligner:
@@ -182,30 +318,7 @@ class _Aligner:
 
     def _tag(self, pos: int, end_tag: bool) -> tuple[int, str]:
         """End of the tag token at `pos` (quotes only count in attribute values) and its lower-case name."""
-        s = self.src
-        n = len(s)
-        j = pos + (2 if end_tag else 1)
-        m = _TAG_NAME.match(s, j)
-        assert m is not None
-        name = m.group().lower()
-        j = m.end()
-        while True:
-            j = _SKIP_WS_SLASH.match(s, j).end()  # type: ignore[union-attr]
-            if j >= n:
-                return n, name
-            if s[j] == ">":
-                return j + 1, name
-            j = _ATTR_REST.match(s, j + 1).end()  # type: ignore[union-attr]
-            k = _SKIP_WS.match(s, j).end()  # type: ignore[union-attr]
-            if k < n and s[k] == "=":
-                k = _SKIP_WS.match(s, k + 1).end()  # type: ignore[union-attr]
-                if k < n and s[k] in "\"'":
-                    e = s.find(s[k], k + 1)
-                    if e < 0:
-                        return n, name
-                    j = e + 1
-                else:
-                    j = _UNQUOTED.match(s, k).end()  # type: ignore[union-attr]
+        return _tag_end(self.src, pos, end_tag)
 
     def _delete(self, length: int) -> None:
         self.map.atomic(0, length)
@@ -319,6 +432,7 @@ class HtmlExtractor:
 
     def extract(self, data: bytes, *, text_encoding: str | None, limits: ExtractionLimits) -> ExtractionResult:
         src = decode_text(data, text_encoding, limits)
+        _check_complexity(src)
         parser = LexborHTMLParser(src, scripting=True)
         al = _Aligner(src)
         has_cdata = "<![CDATA[" in src
