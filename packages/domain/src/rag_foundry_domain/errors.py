@@ -83,3 +83,14 @@ class ExtractionAlignmentError(ExtractionError):
 
     def __init__(self, message: str | None = None) -> None:
         IntakeError.__init__(self, "alignment_failed", message or "text could not be aligned to the source")
+
+
+class AnchorError(IntakeError):
+    """Anchor construction failure with a fixed, content-free message."""
+
+    CODES = ("block_not_found", "range_out_of_bounds", "empty_range", "no_block_in_span", "invalid_namespace")
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown anchor error code")
+        super().__init__(code)

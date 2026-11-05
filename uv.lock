@@ -741,6 +741,7 @@ name = "rag-foundry-ingestion"
 version = "0.0.0"
 source = { editable = "packages/ingestion" }
 dependencies = [
+    { name = "rag-foundry-contracts" },
     { name = "rag-foundry-domain" },
 ]
 
@@ -755,6 +756,7 @@ pdf = [
 [package.metadata]
 requires-dist = [
     { name = "pypdfium2", marker = "extra == 'pdf'", specifier = "==5.14.0" },
+    { name = "rag-foundry-contracts", editable = "packages/contracts" },
     { name = "rag-foundry-domain", editable = "packages/domain" },
     { name = "selectolax", marker = "extra == 'html'", specifier = "==1.0.1" },
 ]

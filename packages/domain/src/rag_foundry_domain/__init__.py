@@ -11,6 +11,7 @@ from rag_foundry_domain.documents import (
     new_id,
 )
 from rag_foundry_domain.errors import (
+    AnchorError,
     EmptyUploadError,
     IntakeError,
     InvalidFilenameError,
@@ -24,6 +25,7 @@ from rag_foundry_domain.errors import (
 from rag_foundry_domain.ports import DocumentRepository, ObjectStore, StagedObject
 
 __all__ = [
+    "AnchorError",
     "LOCAL_DEV_SCOPE",
     "Document",
     "DocumentRepository",
