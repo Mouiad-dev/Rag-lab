@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "AnchorResolution": {
+      "additionalProperties": false,
+      "description": "Result for one anchor. Text and position are set only when the status is ``exact``.",
+      "properties": {
+        "anchor_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "exact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exact"
+        },
+        "page_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Index"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolutionReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "section_path": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Section Path",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ResolutionStatus"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "status"
+      ],
+      "title": "AnchorResolution",
+      "type": "object"
+    },
+    "ResolutionReason": {
+      "enum": [
+        "foreign_namespace",
+        "not_found",
+        "source_mismatch",
+        "unsupported_precision",
+        "block_not_found",
+        "range_out_of_bounds",
+        "quote_mismatch",
+        "prefix_mismatch",
+        "suffix_mismatch",
+        "page_mismatch",
+        "integrity_error"
+      ],
+      "title": "ResolutionReason",
+      "type": "string"
+    },
+    "ResolutionStatus": {
+      "enum": [
+        "exact",
+        "mismatch",
+        "unavailable"
+      ],
+      "title": "ResolutionStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Results in the same order as the request anchors.",
+  "properties": {
+    "contract_version": {
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/AnchorResolution"
+      },
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "results"
+  ],
+  "title": "AnchorResolveResponse",
+  "type": "object"
+}

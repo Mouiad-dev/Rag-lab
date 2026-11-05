@@ -1,0 +1,25 @@
+{
+  "contract_version": "1.0",
+  "results": [
+    {
+      "contract_version": "1.0",
+      "anchor_id": "xa-en-2",
+      "status": "exact",
+      "reason": null,
+      "exact": "points to a shelf",
+      "block_id": "p1",
+      "section_path": [],
+      "page_index": null
+    },
+    {
+      "contract_version": "1.0",
+      "anchor_id": "xa-ar-2",
+      "status": "mismatch",
+      "reason": "quote_mismatch",
+      "exact": null,
+      "block_id": null,
+      "section_path": [],
+      "page_index": null
+    }
+  ]
+}

@@ -4,11 +4,16 @@ import json
 import sys
 from pathlib import Path
 
+from rag_foundry_contracts.resolve import AnchorResolveRequest, AnchorResolveResponse
 from rag_foundry_contracts.source import SourceAnchor
 
 
 def schemas() -> dict[str, dict]:
-    return {"source-anchor.v1.json": SourceAnchor.model_json_schema()}
+    return {
+        "source-anchor.v1.json": SourceAnchor.model_json_schema(),
+        "anchor-resolve-request.v1.json": AnchorResolveRequest.model_json_schema(),
+        "anchor-resolve-response.v1.json": AnchorResolveResponse.model_json_schema(),
+    }
 
 
 def render(schema: dict) -> str:

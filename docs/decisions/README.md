@@ -12,5 +12,6 @@
 | [ADR-0008](ADR-0008-independent-product-and-consumers.md) | Independent product; consumers integrate through contracts | accepted |
 | [ADR-0009](ADR-0009-document-intake-and-versions.md) | Document intake, versions and dedup | accepted |
 | [ADR-0010](ADR-0010-extraction-views-and-normalization.md) | Extraction views and normalization | accepted |
+| [ADR-0011](ADR-0011-source-anchors-and-resolution.md) | Source anchors and resolution | accepted |
 
 New ADRs use [the template](../templates/ADR.md).
