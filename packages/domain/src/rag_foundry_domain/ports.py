@@ -1,6 +1,6 @@
 """Ports for object storage and document persistence. Implementations live elsewhere."""
 
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, AsyncIterator
 from typing import Annotated, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,6 +29,10 @@ class ObjectStore(Protocol):
         ...
 
     async def discard(self, staged: StagedObject) -> None: ...
+
+    def open_read(self, key: str) -> AsyncIterator[bytes]:
+        """Stream the stored bytes in chunks; ObjectStoreError if the key is invalid or missing."""
+        ...
 
     def key_for(self, scope: Scope, sha256: str) -> str:
         """Synchronous, pure: content-addressed key for a scope and hash (D7)."""
