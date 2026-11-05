@@ -8,13 +8,20 @@ version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "rag-foundry-core",
+    "rag-foundry-domain",
+    "rag-foundry-ingestion[pdf,html]",
+    "rag-foundry-storage[sql]",
 ]
 
 [project.scripts]
 rag-foundry-worker = "rag_foundry_worker.main:main"
+rag-foundry-extract = "rag_foundry_worker.extract_cli:main"
 
 [tool.uv.sources]
 rag-foundry-core = { workspace = true }
+rag-foundry-domain = { workspace = true }
+rag-foundry-ingestion = { workspace = true }
+rag-foundry-storage = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rag_foundry_worker"]

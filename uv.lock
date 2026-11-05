@@ -829,10 +829,18 @@ version = "0.0.0"
 source = { editable = "apps/worker" }
 dependencies = [
     { name = "rag-foundry-core" },
+    { name = "rag-foundry-domain" },
+    { name = "rag-foundry-ingestion", extra = ["html", "pdf"] },
+    { name = "rag-foundry-storage", extra = ["sql"] },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "rag-foundry-core", editable = "packages/core" }]
+requires-dist = [
+    { name = "rag-foundry-core", editable = "packages/core" },
+    { name = "rag-foundry-domain", editable = "packages/domain" },
+    { name = "rag-foundry-ingestion", extras = ["pdf", "html"], editable = "packages/ingestion" },
+    { name = "rag-foundry-storage", extras = ["sql"], editable = "packages/storage" },
+]
 
 [[package]]
 name = "ruff"
