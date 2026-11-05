@@ -4,6 +4,7 @@ from datetime import datetime
 
 from rag_foundry_domain import MediaType
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -71,6 +72,7 @@ class DocumentVersionRow(Base):
     __table_args__ = (
         UniqueConstraint("document_id", "version_number"),
         UniqueConstraint("document_id", "sha256"),
+        UniqueConstraint("tenant_id", "project_id", "document_id", "id"),
         ForeignKeyConstraint(
             ["tenant_id", "project_id", "document_id"],
             ["documents.tenant_id", "documents.project_id", "documents.id"],
@@ -98,4 +100,56 @@ class DocumentVersionRow(Base):
     text_encoding: Mapped[str | None] = mapped_column(String(16), nullable=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = _created_at()
+
+
+class ExtractionViewRow(Base):
+    """Immutable extraction view metadata (ADR-0010). The payload lives in the object store (D5)."""
+
+    __tablename__ = "extraction_views"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "project_id", "document_id", "document_version_id"],
+            [
+                "document_versions.tenant_id",
+                "document_versions.project_id",
+                "document_versions.document_id",
+                "document_versions.id",
+            ],
+            name="fk_extraction_views_scope_version",
+        ),
+        UniqueConstraint(
+            "document_version_id",
+            "extractor",
+            "extractor_version",
+            "profile_id",
+            "unicode_version",
+            name="uq_extraction_views_identity_key",
+        ),
+        Index("ix_extraction_views_version_created", "tenant_id", "project_id", "document_version_id", "created_at"),
+        CheckConstraint("canonical_sha256 ~ '^[0-9a-f]{64}$'", name="canonical_sha256_format"),
+        CheckConstraint("payload_sha256 ~ '^[0-9a-f]{64}$'", name="payload_sha256_format"),
+        CheckConstraint("char_count >= 1", name="char_count_positive"),
+        CheckConstraint("block_count >= 1", name="block_count_positive"),
+        CheckConstraint("page_count IS NULL OR page_count >= 1", name="page_count_positive"),
+        CheckConstraint("payload_schema_version = 1", name="payload_schema_version_known"),
+        CheckConstraint("extractor ~ '^[a-z0-9._-]{1,64}$'", name="extractor_format"),
+    )
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    project_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    document_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    document_version_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    extractor: Mapped[str] = mapped_column(String(64), nullable=False)
+    extractor_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    profile_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    unicode_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    canonical_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    block_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_key: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    warnings: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     created_at: Mapped[datetime] = _created_at()
