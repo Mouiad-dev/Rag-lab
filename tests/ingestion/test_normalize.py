@@ -132,7 +132,7 @@ def test_whitespace_pattern_equals_str_isspace():
 def test_profiles_are_step_lists_with_ids():
     assert [s.__name__ for s in CANONICAL_V1] == ["newlines", "nfc"]
     assert [s.__name__ for s in SEARCH_AR_EN_V1] == [
-        "nfkc", "casefold", "nfkc", "strip_format", "strip_tatweel", "strip_harakat",
+        "nfkc", "casefold", "nfkc", "strip_format", "strip_tatweel", "strip_harakat", "nfkc",
         "fold_alef", "fold_yeh", "fold_kaf", "fold_digits", "whitespace",
     ]  # fmt: skip
     r = apply(CANONICAL_V1, "a\r\nb")
@@ -198,8 +198,8 @@ def test_grouping_matches_unicodedata(form, step):
 
 
 # Realistic text for the search profile: Arabic block, ASCII, Latin-1, presentation forms, whitespace, ligatures.
-# Idempotence cannot hold for arbitrary code points: deleting a format character or tatweel can bring a base and a
-# combining mark together that the second NFKC pass then composes or reorders (see test_search_profile_known_gap).
+# The search profile is also fuzzed over all assigned code points; the NFKC step after the strip steps composes a
+# base and a mark that stripping brought together (see test_search_profile_recomposes_after_strip).
 _REALISTIC = (
     [chr(c) for c in range(0x0600, 0x0700) if unicodedata.category(chr(c)) != "Cn"]
     + [chr(c) for c in range(0x20, 0x7F)]
@@ -211,8 +211,8 @@ _REALISTIC = (
 
 @pytest.mark.parametrize(
     ("profile", "alphabet"),
-    [(CANONICAL_V1, _ASSIGNED), (SEARCH_AR_EN_V1, _REALISTIC)],
-    ids=["canonical-v1", "search-ar-en-v1"],
+    [(CANONICAL_V1, _ASSIGNED), (SEARCH_AR_EN_V1, _ASSIGNED), (SEARCH_AR_EN_V1, _REALISTIC)],
+    ids=["canonical-v1", "search-ar-en-v1-assigned", "search-ar-en-v1-realistic"],
 )
 def test_profiles_are_idempotent(profile, alphabet):
     rng = random.Random(2005)
@@ -225,12 +225,12 @@ def test_profiles_are_idempotent(profile, alphabet):
         check_map(s, once.text, once.map)
 
 
-def test_search_profile_known_gap():
-    # Deleting U+200D leaves a base next to a mark that the second pass composes; search text is derived on demand
-    # and never stored, so ADR-0010 does not require idempotence on arbitrary input.
+def test_search_profile_recomposes_after_strip():
+    # Deleting U+200D leaves a base next to a mark; the NFKC step after the strip steps composes it in one pass.
     once = apply(SEARCH_AR_EN_V1, "e\u200d\u0301")
-    assert once.text == "e\u0301"
+    assert once.text == "\u00e9"
     assert apply(SEARCH_AR_EN_V1, once.text).text == "\u00e9"
+    check_map("e\u200d\u0301", once.text, once.map)
 
 
 # -- done criterion ---------------------------------------------------------------------------------------------

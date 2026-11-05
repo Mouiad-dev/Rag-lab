@@ -261,6 +261,8 @@ SEARCH_AR_EN_V1 = Profile(
         strip_format,
         strip_tatweel,
         strip_harakat,
+        # The strip steps can bring a base next to a mark it composes with; re-normalize so the profile is idempotent.
+        nfkc,
         fold_alef,
         fold_yeh,
         fold_kaf,
