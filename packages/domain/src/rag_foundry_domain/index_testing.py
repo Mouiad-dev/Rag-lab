@@ -10,13 +10,13 @@ from pydantic import ValidationError
 
 from rag_foundry_domain.documents import Scope, new_id
 from rag_foundry_domain.errors import IndexingError, NotFoundError
-from rag_foundry_domain.extraction import ExtractionView
 from rag_foundry_domain.indexing import (
     ChunkRecord,
     IndexState,
     IndexVersion,
     NewChunk,
     NewIndexVersion,
+    ScoredChunk,
     check_vector,
     corpus_sha256_for,
     embedding_key_for,
@@ -173,8 +173,6 @@ class InMemoryIndexRepository:
             )
             candidates.append((1.0 - cosine, c.ordinal, c))
         candidates.sort(key=lambda x: (x[0], x[1]))
-        from rag_foundry_domain.indexing import ScoredChunk
-
         return [ScoredChunk(chunk=c, distance=d, rank=i + 1) for i, (d, _, c) in enumerate(candidates[:k])]
 
 
@@ -196,13 +194,6 @@ async def _expect_not_found(awaitable) -> str:
     except NotFoundError as exc:
         return str(exc)
     raise AssertionError("expected not_found")
-
-
-async def _setup(factory: IndexRepoFactory, views: Sequence[ExtractionView]):
-    scopes = [Scope(tenant_id=v.tenant_id, project_id=v.project_id) for v in views]
-    docs, view_repo, repo = await factory(scopes)
-    version = await repo.create_index_version(scopes[0], make_new_index_version(tuple(v.id for v in views)))
-    return scopes[0], repo, version
 
 
 async def check_index_repository(factory: IndexRepoFactory) -> None:

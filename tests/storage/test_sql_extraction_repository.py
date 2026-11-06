@@ -65,7 +65,12 @@ class _Factory:
     async def __call__(self, scopes):
         maker = self.maker()
         async with maker() as session, session.begin():
-            await session.execute(text("TRUNCATE extraction_views, document_versions, documents, projects, tenants"))
+            await session.execute(
+                text(
+                    "TRUNCATE chunks, index_version_views, index_versions, extraction_views, "
+                    "document_versions, documents, projects, tenants"
+                )
+            )
         docs = SqlDocumentRepository(maker)
         for scope in scopes:
             await docs.ensure_local_scope(scope)

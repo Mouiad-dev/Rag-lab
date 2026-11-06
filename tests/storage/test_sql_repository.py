@@ -62,7 +62,12 @@ class _Factory:
         maker = create_sessionmaker(_url())
         self.engines.append(maker.kw["bind"])
         async with maker() as session, session.begin():
-            await session.execute(text("TRUNCATE extraction_views, document_versions, documents, projects, tenants"))
+            await session.execute(
+                text(
+                    "TRUNCATE chunks, index_version_views, index_versions, extraction_views, "
+                    "document_versions, documents, projects, tenants"
+                )
+            )
         repo = SqlDocumentRepository(maker)
         for scope in scopes:
             await repo.ensure_local_scope(scope)

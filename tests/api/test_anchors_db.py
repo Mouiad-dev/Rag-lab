@@ -51,7 +51,12 @@ def sql_repositories():
 
     async def setup():
         async with maker() as session, session.begin():
-            await session.execute(text("TRUNCATE extraction_views, document_versions, documents, projects, tenants"))
+            await session.execute(
+                text(
+                    "TRUNCATE chunks, index_version_views, index_versions, extraction_views, "
+                    "document_versions, documents, projects, tenants"
+                )
+            )
         docs = SqlDocumentRepository(maker)
         await docs.ensure_local_scope(LOCAL_DEV_SCOPE)
         return docs, SqlExtractionRepository(maker)
