@@ -101,3 +101,29 @@ class AnchorError(IntakeError):
         if code not in self.CODES:
             raise ValueError("unknown anchor error code")
         super().__init__(code)
+
+
+class IndexingError(IntakeError):
+    """Content-free index lifecycle and vector errors."""
+
+    CODES = (
+        "not_building",
+        "not_ready",
+        "dimension_mismatch",
+        "invalid_vector",
+        "duplicate_ordinal",
+        "empty_index",
+        "invalid_k",
+        "invalid_page",
+        "incompatible_embedding",
+        "missing_embedding_dim",
+        "empty_query",
+        "query_too_long",
+        "too_many_views",
+        "embedding_count_mismatch",
+    )
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown indexing error code")
+        super().__init__(code, code)

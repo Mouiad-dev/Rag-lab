@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from rag_foundry_domain.documents import Document, DocumentVersion, IntakeOutcome, NewVersion, Scope, Sha256Hex
 from rag_foundry_domain.extraction import ExtractionKey, ExtractionOutcome, ExtractionView, NewExtraction
+from rag_foundry_domain.indexing import ChunkRecord, IndexVersion, NewChunk, NewIndexVersion, ScoredChunk
 
 
 class StagedObject(BaseModel):
@@ -78,3 +79,24 @@ class ExtractionRepository(Protocol):
     async def list_views(self, scope: Scope, document_version_id: str) -> list[ExtractionView]:
         """Ordered by created_at, then id."""
         ...
+
+
+@runtime_checkable
+class IndexRepository(Protocol):
+    async def create_index_version(self, scope: Scope, new: NewIndexVersion) -> IndexVersion: ...
+
+    async def add_chunks(self, scope: Scope, index_version_id: str, chunks: tuple[NewChunk, ...]) -> None: ...
+
+    async def mark_ready(self, scope: Scope, index_version_id: str) -> IndexVersion: ...
+
+    async def mark_failed(self, scope: Scope, index_version_id: str) -> IndexVersion: ...
+
+    async def get_index_version(self, scope: Scope, index_version_id: str) -> IndexVersion: ...
+
+    async def list_chunks(
+        self, scope: Scope, index_version_id: str, *, offset: int = 0, limit: int = 100
+    ) -> list[ChunkRecord]: ...
+
+    async def search(
+        self, scope: Scope, index_version_id: str, query: tuple[float, ...], k: int
+    ) -> list[ScoredChunk]: ...
