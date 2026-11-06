@@ -127,3 +127,22 @@ class IndexingError(IntakeError):
         if code not in self.CODES:
             raise ValueError("unknown indexing error code")
         super().__init__(code, code)
+
+
+class RunError(IntakeError):
+    """Content-free run configuration and execution errors."""
+
+    CODES = (
+        "abstention_threshold_unset",
+        "unsupported_technique",
+        "index_version_required",
+        "index_version_not_allowed",
+        "non_local_model",
+        "too_many_runs",
+        "run_timeout",
+    )
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown run error code")
+        super().__init__(code, code)
