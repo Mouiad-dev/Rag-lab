@@ -681,6 +681,7 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "fastapi" },
     { name = "python-multipart" },
+    { name = "rag-foundry-contracts" },
     { name = "rag-foundry-core" },
     { name = "rag-foundry-domain" },
     { name = "rag-foundry-ingestion" },
@@ -692,6 +693,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.162.0" },
     { name = "python-multipart", specifier = "==0.0.32" },
+    { name = "rag-foundry-contracts", editable = "packages/contracts" },
     { name = "rag-foundry-core", editable = "packages/core" },
     { name = "rag-foundry-domain", editable = "packages/domain" },
     { name = "rag-foundry-ingestion", editable = "packages/ingestion" },

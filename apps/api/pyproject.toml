@@ -8,6 +8,7 @@ version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "rag-foundry-core",
+    "rag-foundry-contracts",
     "rag-foundry-domain",
     "rag-foundry-ingestion",
     "rag-foundry-storage[sql]",
@@ -21,6 +22,7 @@ rag-foundry-api = "rag_foundry_api.main:run"
 
 [tool.uv.sources]
 rag-foundry-core = { workspace = true }
+rag-foundry-contracts = { workspace = true }
 rag-foundry-domain = { workspace = true }
 rag-foundry-ingestion = { workspace = true }
 rag-foundry-storage = { workspace = true }

@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from rag_foundry_domain import (
+    AnchorError,
     EmptyUploadError,
     IntakeError,
     InvalidFilenameError,
@@ -72,7 +73,13 @@ async def _intake_error(_: Request, exc: Exception) -> JSONResponse:
     return error_response(422, exc.code, exc.message)
 
 
+async def _anchor_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, AnchorError)
+    return error_response(422, exc.code, exc.code.replace("_", " "))
+
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(HTTPException, _http_exception)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(IntakeError, _intake_error)
+    app.add_exception_handler(AnchorError, _anchor_error)

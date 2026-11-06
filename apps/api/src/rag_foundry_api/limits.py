@@ -15,7 +15,7 @@ Message = MutableMapping[str, Any]
 Receive = Callable[[], Awaitable[Message]]
 Send = Callable[[Message], Awaitable[None]]
 
-_UPLOAD_PATH = re.compile(r"^/api/v1/projects/[^/]+/documents(/[^/]+/versions)?/?$")
+_UPLOAD_PATH = re.compile(r"^/api/v1/projects/[^/]+/documents(?:/[^/]+/versions)?/?$")
 
 
 class _BodyTooLargeError(Exception):
@@ -28,12 +28,17 @@ class UploadSizeLimitMiddleware:
         self.limit = max_upload_bytes + MULTIPART_OVERHEAD
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["method"] != "POST" or not _UPLOAD_PATH.match(scope["path"]):
+        if scope["type"] != "http" or scope["method"] != "POST":
             await self.app(scope, receive, send)
             return
 
+        upload = _UPLOAD_PATH.match(scope["path"]) is not None
+        limit = self.limit if upload else 1024 * 1024
+
         async def reject() -> None:
-            response = error_response(413, "upload_too_large", "upload exceeds the size limit")
+            code = "upload_too_large" if upload else "request_too_large"
+            message = "upload exceeds the size limit" if upload else "request body exceeds the size limit"
+            response = error_response(413, code, message)
             await response(scope, receive, send)
 
         for name, value in scope["headers"]:
@@ -42,10 +47,42 @@ class UploadSizeLimitMiddleware:
                     declared = int(value)
                 except ValueError:
                     break  # the streaming count below still applies
-                if declared > self.limit:
+                if declared > limit:
                     await reject()
                     return
                 break
+
+        # JSON parsing happens inside FastAPI's request.body(); an exception raised
+        # by a streaming receive is translated there to a 400. Buffer bounded
+        # non-upload bodies here so oversized chunked requests get our 413 envelope.
+        if not upload:
+            buffered: list[Message] = []
+            seen = 0
+            while True:
+                message = await receive()
+                if message["type"] != "http.request":
+                    buffered.append(message)
+                    break
+                seen += len(message.get("body", b""))
+                if seen > limit:
+                    await reject()
+                    return
+                buffered.append(message)
+                if not message.get("more_body", False):
+                    break
+
+            index = 0
+
+            async def replay_receive() -> Message:
+                nonlocal index
+                if index < len(buffered):
+                    message = buffered[index]
+                    index += 1
+                    return message
+                return await receive()
+
+            await self.app(scope, replay_receive, send)
+            return
 
         seen = 0
         started = False

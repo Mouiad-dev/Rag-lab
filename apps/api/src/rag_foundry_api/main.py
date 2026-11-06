@@ -11,8 +11,10 @@ from fastapi import FastAPI
 from rag_foundry_core import __version__
 from rag_foundry_core.settings import Settings, load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, DocumentRepository
+from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.intake import IntakeService
 
+from rag_foundry_api.anchors import register_anchor_routes
 from rag_foundry_api.documents import register_document_routes
 from rag_foundry_api.errors import register_error_handlers
 from rag_foundry_api.limits import UploadSizeLimitMiddleware
@@ -23,6 +25,7 @@ def create_app(
     *,
     intake_service: IntakeService | None = None,
     repository: DocumentRepository | None = None,
+    anchor_service: AnchorService | None = None,
 ) -> FastAPI:
     """`intake_service` and `repository` are injected together (tests); otherwise built from settings."""
     resolved = settings if settings is not None else load_settings()
@@ -30,13 +33,19 @@ def create_app(
     if intake_service is None and resolved.database_url is not None:
         from rag_foundry_storage.local_store import LocalObjectStore
         from rag_foundry_storage.sql.engine import create_sessionmaker
+        from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
         from rag_foundry_storage.sql.repository import SqlDocumentRepository
 
-        sql_repo = SqlDocumentRepository(create_sessionmaker(resolved.database_url))
+        sessionmaker = create_sessionmaker(resolved.database_url)
+        sql_repo = SqlDocumentRepository(sessionmaker)
+        views = SqlExtractionRepository(sessionmaker)
         intake_service = IntakeService(
             LocalObjectStore(resolved.object_store_root), sql_repo, max_bytes=resolved.max_upload_bytes
         )
         repository = sql_repo
+        anchor_service = AnchorService(
+            LocalObjectStore(resolved.object_store_root), views, provider_namespace=resolved.provider_namespace
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -48,9 +57,11 @@ def create_app(
     app.state.settings = resolved
     app.state.intake_service = intake_service
     app.state.repository = repository
+    app.state.anchor_service = anchor_service
     register_error_handlers(app)
     app.add_middleware(UploadSizeLimitMiddleware, max_upload_bytes=resolved.max_upload_bytes)
     register_document_routes(app)
+    register_anchor_routes(app)
 
     @app.get("/health")
     def health() -> dict[str, str]:

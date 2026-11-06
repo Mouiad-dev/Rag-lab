@@ -16,6 +16,7 @@ environment variables, so ``load_settings()`` checks them itself and raises
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -45,9 +46,17 @@ class Settings(BaseSettings):
     # ADR-0009 D4 and D6.
     object_store_root: Path = Path("var/objects")
     max_upload_bytes: int = Field(100 * 1024 * 1024, ge=1, le=1024**3)
+    provider_namespace: str = "rag-foundry-local"
 
     # ADR-0009 D2. A secret: never logged or echoed. Only the psycopg 3 SQLAlchemy dialect is accepted.
     database_url: SecretStr | None = None
+
+    @field_validator("provider_namespace")
+    @classmethod
+    def _validate_provider_namespace(cls, value: str) -> str:
+        if re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", value) is None:
+            raise ValueError("provider_namespace has an invalid format")
+        return value
 
     @field_validator("database_url")
     @classmethod
