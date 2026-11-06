@@ -21,7 +21,7 @@ from rag_foundry_providers.ledger import UsageLedger
 from rag_foundry_providers.ports import ChatModel
 from rag_foundry_techniques.kinds import Retriever
 
-from rag_foundry_answering.citations import check_answer, parse_markers
+from rag_foundry_answering.citations import check_answer, normalize_nonce_markers, parse_markers
 from rag_foundry_answering.gate import apply_gate
 from rag_foundry_answering.prompt import (
     GROUNDED_TEMPLATE_ID,
@@ -159,7 +159,8 @@ class AnswerService:
             temperature=config.temperature,
         )
         completion = await chat.complete(request)
-        check = check_answer(completion.text, completion.finish_reason, {f"S{hit.rank}" for hit in gate.used})
+        text = normalize_nonce_markers(completion.text, nonce)
+        check = check_answer(text, completion.finish_reason, {f"S{hit.rank}" for hit in gate.used})
         reason_by_outcome = {
             "declined": AbstentionReason.MODEL_DECLINED,
             "truncated": AbstentionReason.TRUNCATED_OUTPUT,
@@ -167,6 +168,11 @@ class AnswerService:
             "invalid": AbstentionReason.INVALID_CITATION,
         }
         warnings = ["evidence_truncated"] if gate.truncated else []
+        if check.outcome == "ok" and nonce in text:
+            # The nonce outside an accepted marker form must never reach a response (ADR-0013 amendment).
+            return response(
+                RunStatus.ABSTAINED, reason=AbstentionReason.INVALID_CITATION, evidence=evidence, warnings=warnings
+            )
         if check.outcome != "ok":
             return response(
                 RunStatus.ABSTAINED, reason=reason_by_outcome[check.outcome], evidence=evidence, warnings=warnings
@@ -185,7 +191,7 @@ class AnswerService:
             citations.append(Citation(marker=marker, anchors=anchors_by_marker[marker]))
         return response(
             RunStatus.ANSWERED,
-            answer=completion.text.strip(),
+            answer=text.strip(),
             citations=citations,
             evidence=evidence,
             warnings=warnings,

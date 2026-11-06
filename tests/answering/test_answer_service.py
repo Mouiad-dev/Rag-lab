@@ -232,6 +232,71 @@ def test_scripted_bad_answers_are_redacted(built, reply, finish, reason):
     asyncio.run(run())
 
 
+def test_nonce_marker_is_normalized_and_other_nonce_abstains(built):
+    scope, index, anchors, embedder, version = built
+    nonce = "0123456789abcdef"
+
+    async def run(reply_factory):
+        ledger = UsageLedger()
+        scripted = ScriptedChatModel(lambda request: (reply_factory(request), "stop"))
+        chat = RecordingChatModel(scripted, ledger)
+        retriever = DenseRetriever(
+            DenseConfig(k=5),
+            scope=scope,
+            index_version=version,
+            index=index,
+            embedder=RecordingEmbeddingModel(embedder, ledger),
+        )
+        result = await AnswerService(anchors, nonce_factory=lambda: nonce).answer(
+            scope,
+            "How often does Port Sallow record sea levels?",
+            retriever=retriever,
+            technique_version="1.0",
+            index_version=version,
+            chat=chat,
+            ledger=ledger,
+            config=AnswerConfig(min_score=0.0),
+        )
+        return result
+
+    async def scenario():
+        def nonce_reply(request):
+            user = next(message.content for message in request.messages if message.role == "user")
+            match = re.search(r"<<<EVIDENCE (S\d+) ([0-9a-f]{16})>>>\n", user)
+            assert match is not None and match.group(2) == nonce
+            return f"{FACT_EN} [{match.group(1)} {match.group(2)}]"
+
+        result = await run(nonce_reply)
+        assert result.status == "answered"
+        assert tuple(c.marker for c in result.citations) == ("S1",)
+        resolved = await anchors.resolve(scope, result.citations[0].anchors)
+        assert resolved and all(item.status == "exact" for item in resolved)
+        assert nonce not in result.model_dump_json()
+        other = "fedcba9876543210"
+
+        def wrong_nonce_reply(request):
+            user = next(message.content for message in request.messages if message.role == "user")
+            match = re.search(r"<<<EVIDENCE (S\d+) ([0-9a-f]{16})>>>\n", user)
+            assert match is not None
+            return f"{FACT_EN} [{match.group(1)} {other}]"
+
+        def stray_nonce_reply(request):
+            user = next(message.content for message in request.messages if message.role == "user")
+            match = re.search(r"<<<EVIDENCE (S\d+) ([0-9a-f]{16})>>>\n", user)
+            assert match is not None
+            return f"{FACT_EN} [{match.group(1)}] {nonce}"
+
+        stray = await run(stray_nonce_reply)
+        assert stray.status == "abstained" and stray.abstention_reason == "invalid_citation"
+        assert nonce not in stray.model_dump_json()
+
+        result = await run(wrong_nonce_reply)
+        assert result.status == "abstained"
+        assert result.abstention_reason == "uncited_answer"
+
+    asyncio.run(scenario())
+
+
 def test_unresolved_anchor_abstains_and_redacts(built):
     scope, index, anchors, embedder, version = built
 

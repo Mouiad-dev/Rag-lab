@@ -18,6 +18,17 @@ class AnswerCheck(BaseModel):
     cited: tuple[str, ...]
 
 
+def normalize_nonce_markers(text: str, nonce: str) -> str:
+    """Normalize model-copied nonce suffixes per the ADR-0013 amendment.
+
+    This is safe because the nonce is random per run and the service guarantees
+    it never occurs in the question or evidence (nonce_conflicts).
+    """
+    if not re.fullmatch(r"[0-9a-f]{16}", nonce):
+        raise ValueError("nonce must be 16 lowercase hexadecimal characters")
+    return re.sub(rf"\[(S[1-9][0-9]?) {re.escape(nonce)}\]", r"[\1]", text)
+
+
 def parse_markers(text: str) -> tuple[str, ...]:
     """Return unique recognized markers in their first appearance order."""
     found: list[str] = []

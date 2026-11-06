@@ -29,8 +29,8 @@ The acceptance column describes evidence that must exist before validation. Each
 | C19 | chunking / P4.4 | Adaptive segmentation | Route document regions to explicit segmentation policies. | Compare policy decisions and failures against one fixed policy. | planned |
 | C20 | embedding_representation / P7.5 | Late chunking | Pool token representations after wider-context encoding. | Use a compatible encoder; compare early/late with the same model. | planned |
 | C21 | chunking / P4.2 | Multilingual boundary handling | Handle Arabic/English/mixed segmentation and reversible normalization. | Preserve original locators and inspect Arabic diacritics and punctuation. | planned |
-| R01 | control / P3.4 | No-retrieval baseline | Answer without corpus retrieval as a diagnostic control. | Label absent grounding and compare on corpus-specific questions. | in_progress |
-| R02 | retrieval / P3.4 | Dense two-step RAG | Embed query, retrieve text vectors, generate grounded answer. | Retrieve a known fact and abstain on a missing one. | in_progress |
+| R01 | control / P3.4 | No-retrieval baseline | Answer without corpus retrieval as a diagnostic control. | Label absent grounding and compare on corpus-specific questions. | implemented |
+| R02 | retrieval / P3.4 | Dense two-step RAG | Embed query, retrieve text vectors, generate grounded answer. | Retrieve a known fact and abstain on a missing one. | implemented |
 | R03 | retrieval / P5.1 | BM25 lexical search | Implement genuine BM25 with documented tokenization. | Test exact identifiers and Arabic normalization; do not relabel ts_rank. | planned |
 | R04 | retrieval / P5.1 | PostgreSQL FTS | Use PostgreSQL lexical search as its own baseline. | Document language analyzer and contrast rank behavior with BM25. | planned |
 | R05 | retrieval / P5.1 | Learned sparse retrieval | Use an actual supported learned sparse encoder. | Persist sparse outputs and compare lexical/semantic matches and memory. | planned |
