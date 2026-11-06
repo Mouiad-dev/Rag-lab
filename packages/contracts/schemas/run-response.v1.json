@@ -1,0 +1,541 @@
+{
+  "$defs": {
+    "AbstentionReason": {
+      "enum": [
+        "no_evidence",
+        "low_score",
+        "model_declined",
+        "truncated_output",
+        "uncited_answer",
+        "invalid_citation",
+        "citation_unresolved"
+      ],
+      "title": "AbstentionReason",
+      "type": "string"
+    },
+    "Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "anchors": {
+          "items": {
+            "$ref": "#/$defs/SourceAnchor"
+          },
+          "minItems": 1,
+          "title": "Anchors",
+          "type": "array"
+        },
+        "marker": {
+          "pattern": "^S[1-9][0-9]?$",
+          "title": "Marker",
+          "type": "string"
+        }
+      },
+      "required": [
+        "marker",
+        "anchors"
+      ],
+      "title": "Citation",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "anchors": {
+          "items": {
+            "$ref": "#/$defs/SourceAnchor"
+          },
+          "minItems": 1,
+          "title": "Anchors",
+          "type": "array"
+        },
+        "marker": {
+          "pattern": "^S[1-9][0-9]?$",
+          "title": "Marker",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "used": {
+          "title": "Used",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "marker",
+        "rank",
+        "score",
+        "used",
+        "anchors"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "PageRegion": {
+      "additionalProperties": false,
+      "description": "Normalized [0,1] rectangle with top-left origin in the stored upright page view.",
+      "properties": {
+        "page_index": {
+          "minimum": 0,
+          "title": "Page Index",
+          "type": "integer"
+        },
+        "x0": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X0",
+          "type": "number"
+        },
+        "x1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X1",
+          "type": "number"
+        },
+        "y0": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y0",
+          "type": "number"
+        },
+        "y1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "page_index",
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "PageRegion",
+      "type": "object"
+    },
+    "Precision": {
+      "enum": [
+        "exact_text",
+        "exact_region",
+        "approximate_region",
+        "page_only",
+        "unavailable"
+      ],
+      "title": "Precision",
+      "type": "string"
+    },
+    "RunPins": {
+      "additionalProperties": false,
+      "properties": {
+        "chat_model": {
+          "title": "Chat Model",
+          "type": "string"
+        },
+        "chat_profile_id": {
+          "title": "Chat Profile Id",
+          "type": "string"
+        },
+        "chat_provider": {
+          "title": "Chat Provider",
+          "type": "string"
+        },
+        "embedding_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Embedding Key"
+        },
+        "index_version_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Index Version Id"
+        },
+        "k": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "K"
+        },
+        "min_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Score"
+        },
+        "prompt_template": {
+          "pattern": "^[a-z0-9-]+-v[0-9]+$",
+          "title": "Prompt Template",
+          "type": "string"
+        },
+        "technique_id": {
+          "pattern": "^[A-Z][0-9]{2}$",
+          "title": "Technique Id",
+          "type": "string"
+        },
+        "technique_version": {
+          "title": "Technique Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "technique_id",
+        "technique_version",
+        "index_version_id",
+        "embedding_key",
+        "chat_profile_id",
+        "chat_provider",
+        "chat_model",
+        "prompt_template",
+        "min_score",
+        "k"
+      ],
+      "title": "RunPins",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "answered",
+        "abstained",
+        "ungrounded"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "RunUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "estimated_cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Estimated Cost Usd"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "model_calls": {
+          "minimum": 0,
+          "title": "Model Calls",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_calls",
+        "input_tokens",
+        "output_tokens",
+        "estimated_cost_usd"
+      ],
+      "title": "RunUsage",
+      "type": "object"
+    },
+    "SourceAnchor": {
+      "additionalProperties": false,
+      "description": "Stable reference to an exact span or region within a pinned extraction view.\n\nOwned by the document/extraction version; carries no chunk or index ID. Unknown fields are\nrejected in v1; consumer adapters may relax this later under REUSE_AND_INTEGRATION section 6.",
+      "properties": {
+        "anchor_id": {
+          "minLength": 1,
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "block_id": {
+          "minLength": 1,
+          "title": "Block Id",
+          "type": "string"
+        },
+        "contract_version": {
+          "default": "1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "exact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exact"
+        },
+        "page_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Index"
+        },
+        "page_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Label"
+        },
+        "precision": {
+          "$ref": "#/$defs/Precision"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "regions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PageRegion"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "section_path": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Section Path",
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suffix"
+        },
+        "text_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "source",
+        "block_id",
+        "precision"
+      ],
+      "title": "SourceAnchor",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Provider-qualified pointer to an immutable document version and extraction view.",
+      "properties": {
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_version_id": {
+          "minLength": 1,
+          "title": "Document Version Id",
+          "type": "string"
+        },
+        "extraction_view_id": {
+          "minLength": 1,
+          "title": "Extraction View Id",
+          "type": "string"
+        },
+        "provider_namespace": {
+          "minLength": 1,
+          "title": "Provider Namespace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_namespace",
+        "document_id",
+        "document_version_id",
+        "extraction_view_id"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "TextRange": {
+      "additionalProperties": false,
+      "description": "Zero-based, half-open range of Unicode code points in canonical block text.\n\nNot UTF-8 bytes and not UTF-16 code units.",
+      "properties": {
+        "end": {
+          "title": "End",
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TextRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "abstention_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AbstentionReason"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "answer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Answer"
+    },
+    "citations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Citation"
+      },
+      "title": "Citations",
+      "type": "array"
+    },
+    "contract_version": {
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "pins": {
+      "$ref": "#/$defs/RunPins"
+    },
+    "run_id": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RunStatus"
+    },
+    "usage": {
+      "$ref": "#/$defs/RunUsage"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "pattern": "^[a-z_]{1,64}$",
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "status",
+    "pins",
+    "usage"
+  ],
+  "title": "RunResponse",
+  "type": "object"
+}

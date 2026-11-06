@@ -1,0 +1,90 @@
+{
+  "contract_version": "1.0",
+  "run_id": "run-en-1",
+  "status": "answered",
+  "answer": "The shelf is listed in the catalogue.",
+  "citations": [
+    {
+      "marker": "S1",
+      "anchors": [
+        {
+          "contract_version": "1.0",
+          "anchor_id": "xa-en-1",
+          "source": {
+            "provider_namespace": "rag-foundry-fixtures",
+            "document_id": "doc-en",
+            "document_version_id": "docv-en-1",
+            "extraction_view_id": "xv-en-1"
+          },
+          "block_id": "p1",
+          "section_path": [],
+          "text_range": {
+            "start": 0,
+            "end": 132
+          },
+          "exact": "A library catalogue lists every item the library holds. Each record points to a shelf, so a reader can find the book without asking.",
+          "prefix": null,
+          "suffix": null,
+          "page_index": null,
+          "page_label": null,
+          "regions": [],
+          "precision": "exact_text",
+          "warnings": []
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "marker": "S1",
+      "rank": 1,
+      "score": 0.9,
+      "used": true,
+      "anchors": [
+        {
+          "contract_version": "1.0",
+          "anchor_id": "xa-en-1",
+          "source": {
+            "provider_namespace": "rag-foundry-fixtures",
+            "document_id": "doc-en",
+            "document_version_id": "docv-en-1",
+            "extraction_view_id": "xv-en-1"
+          },
+          "block_id": "p1",
+          "section_path": [],
+          "text_range": {
+            "start": 0,
+            "end": 132
+          },
+          "exact": "A library catalogue lists every item the library holds. Each record points to a shelf, so a reader can find the book without asking.",
+          "prefix": null,
+          "suffix": null,
+          "page_index": null,
+          "page_label": null,
+          "regions": [],
+          "precision": "exact_text",
+          "warnings": []
+        }
+      ]
+    }
+  ],
+  "pins": {
+    "technique_id": "R02",
+    "technique_version": "1.0",
+    "index_version_id": "idxv-1",
+    "embedding_key": "ollama:bge-m3:1024",
+    "chat_profile_id": "local",
+    "chat_provider": "ollama",
+    "chat_model": "gemma4:e4b",
+    "prompt_template": "grounded-answer-v1",
+    "min_score": 0.45,
+    "k": 5
+  },
+  "usage": {
+    "model_calls": 2,
+    "input_tokens": 100,
+    "output_tokens": 20,
+    "estimated_cost_usd": "0.000000"
+  },
+  "warnings": []
+}

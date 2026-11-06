@@ -8,6 +8,19 @@ from rag_foundry_contracts.resolve import (
     ResolutionReason,
     ResolutionStatus,
 )
+from rag_foundry_contracts.runs import (
+    MAX_QUESTION_CHARS,
+    MAX_RUN_K,
+    AbstentionReason,
+    Citation,
+    Evidence,
+    Marker,
+    RunPins,
+    RunRequest,
+    RunResponse,
+    RunStatus,
+    RunUsage,
+)
 from rag_foundry_contracts.source import (
     CONTRACT_VERSION,
     PageRegion,
@@ -34,4 +47,15 @@ __all__ = [
     "TextRange",
     "UnsupportedContractVersionError",
     "check_contract_version",
+    "MAX_QUESTION_CHARS",
+    "MAX_RUN_K",
+    "AbstentionReason",
+    "Citation",
+    "Evidence",
+    "Marker",
+    "RunPins",
+    "RunRequest",
+    "RunResponse",
+    "RunStatus",
+    "RunUsage",
 ]
