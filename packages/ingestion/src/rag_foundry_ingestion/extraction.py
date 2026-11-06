@@ -104,22 +104,7 @@ class ExtractionService:
         return await self._views.create_view_or_get(scope, new)
 
     async def load_payload(self, scope: Scope, view: ExtractionView) -> ExtractionPayload:
-        if (view.tenant_id, view.project_id) != (scope.tenant_id, scope.project_id):
-            raise NotFoundError()
-        if view.payload_key != self._store.key_for(scope, view.payload_sha256):
-            raise _mismatch("payload key does not match its hash")
-        chunks: list[bytes] = []
-        digest = hashlib.sha256()
-        stream = self._store.open_read(view.payload_key)
-        try:
-            async for chunk in stream:
-                digest.update(chunk)
-                chunks.append(chunk)
-        finally:
-            await _aclose(stream)
-        if digest.hexdigest() != view.payload_sha256:
-            raise _mismatch("payload hash does not match")
-        return ExtractionPayload.loads(b"".join(chunks))
+        return await read_payload(self._store, scope, view)
 
     async def _read_verified(self, object_key: str, sha256: str, size_bytes: int) -> bytes:
         digest = hashlib.sha256()
@@ -158,3 +143,22 @@ class ExtractionService:
             await asyncio.shield(self._store.discard(staged))
         except Exception:  # keep the original error
             pass
+
+
+async def read_payload(store: ObjectStore, scope: Scope, view: ExtractionView) -> ExtractionPayload:
+    if (view.tenant_id, view.project_id) != (scope.tenant_id, scope.project_id):
+        raise NotFoundError()
+    if view.payload_key != store.key_for(scope, view.payload_sha256):
+        raise _mismatch("payload key does not match its hash")
+    chunks: list[bytes] = []
+    digest = hashlib.sha256()
+    stream = store.open_read(view.payload_key)
+    try:
+        async for chunk in stream:
+            digest.update(chunk)
+            chunks.append(chunk)
+    finally:
+        await _aclose(stream)
+    if digest.hexdigest() != view.payload_sha256:
+        raise _mismatch("payload hash does not match")
+    return ExtractionPayload.loads(b"".join(chunks))

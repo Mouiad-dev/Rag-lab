@@ -88,7 +88,14 @@ class ExtractionAlignmentError(ExtractionError):
 class AnchorError(IntakeError):
     """Anchor construction failure with a fixed, content-free message."""
 
-    CODES = ("block_not_found", "range_out_of_bounds", "empty_range", "no_block_in_span", "invalid_namespace")
+    CODES = (
+        "block_not_found",
+        "range_out_of_bounds",
+        "empty_range",
+        "no_block_in_span",
+        "invalid_namespace",
+        "too_many_views",
+    )
 
     def __init__(self, code: str) -> None:
         if code not in self.CODES:
