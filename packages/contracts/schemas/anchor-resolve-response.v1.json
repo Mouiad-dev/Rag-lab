@@ -23,7 +23,7 @@
           "title": "Block Id"
         },
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -113,7 +113,7 @@
   "description": "Results in the same order as the request anchors.",
   "properties": {
     "contract_version": {
-      "default": "1.0",
+      "default": "1.1",
       "title": "Contract Version",
       "type": "string"
     },

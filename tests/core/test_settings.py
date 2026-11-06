@@ -27,6 +27,12 @@ def test_env_override(monkeypatch):
     assert load_settings().api_port == 9001
 
 
+def test_runtime_config_path_env_override(monkeypatch, tmp_path):
+    path = tmp_path / "runtime.json"
+    monkeypatch.setenv("RAG_FOUNDRY_RUNTIME_CONFIG_PATH", str(path))
+    assert load_settings().runtime_config_path == path
+
+
 def test_unknown_init_key_rejected():
     with pytest.raises(ValidationError):
         Settings(not_a_field=1)

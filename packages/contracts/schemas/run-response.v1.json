@@ -191,10 +191,36 @@
           ],
           "title": "Min Score"
         },
+        "prompt_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Sha256"
+        },
         "prompt_template": {
           "pattern": "^[a-z0-9-]+-v[0-9]+$",
           "title": "Prompt Template",
           "type": "string"
+        },
+        "settings_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Settings Sha256"
         },
         "technique_id": {
           "pattern": "^[A-Z][0-9]{2}$",
@@ -287,7 +313,7 @@
           "type": "string"
         },
         "contract_version": {
-          "default": "1.0",
+          "default": "1.1",
           "title": "Contract Version",
           "type": "string"
         },
@@ -493,7 +519,7 @@
       "type": "array"
     },
     "contract_version": {
-      "default": "1.0",
+      "default": "1.1",
       "title": "Contract Version",
       "type": "string"
     },

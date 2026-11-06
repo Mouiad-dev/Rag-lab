@@ -146,3 +146,41 @@ class RunError(IntakeError):
         if code not in self.CODES:
             raise ValueError("unknown run error code")
         super().__init__(code, code)
+
+
+class SettingsError(IntakeError):
+    """Content-free runtime settings errors."""
+
+    CODES = (
+        "unknown_key",
+        "scope_not_allowed",
+        "invalid_value",
+        "invalid_file",
+        "invalid_override",
+        "version_conflict",
+        "store_unavailable",
+    )
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown settings error code")
+        super().__init__(code, code)
+
+
+class PromptError(IntakeError):
+    """Content-free prompt template store errors."""
+
+    CODES = (
+        "template_not_found",
+        "no_active_template",
+        "template_exists",
+        "purpose_mismatch",
+        "hash_mismatch",
+        "invalid_template",
+        "store_unavailable",
+    )
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown prompt error code")
+        super().__init__(code, code)

@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     object_store_root: Path = Path("var/objects")
     max_upload_bytes: int = Field(100 * 1024 * 1024, ge=1, le=1024**3)
     provider_namespace: str = "rag-foundry-local"
+    runtime_config_path: Path | None = None
 
     # ADR-0009 D2. A secret: never logged or echoed. Only the psycopg 3 SQLAlchemy dialect is accepted.
     database_url: SecretStr | None = None

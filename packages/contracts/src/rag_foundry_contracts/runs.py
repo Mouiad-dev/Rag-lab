@@ -1,4 +1,4 @@
-"""Run request and response contract models, version 1.0."""
+"""Run request and response contract models, version 1.1."""
 
 from decimal import Decimal
 from enum import StrEnum
@@ -14,6 +14,7 @@ MAX_RUN_K = 20
 Marker = Annotated[str, Field(pattern=r"^S[1-9][0-9]?$")]
 TechniqueId = Annotated[str, Field(pattern=r"^[A-Z][0-9]{2}$")]
 PromptTemplate = Annotated[str, Field(pattern=r"^[a-z0-9-]+-v[0-9]+$")]
+Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 WarningCode = Annotated[str, Field(pattern=r"^[a-z_]{1,64}$")]
 
 
@@ -78,6 +79,8 @@ class RunPins(_Model):
     prompt_template: PromptTemplate
     min_score: float | None = Field(allow_inf_nan=False)
     k: int | None
+    settings_sha256: Sha256 | None = None
+    prompt_sha256: Sha256 | None = None
 
 
 class RunUsage(_Model):

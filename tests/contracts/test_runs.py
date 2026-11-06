@@ -30,6 +30,24 @@ def test_fixtures_validate():
     assert RunResponse.model_validate(_load("response-ungrounded.json")).status is RunStatus.UNGROUNDED
 
 
+def test_run_pins_hashes_round_trip():
+    data = _answered()
+    data["pins"]["settings_sha256"] = "a" * 64
+    data["pins"]["prompt_sha256"] = "b" * 64
+    model = RunResponse.model_validate(data)
+    restored = RunResponse.model_validate_json(model.model_dump_json())
+    assert restored.pins.settings_sha256 == "a" * 64
+    assert restored.pins.prompt_sha256 == "b" * 64
+
+
+def test_run_pins_reject_invalid_hashes():
+    for field, value in (("settings_sha256", "a" * 63), ("prompt_sha256", "A" * 64)):
+        data = _answered()
+        data["pins"][field] = value
+        with pytest.raises(ValidationError):
+            RunResponse.model_validate(data)
+
+
 @pytest.mark.parametrize("name", ["run-request.v1.json", "run-response.v1.json"])
 def test_committed_schema_matches_models(name):
     committed = (SCHEMA_DIR / name).read_bytes().decode("utf-8")

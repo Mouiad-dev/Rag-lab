@@ -1,4 +1,4 @@
-"""Source reference and source anchor contract models, version 1.0.
+"""Source reference and source anchor contract models, version 1.1.
 
 All models are frozen and reject unknown fields (``extra="forbid"``) in v1. Consumer adapters may
 relax this later under REUSE_AND_INTEGRATION section 6 (tolerate documented unknown optional fields).
@@ -11,7 +11,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
 
 _VERSION_RE = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 

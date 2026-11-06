@@ -1,6 +1,8 @@
 # rag-foundry-contracts
 
-Framework-neutral, versioned public contracts for RAG Foundry. Contract version `1.0`.
+Framework-neutral, versioned public contracts for RAG Foundry. Contract version `1.1`.
+
+Version 1.1 adds optional settings and prompt SHA-256 run pins.
 
 - Depends only on `pydantic`. No ORM, FastAPI, LangChain/LangGraph, vendor SDK or lab UI dependency, and no import of `rag_foundry_core`.
 - Currently contains the source reference and source anchor models (`SourceRef`, `TextRange`, `PageRegion`, `Precision`, `SourceAnchor`).

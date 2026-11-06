@@ -78,7 +78,7 @@ def test_valid_anchor_round_trips():
     again = SourceAnchor.model_validate_json(anchor.model_dump_json())
     assert again == anchor
     assert again.precision is Precision.EXACT_TEXT
-    assert again.contract_version == "1.0"
+    assert again.contract_version == "1.1"
 
 
 def test_rejects_end_before_start():
