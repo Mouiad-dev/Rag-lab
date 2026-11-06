@@ -19,6 +19,7 @@ COPY packages/techniques/pyproject.toml packages/techniques/pyproject.toml
 COPY packages/chunking/pyproject.toml packages/chunking/pyproject.toml
 COPY packages/providers/pyproject.toml packages/providers/pyproject.toml
 COPY packages/indexing/pyproject.toml packages/indexing/pyproject.toml
+COPY packages/answering/pyproject.toml packages/answering/pyproject.toml
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 RUN uv sync --locked --no-dev --all-packages --no-install-workspace
