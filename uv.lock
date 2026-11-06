@@ -9,6 +9,7 @@ members = [
     "rag-foundry-contracts",
     "rag-foundry-core",
     "rag-foundry-domain",
+    "rag-foundry-indexing",
     "rag-foundry-ingestion",
     "rag-foundry-providers",
     "rag-foundry-storage",
@@ -24,6 +25,7 @@ dev = [
     { name = "rag-foundry-contracts", editable = "packages/contracts" },
     { name = "rag-foundry-core", editable = "packages/core" },
     { name = "rag-foundry-domain", editable = "packages/domain" },
+    { name = "rag-foundry-indexing", editable = "packages/indexing" },
     { name = "rag-foundry-ingestion", extras = ["html", "pdf"], editable = "packages/ingestion" },
     { name = "rag-foundry-providers", extras = ["ollama"], editable = "packages/providers" },
     { name = "rag-foundry-storage", extras = ["sql"], editable = "packages/storage" },
@@ -750,6 +752,27 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pydantic", specifier = ">=2.14.2" }]
+
+[[package]]
+name = "rag-foundry-indexing"
+version = "0.0.0"
+source = { editable = "packages/indexing" }
+dependencies = [
+    { name = "rag-foundry-contracts" },
+    { name = "rag-foundry-domain" },
+    { name = "rag-foundry-ingestion" },
+    { name = "rag-foundry-providers" },
+    { name = "rag-foundry-techniques" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "rag-foundry-contracts", editable = "packages/contracts" },
+    { name = "rag-foundry-domain", editable = "packages/domain" },
+    { name = "rag-foundry-ingestion", editable = "packages/ingestion" },
+    { name = "rag-foundry-providers", editable = "packages/providers" },
+    { name = "rag-foundry-techniques", editable = "packages/techniques" },
+]
 
 [[package]]
 name = "rag-foundry-ingestion"

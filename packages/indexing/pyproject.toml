@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-indexing"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "rag-foundry-domain",
+    "rag-foundry-contracts",
+    "rag-foundry-ingestion",
+    "rag-foundry-providers",
+    "rag-foundry-techniques",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_indexing"]

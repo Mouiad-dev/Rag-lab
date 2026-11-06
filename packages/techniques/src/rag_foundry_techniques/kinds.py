@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Protocol
+from typing import ClassVar, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -68,3 +68,44 @@ class Chunker(Protocol):
     def __init__(self, config: BaseModel) -> None: ...
 
     def chunk(self, doc: ChunkInput) -> tuple[ChunkSpan, ...]: ...
+
+
+class RetrievedChunk(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    chunk_id: str
+    extraction_view_id: str
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    block_ids: tuple[str, ...]
+    text: str
+    distance: float
+    score: float
+    rank: int = Field(ge=1)
+
+
+class RetrievalResult(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    technique_id: str
+    grounding: Literal["corpus", "none"]
+    index_version_id: str | None
+    hits: tuple[RetrievedChunk, ...]
+
+    @field_validator("index_version_id")
+    @classmethod
+    def _none_grounding_has_no_index(cls, value, info):
+        if info.data.get("grounding") == "none" and value is not None:
+            raise ValueError("ungrounded results cannot reference an index")
+        return value
+
+    @field_validator("hits")
+    @classmethod
+    def _none_grounding_has_no_hits(cls, value, info):
+        if info.data.get("grounding") == "none" and value:
+            raise ValueError("ungrounded results cannot contain hits")
+        return value
+
+
+class Retriever(Protocol):
+    async def retrieve(self, query: str) -> RetrievalResult: ...

@@ -8,6 +8,7 @@ from rag_foundry_techniques import (
     Fidelity,
     PluginKind,
     PluginManifest,
+    RetrievalResult,
     TechniqueError,
     TechniquePlugin,
     TechniqueRegistry,
@@ -121,3 +122,36 @@ def test_plugin_kind_has_twelve_members():
         "chunker", "representation", "retriever", "fusion", "query_transform", "reranker",
         "context_builder", "workflow", "graph_builder", "knowledge_store", "cache", "evaluator",
     }  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {
+            "technique_id": "R01",
+            "grounding": "none",
+            "hits": (
+                {
+                    "chunk_id": "c1",
+                    "extraction_view_id": "v1",
+                    "start": 0,
+                    "end": 1,
+                    "block_ids": ("b00000",),
+                    "text": "x",
+                    "distance": 0.0,
+                    "score": 1.0,
+                    "rank": 1,
+                },
+            ),
+        },
+        {
+            "technique_id": "R01",
+            "grounding": "none",
+            "index_version_id": "00000000-0000-4000-8000-000000000001",
+            "hits": (),
+        },
+    ],
+)
+def test_no_grounding_rejects_hits_or_index_id(values):
+    with pytest.raises(ValidationError):
+        RetrievalResult(**values)

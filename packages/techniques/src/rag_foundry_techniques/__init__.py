@@ -6,7 +6,15 @@ from rag_foundry_techniques.errors import (
     TechniqueUnavailableError,
     UnknownTechniqueError,
 )
-from rag_foundry_techniques.kinds import Chunker, ChunkInput, ChunkSpan, TextBlock
+from rag_foundry_techniques.kinds import (
+    Chunker,
+    ChunkInput,
+    ChunkSpan,
+    RetrievalResult,
+    RetrievedChunk,
+    Retriever,
+    TextBlock,
+)
 from rag_foundry_techniques.protocol import (
     PROTOCOL_VERSION,
     Fidelity,
@@ -23,6 +31,9 @@ __all__ = [
     "ChunkInput",
     "ChunkSpan",
     "Chunker",
+    "RetrievedChunk",
+    "RetrievalResult",
+    "Retriever",
     "DuplicatePluginError",
     "Fidelity",
     "PluginKind",
