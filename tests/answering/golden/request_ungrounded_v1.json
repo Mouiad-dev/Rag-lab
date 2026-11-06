@@ -1,0 +1,16 @@
+{
+  "max_output_tokens": 512,
+  "messages": [
+    {
+      "content": "No document evidence is available for this question. Answer briefly from general knowledge in the same language as the question. Do not cite sources and do not use citation markers.",
+      "role": "system"
+    },
+    {
+      "content": "Question:\n<<<QUESTION 0123456789abcdef>>>\nWhere is the observatory?\n<<<END QUESTION 0123456789abcdef>>>",
+      "role": "user"
+    }
+  ],
+  "response_schema": null,
+  "temperature": 0.0,
+  "tools": []
+}

@@ -91,7 +91,12 @@ def check_roadmap(errors):
             f"ROADMAP.md must have exactly {STEPS_PER_PHASE} steps per phase "
             f"({len(expected)} total); found {len(steps)}."
         )
-    progress = re.findall(r"^\| (P\d+\.\d+) \|", read("docs/PROGRESS.md"), re.M)
+    progress_text = read("docs/PROGRESS.md")
+    steps_match = re.search(r"^## Steps\b[^\n]*\n(.*?)(?=^## |\Z)", progress_text, re.M | re.S)
+    if steps_match is None:
+        errors.append('PROGRESS.md must have a "## Steps" section.')
+        return set(expected)
+    progress = re.findall(r"^\| (P\d+\.\d+) \|", steps_match.group(1), re.M)
     if progress != expected:
         errors.append(f"PROGRESS.md must track the same {len(expected)} steps as ROADMAP.md; found {len(progress)}.")
     return set(expected)

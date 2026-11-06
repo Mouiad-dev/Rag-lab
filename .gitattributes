@@ -1,2 +1,3 @@
 packages/contracts/fixtures/** text eol=lf
 packages/contracts/schemas/*.json text eol=lf
+tests/answering/golden/*.json text eol=lf

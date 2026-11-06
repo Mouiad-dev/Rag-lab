@@ -15,5 +15,6 @@
 | [ADR-0011](ADR-0011-source-anchors-and-resolution.md) | Source anchors and resolution | accepted |
 | [ADR-0012](ADR-0012-minimal-index.md) | Minimal chunk and vector index | accepted |
 | [ADR-0013](ADR-0013-thin-slice-grounded-answers.md) | Thin slice: grounded answers, citations and abstention | accepted |
+| [ADR-0014](ADR-0014-adapter-factories-runtime-settings-prompt-store.md) | Adapter factories, runtime settings and prompt store | accepted |
 
 New ADRs use [the template](../templates/ADR.md).

@@ -51,7 +51,11 @@ def repo_copy(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture
 def work(repo_copy: Path):
     """Yield the copy; restore the two mutable files afterwards."""
-    files = [repo_copy / "config" / "techniques.json", repo_copy / "docs" / "techniques" / "TECHNIQUE_CATALOG.md"]
+    files = [
+        repo_copy / "config" / "techniques.json",
+        repo_copy / "docs" / "techniques" / "TECHNIQUE_CATALOG.md",
+        repo_copy / "docs" / "PROGRESS.md",
+    ]
     saved = {f: f.read_bytes() for f in files}
     yield repo_copy
     for f, data in saved.items():
@@ -133,6 +137,50 @@ def test_unmodified_copy_passes(work: Path) -> None:
     result = _run(work)
     assert result.returncode == 0, result.stderr
     assert "72 catalogue entries" in result.stdout
+
+
+def test_extra_roadmap_step_outside_steps_section_passes(work: Path) -> None:
+    progress_path = work / "docs" / "PROGRESS.md"
+    progress = progress_path.read_text(encoding="utf-8")
+    progress_path.write_text(
+        progress
+        + "\n## Extra steps\n\n| Step | Goal | State | Evidence |\n|---|---|---|---|\n| P3.6 | Extra | planned | - |\n",
+        encoding="utf-8",
+    )
+    result = _run(work)
+    assert result.returncode == 0, result.stderr
+
+
+def test_extra_roadmap_step_inside_steps_section_fails(work: Path) -> None:
+    progress_path = work / "docs" / "PROGRESS.md"
+    progress = progress_path.read_text(encoding="utf-8")
+    marker = "## Steps (10 \u00d7 5)\n"
+    assert marker in progress
+    progress_path.write_text(progress.replace(marker, marker + "| P3.6 | Extra | planned | - |\n", 1), encoding="utf-8")
+    result = _run(work)
+    assert result.returncode == 1
+    assert "PROGRESS.md must track the same 50 steps" in result.stderr
+
+
+def test_missing_roadmap_step_inside_steps_section_fails(work: Path) -> None:
+    progress_path = work / "docs" / "PROGRESS.md"
+    progress = progress_path.read_text(encoding="utf-8")
+    lines = progress.splitlines(keepends=True)
+    kept = [line for line in lines if not line.startswith("| P10.5 |")]
+    assert len(kept) == len(lines) - 1
+    progress_path.write_text("".join(kept), encoding="utf-8")
+    result = _run(work)
+    assert result.returncode == 1
+    assert "PROGRESS.md must track the same 50 steps" in result.stderr
+
+
+def test_missing_steps_section_fails_clearly(work: Path) -> None:
+    progress_path = work / "docs" / "PROGRESS.md"
+    progress = progress_path.read_text(encoding="utf-8")
+    progress_path.write_text(progress.replace("## Steps (10 \u00d7 5)", "## Roadmap", 1), encoding="utf-8")
+    result = _run(work)
+    assert result.returncode == 1
+    assert 'PROGRESS.md must have a "## Steps" section.' in result.stderr
 
 
 UNIQUE_IDS = "Technique IDs must be unique and include the committed 72-entry curriculum"
