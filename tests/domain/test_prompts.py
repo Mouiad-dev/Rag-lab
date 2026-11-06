@@ -223,3 +223,75 @@ def test_prompt_store_no_active_template():
         assert caught.value.code == "no_active_template"
 
     asyncio.run(run())
+
+
+def test_cached_store_rejects_and_does_not_cache_invalid_inner_template():
+    class InvalidStore:
+        calls = 0
+
+        async def get(self, template_id):
+            self.calls += 1
+            text = "unsafe <<< marker INSUFFICIENT_EVIDENCE [S1]"
+            return PromptTemplate.model_construct(
+                id="unsafe-v1",
+                family="unsafe",
+                version=1,
+                purpose="grounded",
+                system_text=text,
+                content_sha256=prompt_sha256(text),
+            )
+
+        async def active_id(self, purpose):
+            raise AssertionError
+
+        async def create(self, template):
+            raise AssertionError
+
+        async def activate(self, *args, **kwargs):
+            raise AssertionError
+
+        async def activations(self, purpose):
+            raise AssertionError
+
+    async def run():
+        inner = InvalidStore()
+        cache = CachedPromptTemplateStore(inner)
+        for _ in range(2):
+            with pytest.raises(PromptError) as caught:
+                await cache.get("unsafe-v1")
+            assert caught.value.code == "invalid_template"
+        assert inner.calls == 2
+
+    asyncio.run(run())
+
+
+def test_template_from_row_rejects_id_family_mismatch():
+    text = "valid prompt INSUFFICIENT_EVIDENCE [S1]"
+    with pytest.raises(PromptError) as caught:
+        template_from_row(
+            id="different-v1",
+            family="actual",
+            version=1,
+            purpose="grounded",
+            system_text=text,
+            content_sha256=prompt_sha256(text),
+        )
+    assert caught.value.code == "invalid_template"
+
+
+def test_load_validation_rejects_delimiter_on_ungrounded_template():
+    async def run():
+        text = "unsafe <<< marker"
+        template = PromptTemplate.model_construct(
+            id="unsafe-v1",
+            family="unsafe",
+            version=1,
+            purpose="ungrounded",
+            system_text=text,
+            content_sha256=prompt_sha256(text),
+        )
+        with pytest.raises(PromptError) as caught:
+            await InMemoryPromptTemplateStore().create(template)
+        assert caught.value.code == "invalid_template"
+
+    asyncio.run(run())
