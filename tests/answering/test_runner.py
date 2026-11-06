@@ -15,6 +15,7 @@ from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import OllamaChatModel
 from rag_foundry_providers.budget import BudgetedChatModel, BudgetedEmbeddingModel, RunBudget
+from rag_foundry_providers.config import Endpoint
 from rag_foundry_providers.ledger import RecordingChatModel, RecordingEmbeddingModel, UsageLedger
 from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel
 from test_extraction_service import ingest, setup
@@ -179,6 +180,13 @@ def test_ollama_factory_has_resilient_budgeted_recording_chain():
     assert isinstance(chat._model._model._model, OllamaChatModel)
     assert isinstance(embed, ResilientEmbeddingModel)
     assert isinstance(embed._model, BudgetedEmbeddingModel) and isinstance(embed._model._model, RecordingEmbeddingModel)
+
+
+def test_ollama_factory_urls_are_valid_endpoints():
+    from rag_foundry_core.settings import Settings
+
+    for url in ("http://ollama:11434", Settings().ollama_base_url):
+        assert Endpoint(id="ollama", adapter="ollama", base_url=url, local=True).base_url == url
 
 
 def test_canary_leak_metric_detects_answer_text(built):

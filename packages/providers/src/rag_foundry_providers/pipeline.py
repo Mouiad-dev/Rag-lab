@@ -10,9 +10,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from rag_foundry_providers.budget import BudgetedChatModel, BudgetedEmbeddingModel, RunBudget
-from rag_foundry_providers.capabilities import Capability, ModelKind, ModelProfile
-from rag_foundry_providers.config import Endpoint, ProvidersConfig
+from rag_foundry_providers.capabilities import Capability, ModelKind
+from rag_foundry_providers.config import ProvidersConfig
 from rag_foundry_providers.errors import BudgetRequiredError, ProviderUnavailableError, UnboundStageError
+from rag_foundry_providers.factories import AdapterRegistry, default_adapter_registry
 from rag_foundry_providers.ledger import RecordingChatModel, RecordingEmbeddingModel, UsageSink
 from rag_foundry_providers.registry import ProviderRegistry, StageRequirement
 from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel, RetryPolicy, Sleep
@@ -66,66 +67,6 @@ def resolve_pipeline(config: ProvidersConfig, needs: Mapping[str, StageNeed]) ->
     return reqs
 
 
-def _construct(profile: ModelProfile, endpoint: Endpoint, transport: Any, clock: Clock | None) -> object:
-    kind = profile.kind
-    if endpoint.adapter == "fake":
-        from rag_foundry_providers.fake import FakeChatModel, FakeEmbeddingModel, FakeReranker
-
-        fakes = {
-            ModelKind.CHAT: FakeChatModel,
-            ModelKind.EMBEDDING: FakeEmbeddingModel,
-            ModelKind.RERANKER: FakeReranker,
-        }
-        return fakes[kind](profile, clock=clock)
-    if endpoint.adapter == "ollama" and endpoint.base_url is not None:
-        from rag_foundry_providers.adapters.ollama import OllamaChatModel, OllamaEmbeddingModel
-
-        if kind is ModelKind.CHAT:
-            return OllamaChatModel(profile, api_base=endpoint.base_url, transport=transport, **_clock(clock))
-        if kind is ModelKind.EMBEDDING:
-            return OllamaEmbeddingModel(profile, api_base=endpoint.base_url, transport=transport, **_clock(clock))
-    if endpoint.adapter == "anthropic" and kind is ModelKind.CHAT and endpoint.api_key_env is not None:
-        from rag_foundry_providers.adapters.anthropic import AnthropicChatModel
-
-        extra: dict[str, Any] = {} if endpoint.base_url is None else {"api_base": endpoint.base_url}
-        return AnthropicChatModel(
-            profile, api_key_env=endpoint.api_key_env, transport=transport, **extra, **_clock(clock)
-        )
-    if endpoint.adapter == "openai_compatible" and endpoint.base_url is not None:
-        from rag_foundry_providers.adapters.openai_compat import (
-            OpenAICompatibleChatModel,
-            OpenAICompatibleEmbeddingModel,
-        )
-
-        if kind is ModelKind.CHAT:
-            return OpenAICompatibleChatModel(
-                profile,
-                api_base=endpoint.base_url,
-                api_key_env=endpoint.api_key_env,
-                default_max_tokens=endpoint.default_max_tokens,
-                max_tokens_field=endpoint.max_tokens_field or "max_completion_tokens",
-                supports_temperature=(
-                    endpoint.local if endpoint.supports_temperature is None else endpoint.supports_temperature
-                ),
-                transport=transport,
-                **_clock(clock),
-            )
-        if kind is ModelKind.EMBEDDING:
-            return OpenAICompatibleEmbeddingModel(
-                profile,
-                api_base=endpoint.base_url,
-                api_key_env=endpoint.api_key_env,
-                transport=transport,
-                **_clock(clock),
-            )
-    # No adapter for this adapter/kind pair (for example Anthropic embeddings): fail, never fall back.
-    raise ProviderUnavailableError(profile.id)
-
-
-def _clock(clock: Clock | None) -> dict[str, Any]:
-    return {} if clock is None else {"clock": clock}
-
-
 def build_registry(
     config: ProvidersConfig,
     *,
@@ -136,6 +77,7 @@ def build_registry(
     budget: RunBudget | None = None,
     retry: RetryPolicy | None = None,
     retry_sleep: Sleep = asyncio.sleep,
+    adapters: AdapterRegistry | None = None,
 ) -> ProviderRegistry:
     """Register every profile; construct and bind adapters only for profiles bound to ``stages``.
 
@@ -163,10 +105,11 @@ def build_registry(
     if paid and budget is None:
         raise BudgetRequiredError(paid)
     policy = retry or RetryPolicy()
+    adapter_registry = adapters or default_adapter_registry()
     for pid in pids:
         profile = profiles[pid]
         endpoint = endpoints[profile.provider]
-        adapter = _construct(profile, endpoint, transports.get(endpoint.id), clock)
+        adapter = adapter_registry.build(profile, endpoint, transport=transports.get(endpoint.id), clock=clock)
         registry.bind(pid, _wrap(adapter, profile.kind, ledger, budget, policy, retry_sleep))
     return registry
 

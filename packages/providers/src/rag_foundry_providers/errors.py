@@ -46,6 +46,31 @@ class ProviderUnavailableError(ProviderError):
         super().__init__(f"profile '{profile_id}' is known but has no bound provider adapter")
 
 
+class UnknownAdapterError(ProviderUnavailableError):
+    """An endpoint names an adapter that is not registered."""
+
+    def __init__(self, profile_id: str, adapter: str) -> None:
+        self.adapter = adapter
+        super().__init__(profile_id)
+
+
+class UnsupportedModelKindError(ProviderUnavailableError):
+    """An adapter cannot build the requested model kind."""
+
+    def __init__(self, profile_id: str, adapter: str, kind: str) -> None:
+        self.adapter = adapter
+        self.kind = kind
+        super().__init__(profile_id)
+
+
+class DuplicateAdapterError(ProviderError):
+    """Two adapter factories use the same name."""
+
+    def __init__(self, adapter: str) -> None:
+        self.adapter = adapter
+        super().__init__(f"duplicate adapter '{adapter}'")
+
+
 @dataclass(frozen=True)
 class CapabilityProblem:
     """One capability a stage needs that its profile does not declare as supported."""

@@ -12,13 +12,10 @@ from rag_foundry_domain.indexing import IndexState
 from rag_foundry_domain.ports import IndexRepository
 from rag_foundry_indexing import DenseConfig, DenseRetriever, NoRetrieval, NoRetrievalConfig
 from rag_foundry_ingestion.anchor_service import AnchorService
-from rag_foundry_providers.adapters.ollama import (
-    OllamaChatModel,
-    OllamaEmbeddingModel,
-    ollama_chat_profile,
-    ollama_embedding_profile,
-)
+from rag_foundry_providers.adapters.ollama import ollama_chat_profile, ollama_embedding_profile
 from rag_foundry_providers.budget import BudgetedChatModel, BudgetedEmbeddingModel, RunBudget
+from rag_foundry_providers.config import Endpoint
+from rag_foundry_providers.factories import AdapterRegistry, default_adapter_registry
 from rag_foundry_providers.ledger import RecordingChatModel, RecordingEmbeddingModel, UsageLedger
 from rag_foundry_providers.ports import ChatModel, EmbeddingModel
 from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel, RetryPolicy
@@ -36,12 +33,16 @@ _RETRIEVERS = {"R01": NoRetrieval, "R02": DenseRetriever}
 _LOG = logging.getLogger(__name__)
 
 
-def ollama_model_factory(base_url: str, *, retry: RetryPolicy = RUN_RETRY) -> ModelFactory:
+def ollama_model_factory(
+    base_url: str, *, retry: RetryPolicy = RUN_RETRY, adapters: AdapterRegistry | None = None
+) -> ModelFactory:
     """Build the local Resilient(Budgeted(Recording(adapter))) model chain."""
+    endpoint = Endpoint(id="ollama", adapter="ollama", base_url=base_url, local=True)
+    registry = adapters or default_adapter_registry()
 
     def factory(ledger: UsageLedger, budget: RunBudget) -> tuple[ChatModel, EmbeddingModel]:
-        chat = OllamaChatModel(ollama_chat_profile(), api_base=base_url)
-        embedder = OllamaEmbeddingModel(ollama_embedding_profile(), api_base=base_url)
+        chat = registry.build(ollama_chat_profile(), endpoint)
+        embedder = registry.build(ollama_embedding_profile(), endpoint)
         return (
             ResilientChatModel(
                 BudgetedChatModel(RecordingChatModel(chat, ledger), budget, default_max_output_tokens=512), retry

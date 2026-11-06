@@ -8,14 +8,17 @@ import json
 import sys
 from collections.abc import Sequence
 
+from pydantic import ValidationError
 from rag_foundry_answering.runner import RUN_RETRY
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_core.settings import Settings, load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
-from rag_foundry_providers.adapters.ollama import OllamaEmbeddingModel, ollama_embedding_profile
+from rag_foundry_providers.adapters.ollama import ollama_embedding_profile
+from rag_foundry_providers.config import Endpoint
 from rag_foundry_providers.errors import ProviderError
+from rag_foundry_providers.factories import default_adapter_registry
 from rag_foundry_providers.ledger import RecordingEmbeddingModel, UsageLedger
 from rag_foundry_providers.resilience import ResilientEmbeddingModel
 from rag_foundry_storage.local_store import LocalObjectStore
@@ -53,7 +56,10 @@ async def _index(settings: Settings, args):
             chunker = RecursiveChunker(RecursiveConfig(chunk_size=args.chunk_size, chunk_overlap=args.chunk_overlap))
             embedder = ResilientEmbeddingModel(
                 RecordingEmbeddingModel(
-                    OllamaEmbeddingModel(ollama_embedding_profile(), api_base=settings.ollama_base_url),
+                    default_adapter_registry().build(
+                        ollama_embedding_profile(),
+                        Endpoint(id="ollama", adapter="ollama", base_url=settings.ollama_base_url, local=True),
+                    ),
                     UsageLedger(),
                 ),
                 RUN_RETRY,
@@ -109,6 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _fail(EXIT_FAILED, exc.code)
     except ProviderError:
         return _fail(EXIT_FAILED, "provider_unavailable")
+    except ValidationError:
+        return _fail(EXIT_USAGE, "invalid RAG_FOUNDRY_* settings")
     except Exception as exc:
         return _fail(EXIT_FAILED, f"unexpected {type(exc).__name__}")
     for line in lines:

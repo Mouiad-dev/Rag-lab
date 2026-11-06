@@ -120,7 +120,9 @@ def _embed_transport() -> httpx.MockTransport:
 @pytest.mark.parametrize("profile", ["local-chat", "undeclared-chat"])
 def test_done1_tool_calling_rejected_before_any_adapter(profile: str, monkeypatch: pytest.MonkeyPatch) -> None:
     constructed: list[str] = []
-    monkeypatch.setattr("rag_foundry_providers.pipeline._construct", lambda *a, **k: constructed.append("x"))
+    monkeypatch.setattr(
+        "rag_foundry_providers.factories.AdapterRegistry.build", lambda *a, **k: constructed.append("x")
+    )
     cfg = _config({"generator": profile})
     with pytest.raises(MissingCapabilityError) as info:
         resolve_pipeline(cfg, {"generator": StageNeed("chat", frozenset({"tool_calling"}))})
