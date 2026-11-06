@@ -419,7 +419,7 @@ def test_evidence_truncation_and_deterministic_json(built):
             "fake",
             "fake-chat-v1",
         )
-        assert one.pins.prompt_template == "grounded-answer-v1"
+        assert one.pins.prompt_template == "grounded-answer-v2"
         assert one.pins.min_score == 0.0 and one.pins.k == 5
 
     asyncio.run(run())

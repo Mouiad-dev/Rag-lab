@@ -899,17 +899,25 @@ name = "rag-foundry-worker"
 version = "0.0.0"
 source = { editable = "apps/worker" }
 dependencies = [
+    { name = "rag-foundry-answering" },
+    { name = "rag-foundry-chunking" },
     { name = "rag-foundry-core" },
     { name = "rag-foundry-domain" },
+    { name = "rag-foundry-indexing" },
     { name = "rag-foundry-ingestion", extra = ["html", "pdf"] },
+    { name = "rag-foundry-providers", extra = ["ollama"] },
     { name = "rag-foundry-storage", extra = ["sql"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "rag-foundry-answering", editable = "packages/answering" },
+    { name = "rag-foundry-chunking", editable = "packages/chunking" },
     { name = "rag-foundry-core", editable = "packages/core" },
     { name = "rag-foundry-domain", editable = "packages/domain" },
+    { name = "rag-foundry-indexing", editable = "packages/indexing" },
     { name = "rag-foundry-ingestion", extras = ["pdf", "html"], editable = "packages/ingestion" },
+    { name = "rag-foundry-providers", extras = ["ollama"], editable = "packages/providers" },
     { name = "rag-foundry-storage", extras = ["sql"], editable = "packages/storage" },
 ]
 

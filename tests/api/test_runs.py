@@ -42,7 +42,7 @@ def _response(status="ungrounded"):
             "chat_profile_id": "local-chat",
             "chat_provider": "ollama",
             "chat_model": "gemma4:e4b",
-            "prompt_template": "grounded-answer-v1" if status == "answered" else "ungrounded-v1",
+            "prompt_template": "grounded-answer-v2" if status == "answered" else "ungrounded-v1",
             "min_score": 0.0 if status == "answered" else None,
             "k": 5 if status == "answered" else None,
         },

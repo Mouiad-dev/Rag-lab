@@ -1,6 +1,7 @@
 import pytest
 from rag_foundry_answering.prompt import (
     GROUNDED_SYSTEM,
+    GROUNDED_TEMPLATE_ID,
     UNGROUNDED_SYSTEM,
     build_grounded_request,
     build_ungrounded_request,
@@ -68,3 +69,8 @@ def test_grounded_system_is_constant_across_inputs():
         "two", [("S2", "second")], nonce="abcdef0123456789", max_output_tokens=1, temperature=0
     )
     assert one.messages[0] == two.messages[0]
+
+
+def test_grounded_template_version_and_nonce_instruction():
+    assert "never copy the code" in GROUNDED_SYSTEM
+    assert GROUNDED_TEMPLATE_ID == "grounded-answer-v2"
