@@ -16,6 +16,7 @@ COPY packages/domain/pyproject.toml packages/domain/pyproject.toml
 COPY packages/storage/pyproject.toml packages/storage/pyproject.toml
 COPY packages/ingestion/pyproject.toml packages/ingestion/pyproject.toml
 COPY packages/techniques/pyproject.toml packages/techniques/pyproject.toml
+COPY packages/chunking/pyproject.toml packages/chunking/pyproject.toml
 COPY packages/providers/pyproject.toml packages/providers/pyproject.toml
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml

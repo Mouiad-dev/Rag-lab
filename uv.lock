@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "rag-foundry-api",
+    "rag-foundry-chunking",
     "rag-foundry-contracts",
     "rag-foundry-core",
     "rag-foundry-domain",
@@ -19,6 +20,7 @@ members = [
 dev = [
     { name = "pytest", specifier = ">=9.2" },
     { name = "rag-foundry-api", editable = "apps/api" },
+    { name = "rag-foundry-chunking", editable = "packages/chunking" },
     { name = "rag-foundry-contracts", editable = "packages/contracts" },
     { name = "rag-foundry-core", editable = "packages/core" },
     { name = "rag-foundry-domain", editable = "packages/domain" },
@@ -700,6 +702,17 @@ requires-dist = [
     { name = "rag-foundry-storage", extras = ["sql"], editable = "packages/storage" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
+
+[[package]]
+name = "rag-foundry-chunking"
+version = "0.0.0"
+source = { editable = "packages/chunking" }
+dependencies = [
+    { name = "rag-foundry-techniques" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "rag-foundry-techniques", editable = "packages/techniques" }]
 
 [[package]]
 name = "rag-foundry-contracts"
