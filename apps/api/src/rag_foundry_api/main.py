@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
+from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_core import __version__
 from rag_foundry_core.settings import Settings, load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, DocumentRepository
@@ -18,6 +19,7 @@ from rag_foundry_api.anchors import register_anchor_routes
 from rag_foundry_api.documents import register_document_routes
 from rag_foundry_api.errors import register_error_handlers
 from rag_foundry_api.limits import UploadSizeLimitMiddleware
+from rag_foundry_api.runs import register_run_routes
 
 
 def create_app(
@@ -26,6 +28,7 @@ def create_app(
     intake_service: IntakeService | None = None,
     repository: DocumentRepository | None = None,
     anchor_service: AnchorService | None = None,
+    run_service=None,
 ) -> FastAPI:
     """`intake_service` and `repository` are injected together (tests); otherwise built from settings."""
     resolved = settings if settings is not None else load_settings()
@@ -34,6 +37,7 @@ def create_app(
         from rag_foundry_storage.local_store import LocalObjectStore
         from rag_foundry_storage.sql.engine import create_sessionmaker
         from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
+        from rag_foundry_storage.sql.index_repository import SqlIndexRepository
         from rag_foundry_storage.sql.repository import SqlDocumentRepository
 
         sessionmaker = create_sessionmaker(resolved.database_url)
@@ -45,6 +49,11 @@ def create_app(
         repository = sql_repo
         anchor_service = AnchorService(
             LocalObjectStore(resolved.object_store_root), views, provider_namespace=resolved.provider_namespace
+        )
+        run_service = LocalRunner(
+            SqlIndexRepository(sessionmaker),
+            anchor_service,
+            model_factory=ollama_model_factory(resolved.ollama_base_url),
         )
 
     @asynccontextmanager
@@ -58,10 +67,12 @@ def create_app(
     app.state.intake_service = intake_service
     app.state.repository = repository
     app.state.anchor_service = anchor_service
+    app.state.run_service = run_service
     register_error_handlers(app)
     app.add_middleware(UploadSizeLimitMiddleware, max_upload_bytes=resolved.max_upload_bytes)
     register_document_routes(app)
     register_anchor_routes(app)
+    register_run_routes(app)
 
     @app.get("/health")
     def health() -> dict[str, str]:

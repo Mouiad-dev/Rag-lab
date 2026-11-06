@@ -19,9 +19,11 @@ from rag_foundry_domain import (
     UnsupportedMediaTypeError,
     UploadTooLargeError,
 )
+from rag_foundry_domain.errors import IndexingError, RunError
+from rag_foundry_providers.errors import BudgetError, ProviderError
 from starlette.exceptions import HTTPException
 
-_RETRYABLE = frozenset({503})
+_RETRYABLE = frozenset({429, 503})
 
 _INTAKE_STATUS: tuple[tuple[type[IntakeError], int], ...] = (
     (UploadTooLargeError, 413),
@@ -78,8 +80,36 @@ async def _anchor_error(_: Request, exc: Exception) -> JSONResponse:
     return error_response(422, exc.code, exc.code.replace("_", " "))
 
 
+async def _run_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RunError)
+    if exc.code == "too_many_runs":
+        return error_response(429, exc.code, "too many runs")
+    if exc.code == "run_timeout":
+        return error_response(503, exc.code, "run timed out")
+    return error_response(422, exc.code, exc.code.replace("_", " "))
+
+
+async def _indexing_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, IndexingError)
+    if exc.code in ("not_ready", "incompatible_embedding"):
+        return error_response(409, exc.code, exc.code.replace("_", " "))
+    return error_response(422, exc.code, exc.code.replace("_", " "))
+
+
+async def _budget_error(_: Request, __: Exception) -> JSONResponse:
+    return error_response(409, "budget_exceeded", "run budget exceeded")
+
+
+async def _provider_error(_: Request, __: Exception) -> JSONResponse:
+    return error_response(503, "provider_unavailable", "model provider unavailable")
+
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(HTTPException, _http_exception)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(IntakeError, _intake_error)
     app.add_exception_handler(AnchorError, _anchor_error)
+    app.add_exception_handler(RunError, _run_error)
+    app.add_exception_handler(IndexingError, _indexing_error)
+    app.add_exception_handler(BudgetError, _budget_error)
+    app.add_exception_handler(ProviderError, _provider_error)

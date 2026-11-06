@@ -12,6 +12,9 @@ dependencies = [
     "rag-foundry-domain",
     "rag-foundry-ingestion",
     "rag-foundry-storage[sql]",
+    "rag-foundry-answering",
+    "rag-foundry-indexing",
+    "rag-foundry-providers[ollama]",
     "fastapi>=0.162.0",
     "uvicorn>=0.54.0",
     "python-multipart==0.0.32",
@@ -26,6 +29,9 @@ rag-foundry-contracts = { workspace = true }
 rag-foundry-domain = { workspace = true }
 rag-foundry-ingestion = { workspace = true }
 rag-foundry-storage = { workspace = true }
+rag-foundry-answering = { workspace = true }
+rag-foundry-indexing = { workspace = true }
+rag-foundry-providers = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rag_foundry_api"]
