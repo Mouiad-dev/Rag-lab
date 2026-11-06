@@ -67,7 +67,8 @@ class _Factory:
         async with maker() as session, session.begin():
             await session.execute(
                 text(
-                    "TRUNCATE chunks, index_version_views, index_versions, extraction_views, "
+                    "TRUNCATE runtime_setting_overrides, chunks, index_version_views, "
+                    "index_versions, extraction_views, "
                     "document_versions, documents, projects, tenants"
                 )
             )
