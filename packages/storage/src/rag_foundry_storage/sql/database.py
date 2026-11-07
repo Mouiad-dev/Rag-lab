@@ -17,6 +17,11 @@ class Database:
     engine: AsyncEngine
     sessionmaker: async_sessionmaker[AsyncSession]
 
+    def uow(self, *, read_only: bool = False):
+        from rag_foundry_storage.sql.uow import SqlUnitOfWork
+
+        return SqlUnitOfWork(self.sessionmaker, read_only=read_only)
+
     async def dispose(self) -> None:
         await self.engine.dispose()
 

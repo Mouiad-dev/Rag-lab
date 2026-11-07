@@ -19,9 +19,9 @@ _URL = os.environ.get("RAGF_TEST_DATABASE_URL")
 pytestmark = [pytest.mark.db, pytest.mark.skipif(not _URL, reason="RAGF_TEST_DATABASE_URL is not set")]
 
 if _URL:
+    from rag_foundry_domain.uow_adapters import per_call_prompts
     from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.migrate import run_migrations
-    from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
 
 
 def run(coro_fn):
@@ -48,9 +48,8 @@ def migrated():
 @run
 async def test_sql_prompt_store_shared_checks(check):
     db = create_database(_url())
-    maker = db.sessionmaker
     try:
-        await check(SqlPromptTemplateStore(maker))
+        await check(per_call_prompts(db.uow))
     finally:
         await db.dispose()
 
@@ -96,8 +95,8 @@ async def test_prompt_migration_seeds_and_active_templates():
             ("grounded", "grounded-answer-v2"),
             ("ungrounded", "ungrounded-v1"),
         ]
-        assert await SqlPromptTemplateStore(maker).active_id("grounded") == "grounded-answer-v2"
-        assert await SqlPromptTemplateStore(maker).active_id("ungrounded") == "ungrounded-v1"
+        assert await per_call_prompts(db.uow).active_id("grounded") == "grounded-answer-v2"
+        assert await per_call_prompts(db.uow).active_id("ungrounded") == "ungrounded-v1"
     finally:
         await db.dispose()
 
@@ -196,10 +195,9 @@ async def test_database_rejects_incorrect_prompt_hash():
 async def test_unavailable_prompt_database_is_sanitized():
     broken_url = make_url(_url().get_secret_value()).set(port=1)
     db = create_database(SecretStr(str(broken_url)))
-    maker = db.sessionmaker
     try:
         with pytest.raises(PromptError) as caught:
-            await SqlPromptTemplateStore(maker).active_id("grounded")
+            await per_call_prompts(db.uow).active_id("grounded")
         assert caught.value.code == "store_unavailable"
         assert caught.value.__cause__ is None
     finally:
@@ -220,8 +218,8 @@ def test_prompt_migration_downgrade_and_upgrade_restores_seeds():
                     .scalars()
                     .all()
                 )
-            active_g = await SqlPromptTemplateStore(maker).active_id("grounded")
-            active_u = await SqlPromptTemplateStore(maker).active_id("ungrounded")
+            active_g = await per_call_prompts(db.uow).active_id("grounded")
+            active_u = await per_call_prompts(db.uow).active_id("ungrounded")
             assert set(ids) == {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
             assert active_g == "grounded-answer-v2" and active_u == "ungrounded-v1"
         finally:

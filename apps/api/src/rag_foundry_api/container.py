@@ -33,32 +33,35 @@ async def open_container(
         yield AppContainer(settings, None, None, None, None)
         return
 
+    from rag_foundry_domain.uow_adapters import (
+        per_call_documents,
+        per_call_extractions,
+        per_call_indexes,
+        per_call_prompts,
+        per_call_settings,
+    )
     from rag_foundry_storage.local_store import LocalObjectStore
     from rag_foundry_storage.sql.database import create_database
-    from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-    from rag_foundry_storage.sql.index_repository import SqlIndexRepository
-    from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
-    from rag_foundry_storage.sql.repository import SqlDocumentRepository
-    from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
+    from rag_foundry_storage.sql.uow import ensure_local_scope
 
     database = create_database(settings.database_url)
     try:
-        maker = database.sessionmaker
-        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=SqlSettingsOverrideRepository(maker))
-        documents = SqlDocumentRepository(maker)
+        factory = database.uow
+        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
+        documents = per_call_documents(factory)
         store = LocalObjectStore(settings.object_store_root)
         intake = IntakeService(store, documents, max_bytes=settings.max_upload_bytes)
-        views = SqlExtractionRepository(maker)
+        views = per_call_extractions(factory)
         anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
         runs = LocalRunner(
-            SqlIndexRepository(maker),
+            per_call_indexes(factory),
             anchors,
             model_factory=ollama_model_factory(settings.ollama_base_url),
             settings=runtime,
-            prompts=SqlPromptTemplateStore(maker),
+            prompts=per_call_prompts(factory),
         )
         if settings.environment in ("dev", "test"):
-            await documents.ensure_local_scope(LOCAL_DEV_SCOPE)
+            await ensure_local_scope(factory, LOCAL_DEV_SCOPE)
         yield AppContainer(settings, intake, documents, anchors, runs)
     finally:
         await database.dispose()

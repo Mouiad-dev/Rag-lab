@@ -42,10 +42,10 @@ if _URL:
     from rag_foundry_domain.errors import SettingsError
     from rag_foundry_domain.settings_store import NewSettingOverride
     from rag_foundry_domain.settings_testing import SETTINGS_REPOSITORY_CHECKS
+    from rag_foundry_domain.uow_adapters import per_call_settings
     from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.migrate import run_migrations
-    from rag_foundry_storage.sql.repository import SqlDocumentRepository
-    from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
+    from rag_foundry_storage.sql.uow import ensure_local_scope
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
@@ -60,12 +60,11 @@ if _URL:
         maker = db.sessionmaker
         async with maker() as session, session.begin():
             await session.execute(text("TRUNCATE runtime_setting_overrides, projects, tenants CASCADE"))
-        docs = SqlDocumentRepository(maker)
         # The third scope reuses the first project UUID under another tenant; it is read-only in the
         # checks and cannot exist as a row (a project belongs to one tenant), so only the first two are created.
         for scope in scopes[:2]:
-            await docs.ensure_local_scope(scope)
-        return SqlSettingsOverrideRepository(maker)
+            await ensure_local_scope(db.uow, scope)
+        return per_call_settings(db.uow)
 
     @pytest.fixture(scope="module", autouse=True)
     def migrated():
@@ -138,7 +137,7 @@ if _URL:
         await _factory(())
         db = create_database(_secret_url())
         maker = db.sessionmaker
-        repo = SqlSettingsOverrideRepository(maker)
+        repo = per_call_settings(db.uow)
         row = await repo.append(NewSettingOverride("global", None, "answer.temperature", 0.5, "test", "test"))
         for statement in (
             "UPDATE runtime_setting_overrides SET reason = 'changed' WHERE id = :id",
@@ -151,9 +150,8 @@ if _URL:
     @run
     async def test_closed_port_maps_to_store_unavailable():
         db = create_database(SecretStr("postgresql+asyncpg://u:p@127.0.0.1:1/db"))
-        maker = db.sessionmaker
         with pytest.raises(SettingsError) as exc:
-            await SqlSettingsOverrideRepository(maker).current(None)
+            await per_call_settings(db.uow).current(None)
         assert exc.value.code == "store_unavailable"
 
     @pytest.mark.db

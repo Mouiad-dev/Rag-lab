@@ -17,6 +17,13 @@ from rag_foundry_core.settings import load_settings
 from rag_foundry_domain.runtime_settings import RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_adapters import (
+    per_call_documents,
+    per_call_extractions,
+    per_call_indexes,
+    per_call_prompts,
+    per_call_settings,
+)
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -25,12 +32,8 @@ from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_providers.adapters.ollama import OllamaEmbeddingModel, ollama_embedding_profile
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.database import create_database
-from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
-from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
-from rag_foundry_storage.sql.repository import SqlDocumentRepository
-from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
+from rag_foundry_storage.sql.uow import ensure_local_scope
 from sqlalchemy import text
 from test_extraction_service import ingest
 
@@ -71,9 +74,9 @@ def test_live_answer_fixture(tmp_path):
                     )
                 )
             scope = make_scope()
-            docs = SqlDocumentRepository(maker)
-            await docs.ensure_local_scope(scope)
-            views, index = SqlExtractionRepository(maker), SqlIndexRepository(maker)
+            docs = per_call_documents(db.uow)
+            await ensure_local_scope(db.uow, scope)
+            views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
             intake = IntakeService(store, docs, max_bytes=100_000)
             doc_id, ver_id = await ingest(
@@ -104,8 +107,8 @@ def test_live_answer_fixture(tmp_path):
                 index,
                 anchors,
                 model_factory=factory,
-                settings=RuntimeSettingsService(RuntimeSettings(), repo=SqlSettingsOverrideRepository(maker)),
-                prompts=SqlPromptTemplateStore(maker),
+                settings=RuntimeSettingsService(RuntimeSettings(), repo=per_call_settings(db.uow)),
+                prompts=per_call_prompts(db.uow),
             )
             measured, results = [], {}
             for case in fixture["cases"]:

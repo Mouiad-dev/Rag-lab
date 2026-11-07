@@ -10,6 +10,7 @@ from pydantic import SecretStr
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_domain.index_testing import make_chunk, make_new_index_version
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions, per_call_indexes
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -17,10 +18,8 @@ from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.database import create_database
-from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
-from rag_foundry_storage.sql.repository import SqlDocumentRepository
+from rag_foundry_storage.sql.uow import ensure_local_scope
 
 _URL = os.environ.get("RAGF_TEST_DATABASE_URL")
 pytestmark = [pytest.mark.db, pytest.mark.skipif(not _URL, reason="RAGF_TEST_DATABASE_URL is not set")]
@@ -36,11 +35,10 @@ async def _build(tmp_path):
     assert _URL
     await asyncio.to_thread(run_migrations, SecretStr(_URL), "upgrade", "head")
     db = create_database(SecretStr(_URL))
-    maker = db.sessionmaker
     scope = make_scope()
-    docs = SqlDocumentRepository(maker)
-    await docs.ensure_local_scope(scope)
-    views, indexes = SqlExtractionRepository(maker), SqlIndexRepository(maker)
+    docs = per_call_documents(db.uow)
+    await ensure_local_scope(db.uow, scope)
+    views, indexes = per_call_extractions(db.uow), per_call_indexes(db.uow)
     store = LocalObjectStore(tmp_path / "objects")
     intake = IntakeService(store, docs, max_bytes=100_000)
     payload = ("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu " * 20).encode()

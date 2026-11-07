@@ -11,16 +11,15 @@ from pydantic import SecretStr
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_domain.errors import NotFoundError
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions, per_call_indexes
 from rag_foundry_indexing import DenseConfig, DenseRetriever, IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.database import create_database
-from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
-from rag_foundry_storage.sql.repository import SqlDocumentRepository
+from rag_foundry_storage.sql.uow import ensure_local_scope
 from sqlalchemy import text
 from test_extraction_service import ingest
 
@@ -45,9 +44,9 @@ def test_sql_index_retrieves_fixture_facts_and_scopes_search(tmp_path):
                     )
                 )
             scope = make_scope()
-            docs = SqlDocumentRepository(maker)
-            await docs.ensure_local_scope(scope)
-            views, index = SqlExtractionRepository(maker), SqlIndexRepository(maker)
+            docs = per_call_documents(db.uow)
+            await ensure_local_scope(db.uow, scope)
+            views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
             from rag_foundry_ingestion import IntakeService
 

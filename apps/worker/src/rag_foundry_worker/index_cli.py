@@ -14,6 +14,7 @@ from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.errors import SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
 from rag_foundry_domain.settings_store import RuntimeSettingsService
+from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes, per_call_settings
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import ollama_embedding_profile
@@ -24,9 +25,6 @@ from rag_foundry_providers.ledger import RecordingEmbeddingModel, UsageLedger
 from rag_foundry_providers.resilience import ResilientEmbeddingModel
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.database import open_database, run_db_main
-from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-from rag_foundry_storage.sql.index_repository import SqlIndexRepository
-from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
 from rag_foundry_worker.extract_cli import EXIT_FAILED, EXIT_OK, EXIT_USAGE, _fail
 
@@ -49,13 +47,13 @@ def inspection_line(row, show_text: bool = False) -> str:
 
 async def _index(settings: Settings, args):
     async with open_database(settings.database_url) as db:
-        maker = db.sessionmaker
+        factory = db.uow
         store = LocalObjectStore(settings.object_store_root)
         base, file_keys = (RuntimeSettings(), frozenset())
         if settings.runtime_config_path is not None:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
-        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=SqlSettingsOverrideRepository(maker))
-        views, index = SqlExtractionRepository(maker), SqlIndexRepository(maker)
+        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
+        views, index = per_call_extractions(factory), per_call_indexes(factory)
         anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
         if args.command == "build":
             idx = await runtime.indexing(LOCAL_DEV_SCOPE)

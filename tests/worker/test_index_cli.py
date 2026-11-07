@@ -102,7 +102,7 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
             return (SimpleNamespace(level="global", key="answer.max_output_tokens", value=0),)
 
     class Maker:
-        sessionmaker = object()
+        uow = object()
 
     @asynccontextmanager
     async def open_db(_url):
@@ -128,10 +128,10 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
             )
 
     monkeypatch.setattr(index_cli, "open_database", open_db)
-    monkeypatch.setattr(index_cli, "SqlSettingsOverrideRepository", lambda _maker: Repository())
+    monkeypatch.setattr(index_cli, "per_call_settings", lambda _factory: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
-    monkeypatch.setattr(index_cli, "SqlExtractionRepository", lambda *_: object())
-    monkeypatch.setattr(index_cli, "SqlIndexRepository", lambda *_: object())
+    monkeypatch.setattr(index_cli, "per_call_extractions", lambda *_: object())
+    monkeypatch.setattr(index_cli, "per_call_indexes", lambda *_: object())
     monkeypatch.setattr(index_cli, "AnchorService", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(index_cli, "IndexService", Service)
     monkeypatch.setattr(index_cli, "RecursiveChunker", lambda *_: object())
@@ -161,7 +161,7 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
             return (SimpleNamespace(level="global", key="indexing.c05_chunk_size", value=1),)
 
     class Maker:
-        sessionmaker = object()
+        uow = object()
 
     @asynccontextmanager
     async def open_db(_url):
@@ -178,10 +178,10 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
             return []
 
     monkeypatch.setattr(index_cli, "open_database", open_db)
-    monkeypatch.setattr(index_cli, "SqlSettingsOverrideRepository", lambda _maker: Repository())
+    monkeypatch.setattr(index_cli, "per_call_settings", lambda _factory: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
-    monkeypatch.setattr(index_cli, "SqlExtractionRepository", lambda *_: object())
-    monkeypatch.setattr(index_cli, "SqlIndexRepository", lambda *_: object())
+    monkeypatch.setattr(index_cli, "per_call_extractions", lambda *_: object())
+    monkeypatch.setattr(index_cli, "per_call_indexes", lambda *_: object())
     monkeypatch.setattr(index_cli, "AnchorService", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(index_cli, "IndexService", Service)
     settings = SimpleNamespace(

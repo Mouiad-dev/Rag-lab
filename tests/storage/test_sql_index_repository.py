@@ -16,11 +16,10 @@ if _URL:
     from rag_foundry_domain.errors import NotFoundError
     from rag_foundry_domain.index_testing import INDEX_REPOSITORY_CHECKS
     from rag_foundry_domain.testing import CheckSkippedError, make_new_extraction, make_new_version, make_scope
+    from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions, per_call_indexes
     from rag_foundry_storage.sql.database import create_database
-    from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-    from rag_foundry_storage.sql.index_repository import SqlIndexRepository
     from rag_foundry_storage.sql.migrate import run_migrations
-    from rag_foundry_storage.sql.repository import SqlDocumentRepository
+    from rag_foundry_storage.sql.uow import ensure_local_scope
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
@@ -63,10 +62,10 @@ class _Factory:
                     "TRUNCATE runtime_setting_overrides, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
                 )
             )
-        docs = SqlDocumentRepository(maker)
+        docs = per_call_documents(db.uow)
         for scope in scopes:
-            await docs.ensure_local_scope(scope)
-        return docs, SqlExtractionRepository(maker), SqlIndexRepository(maker)
+            await ensure_local_scope(db.uow, scope)
+        return docs, per_call_extractions(db.uow), per_call_indexes(db.uow)
 
     async def close(self):
         for db in self.databases:

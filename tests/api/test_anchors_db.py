@@ -13,15 +13,15 @@ from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_ingestion.intake import IntakeService
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.database import create_database
-from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.migrate import run_migrations
-from rag_foundry_storage.sql.repository import SqlDocumentRepository
+from rag_foundry_storage.sql.uow import ensure_local_scope
 from sqlalchemy import text
 
 PROJECT = LOCAL_DEV_SCOPE.project_id
@@ -60,15 +60,15 @@ def sql_repositories():
                     "document_versions, documents, projects, tenants"
                 )
             )
-        docs = SqlDocumentRepository(maker)
-        await docs.ensure_local_scope(LOCAL_DEV_SCOPE)
-        return docs, SqlExtractionRepository(maker)
+        docs = per_call_documents(db.uow)
+        await ensure_local_scope(db.uow, LOCAL_DEV_SCOPE)
+        return docs, per_call_extractions(db.uow)
 
     factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
     with asyncio.Runner(loop_factory=factory) as runner:
         docs, views = runner.run(setup())
     try:
-        yield docs, views, maker
+        yield docs, views, db
     finally:
 
         async def close():
@@ -97,7 +97,7 @@ def _services(tmp_path, docs, views):
 
 
 def test_sql_upload_extract_and_resolve_exact(tmp_path, sql_repositories):
-    docs, views, _maker = sql_repositories
+    docs, views, _db = sql_repositories
     _store, _intake, extraction, anchors, app = _services(tmp_path, docs, views)
     backend_options = {"loop_factory": asyncio.SelectorEventLoop} if sys.platform == "win32" else {}
     with TestClient(app, backend_options=backend_options) as client:
@@ -125,10 +125,10 @@ def test_sql_upload_extract_and_resolve_exact(tmp_path, sql_repositories):
 
 
 def test_sql_foreign_scope_anchor_is_unavailable(tmp_path, sql_repositories, monkeypatch):
-    docs, views, _maker = sql_repositories
+    docs, views, _db = sql_repositories
     _store, intake, extraction, anchors, app = _services(tmp_path, docs, views)
     foreign = make_scope()
-    _run(docs.ensure_local_scope(foreign))
+    _run(ensure_local_scope(_db.uow, foreign))
     unique = uuid.uuid4().hex
     uploaded = _run(
         intake.ingest(
@@ -168,7 +168,7 @@ def test_sql_foreign_scope_anchor_is_unavailable(tmp_path, sql_repositories, mon
 
 
 def test_sql_malformed_extraction_view_id_is_unavailable(tmp_path, sql_repositories, monkeypatch):
-    docs, views, _maker = sql_repositories
+    docs, views, _db = sql_repositories
     _store, intake, extraction, anchors, app = _services(tmp_path, docs, views)
     # Upload bytes are unique so the SQL version is never a deduplicated fixture artifact.
     unique = uuid.uuid4().hex

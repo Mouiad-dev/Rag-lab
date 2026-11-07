@@ -17,7 +17,9 @@ from rag_foundry_domain.indexing import (
 )
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from rag_foundry_storage.sql._tx import read, write
 
 
 def _uuid(value: str) -> str:
@@ -73,8 +75,8 @@ def _chunk(row: Any) -> ChunkRecord:
 
 
 class SqlIndexRepository:
-    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
-        self._sessionmaker = sessionmaker
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def _locked(self, session: AsyncSession, scope: Scope, iid: str):
         row = (
@@ -103,7 +105,7 @@ class SqlIndexRepository:
         return tuple(str(x) for x in rows)
 
     async def create_index_version(self, scope: Scope, new: NewIndexVersion) -> IndexVersion:
-        async with self._sessionmaker() as session, session.begin():
+        async with write(self._session) as session:
             for view_id in new.extraction_view_ids:
                 found = await session.scalar(
                     text("SELECT id FROM extraction_views WHERE id=:v AND tenant_id=:t AND project_id=:p"),
@@ -135,7 +137,7 @@ class SqlIndexRepository:
 
     async def add_chunks(self, scope: Scope, index_version_id: str, chunks: tuple[NewChunk, ...]) -> None:
         iid = _uuid(index_version_id)
-        async with self._sessionmaker() as session, session.begin():
+        async with write(self._session) as session:
             version = await self._locked(session, scope, iid)
             if version["state"] != "building":
                 raise IndexingError("not_building")
@@ -180,7 +182,7 @@ class SqlIndexRepository:
                     raise
 
     async def _transition(self, scope: Scope, iid: str, target: str) -> IndexVersion:
-        async with self._sessionmaker() as session, session.begin():
+        async with write(self._session) as session:
             row = await self._locked(session, scope, iid)
             if row["state"] != "building":
                 raise IndexingError("not_building")
@@ -216,7 +218,7 @@ class SqlIndexRepository:
 
     async def get_index_version(self, scope: Scope, index_version_id: str) -> IndexVersion:
         iid = _uuid(index_version_id)
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             row = (
                 (
                     await session.execute(
@@ -237,7 +239,7 @@ class SqlIndexRepository:
         iid = _uuid(index_version_id)
         if offset < 0 or not 1 <= limit <= 500:
             raise IndexingError("invalid_page")
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             if (
                 await session.scalar(
                     text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
@@ -262,7 +264,7 @@ class SqlIndexRepository:
             raise IndexingError("invalid_k")
         vector = check_vector(query)
         literal = "[" + ",".join(repr(x) for x in vector) + "]"
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             version = (
                 (
                     await session.execute(

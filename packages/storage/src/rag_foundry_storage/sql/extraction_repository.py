@@ -10,8 +10,9 @@ from typing import Any
 from rag_foundry_domain import NotFoundError, Scope, new_id
 from rag_foundry_domain.extraction import ExtractionKey, ExtractionOutcome, ExtractionView, NewExtraction
 from sqlalchemy import insert, select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from rag_foundry_storage.sql._tx import read, write
 from rag_foundry_storage.sql.models import DocumentVersionRow, ExtractionViewRow
 from rag_foundry_storage.sql.repository import _canonical_uuid4
 
@@ -42,8 +43,8 @@ def _view(row: Any) -> ExtractionView:
 
 
 class SqlExtractionRepository:
-    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
-        self._sessionmaker = sessionmaker
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     @staticmethod
     def _by_key(scope: Scope, key: ExtractionKey) -> Any:
@@ -76,14 +77,14 @@ class SqlExtractionRepository:
             _canonical_uuid4(key.document_version_id)
         except NotFoundError:
             return None
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             row = (await session.execute(self._by_key(scope, key))).scalar_one_or_none()
             return None if row is None else _view(row)
 
     async def create_view_or_get(self, scope: Scope, new: NewExtraction) -> ExtractionOutcome:
         _canonical_uuid4(new.document_version_id)
         _canonical_uuid4(new.document_id)
-        async with self._sessionmaker() as session, session.begin():
+        async with write(self._session) as session:
             # Check the version together with its document, in scope; never rely on the FK for this.
             # Done before locking so a caller from another scope never holds the lock.
             await self._require_version(session, scope, new.document_version_id, new.document_id)
@@ -107,7 +108,7 @@ class SqlExtractionRepository:
 
     async def get_view(self, scope: Scope, view_id: str) -> ExtractionView:
         _canonical_uuid4(view_id)
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             row = (
                 await session.execute(
                     select(ExtractionViewRow).where(
@@ -123,7 +124,7 @@ class SqlExtractionRepository:
 
     async def list_views(self, scope: Scope, document_version_id: str) -> list[ExtractionView]:
         _canonical_uuid4(document_version_id)
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             await self._require_version(session, scope, document_version_id)
             rows = (
                 await session.execute(

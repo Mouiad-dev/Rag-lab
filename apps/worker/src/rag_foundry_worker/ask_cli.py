@@ -15,14 +15,11 @@ from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.errors import PromptError, SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
 from rag_foundry_domain.settings_store import RuntimeSettingsService
+from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes, per_call_prompts, per_call_settings
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.errors import ProviderError
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.database import open_database, run_db_main
-from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
-from rag_foundry_storage.sql.index_repository import SqlIndexRepository
-from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
-from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
 from rag_foundry_worker.extract_cli import EXIT_FAILED, EXIT_OK, EXIT_USAGE, _fail
 
@@ -33,20 +30,20 @@ def format_response(resp: RunResponse) -> str:
 
 async def _ask(settings, request: RunRequest) -> RunResponse:
     async with open_database(settings.database_url) as db:
-        maker = db.sessionmaker
+        factory = db.uow
         base, file_keys = (RuntimeSettings(), frozenset())
         if settings.runtime_config_path is not None:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
-        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=SqlSettingsOverrideRepository(maker))
+        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
         store = LocalObjectStore(settings.object_store_root)
-        views = SqlExtractionRepository(maker)
+        views = per_call_extractions(factory)
         anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
         runner = LocalRunner(
-            SqlIndexRepository(maker),
+            per_call_indexes(factory),
             anchors,
             model_factory=ollama_model_factory(settings.ollama_base_url),
             settings=runtime,
-            prompts=SqlPromptTemplateStore(maker),
+            prompts=per_call_prompts(factory),
         )
         return await runner.run(LOCAL_DEV_SCOPE, request)
 

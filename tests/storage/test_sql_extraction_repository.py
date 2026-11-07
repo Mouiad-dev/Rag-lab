@@ -26,10 +26,10 @@ if _URL:
         make_new_version,
         make_scope,
     )
+    from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions
     from rag_foundry_storage.sql.database import create_database
-    from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
     from rag_foundry_storage.sql.migrate import run_migrations
-    from rag_foundry_storage.sql.repository import SqlDocumentRepository
+    from rag_foundry_storage.sql.uow import ensure_local_scope
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
@@ -63,7 +63,8 @@ class _Factory:
         self.databases = []
 
     async def __call__(self, scopes):
-        maker = self.maker()
+        db = self.database()
+        maker = db.sessionmaker
         async with maker() as session, session.begin():
             await session.execute(
                 text(
@@ -72,16 +73,18 @@ class _Factory:
                     "document_versions, documents, projects, tenants"
                 )
             )
-        docs = SqlDocumentRepository(maker)
+        docs = per_call_documents(db.uow)
         for scope in scopes:
-            await docs.ensure_local_scope(scope)
-        return docs, SqlExtractionRepository(maker)
+            await ensure_local_scope(db.uow, scope)
+        return docs, per_call_extractions(db.uow)
+
+    def database(self):
+        db = create_database(_url())
+        self.databases.append(db)
+        return db
 
     def maker(self):
-        db = create_database(_url())
-        maker = db.sessionmaker
-        self.databases.append(db)
-        return maker
+        return self.database().sessionmaker
 
     async def close(self) -> None:
         for db in self.databases:

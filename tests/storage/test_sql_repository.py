@@ -21,9 +21,10 @@ pytestmark = [
 
 if _URL:  # imports need the `sql` extra; keep collection safe when it is absent and no URL is given
     from rag_foundry_domain.testing import REPOSITORY_CHECKS, CheckSkippedError, make_new_version, make_scope
+    from rag_foundry_domain.uow_adapters import per_call_documents
     from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.migrate import run_migrations
-    from rag_foundry_storage.sql.repository import SqlDocumentRepository
+    from rag_foundry_storage.sql.uow import ensure_local_scope
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
@@ -70,9 +71,9 @@ class _Factory:
                     "document_versions, documents, projects, tenants"
                 )
             )
-        repo = SqlDocumentRepository(maker)
+        repo = per_call_documents(db.uow)
         for scope in scopes:
-            await repo.ensure_local_scope(scope)
+            await ensure_local_scope(db.uow, scope)
         return repo
 
     async def close(self) -> None:

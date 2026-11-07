@@ -16,7 +16,9 @@ from rag_foundry_domain.settings_store import (
 )
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from rag_foundry_storage.sql._tx import read, write
 
 
 def _uuid(value: str) -> str:
@@ -45,15 +47,15 @@ def _row(row: Any) -> SettingOverride:
 
 
 class SqlSettingsOverrideRepository:
-    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
-        self._sessionmaker = sessionmaker
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def append(self, new: NewSettingOverride) -> SettingOverride:
         validate_override(new)
         tenant_id = _uuid(new.scope.tenant_id) if new.scope is not None else None
         project_id = _uuid(new.scope.project_id) if new.level == "project" and new.scope is not None else None
         try:
-            async with self._sessionmaker() as session, session.begin():
+            async with write(self._session) as session:
                 version = (
                     await session.execute(
                         text("""SELECT COALESCE(MAX(version), 0) + 1
@@ -96,7 +98,7 @@ class SqlSettingsOverrideRepository:
     async def current(self, scope: Scope | None) -> tuple[SettingOverride, ...]:
         params = self._scope_params(scope)
         try:
-            async with self._sessionmaker() as session:
+            async with read(self._session) as session:
                 rows = (
                     (
                         await session.execute(
@@ -128,7 +130,7 @@ class SqlSettingsOverrideRepository:
         if level == "tenant":
             params["project_id"] = None  # tenant rows are stored without a project
         try:
-            async with self._sessionmaker() as session:
+            async with read(self._session) as session:
                 rows = (
                     (
                         await session.execute(

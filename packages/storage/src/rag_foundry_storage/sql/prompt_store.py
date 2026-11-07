@@ -13,7 +13,9 @@ from rag_foundry_domain.prompts import (
 )
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from rag_foundry_storage.sql._tx import read, write
 
 
 def _row_template(row: Any) -> PromptTemplate:
@@ -33,12 +35,12 @@ def _sqlstate(exc: IntegrityError) -> str | None:
 
 
 class SqlPromptTemplateStore:
-    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
-        self._sessionmaker = sessionmaker
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def get(self, template_id: str) -> PromptTemplate:
         try:
-            async with self._sessionmaker() as session:
+            async with read(self._session) as session:
                 result = await session.execute(
                     text(
                         "SELECT id, family, version, purpose, system_text, content_sha256 "
@@ -57,7 +59,7 @@ class SqlPromptTemplateStore:
 
     async def active_id(self, purpose: PromptPurpose) -> str:
         try:
-            async with self._sessionmaker() as session:
+            async with read(self._session) as session:
                 result = await session.execute(
                     text(
                         "SELECT template_id FROM prompt_activations WHERE purpose = :purpose ORDER BY seq DESC LIMIT 1"
@@ -74,7 +76,7 @@ class SqlPromptTemplateStore:
     async def create(self, template: PromptTemplate) -> None:
         validate_loaded(template)
         try:
-            async with self._sessionmaker() as session, session.begin():
+            async with write(self._session) as session:
                 await session.execute(
                     text(
                         """INSERT INTO prompt_templates
@@ -102,7 +104,7 @@ class SqlPromptTemplateStore:
         self, purpose: PromptPurpose, template_id: str, *, activated_by: str, decision_ref: str
     ) -> PromptActivation:
         try:
-            async with self._sessionmaker() as session, session.begin():
+            async with write(self._session) as session:
                 result = await session.execute(
                     text("""INSERT INTO prompt_activations (purpose, template_id, activated_by, decision_ref)
                     VALUES (:purpose, :template_id, :activated_by, :decision_ref)
@@ -135,7 +137,7 @@ class SqlPromptTemplateStore:
 
     async def activations(self, purpose: PromptPurpose) -> list[PromptActivation]:
         try:
-            async with self._sessionmaker() as session:
+            async with read(self._session) as session:
                 result = await session.execute(
                     text("""SELECT seq, purpose, template_id, activated_by, activated_at, decision_ref
                     FROM prompt_activations WHERE purpose = :purpose ORDER BY seq"""),

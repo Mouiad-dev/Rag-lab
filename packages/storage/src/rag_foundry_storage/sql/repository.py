@@ -19,10 +19,10 @@ from rag_foundry_domain import (
     new_id,
 )
 from sqlalchemy import func, insert, select, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from rag_foundry_storage.sql.models import DocumentRow, DocumentVersionRow, Project, Tenant
+from rag_foundry_storage.sql._tx import read, write
+from rag_foundry_storage.sql.models import DocumentRow, DocumentVersionRow, Project
 
 _SHA_LOCK = text(
     "SELECT pg_advisory_xact_lock("
@@ -73,18 +73,8 @@ class SqlDocumentRepository:
     # Note: create (project sha lock) and add-version (document lock) use different locks, so they can
     # concurrently put the same bytes into two documents of one project. The domain allows this; later
     # dedup returns the earliest-created version.
-    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]) -> None:
-        self._sessionmaker = sessionmaker
-
-    async def ensure_local_scope(self, scope: Scope) -> None:
-        """Upsert tenant and project. For dev, tests and the local-scope mapping (D10), not for requests."""
-        async with self._sessionmaker() as session, session.begin():
-            await session.execute(pg_insert(Tenant).values(id=scope.tenant_id).on_conflict_do_nothing())
-            await session.execute(
-                pg_insert(Project).values(id=scope.project_id, tenant_id=scope.tenant_id).on_conflict_do_nothing()
-            )
-            if not await self._project_exists(session, scope):
-                raise ValueError("project ID already belongs to another tenant")
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     @staticmethod
     async def _project_exists(session: AsyncSession, scope: Scope) -> bool:
@@ -121,15 +111,15 @@ class SqlDocumentRepository:
         }
 
     async def project_exists(self, scope: Scope) -> bool:
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             return await self._project_exists(session, scope)
 
     async def get_document(self, scope: Scope, document_id: str) -> Document:
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             return _document(await self._document_row(session, scope, document_id))
 
     async def create_document_or_get(self, scope: Scope, new: NewVersion, *, display_name: str) -> IntakeOutcome:
-        async with self._sessionmaker() as session, session.begin():
+        async with write(self._session) as session:
             if not await self._project_exists(session, scope):
                 raise NotFoundError()
             await session.execute(_SHA_LOCK, {"project_id": scope.project_id, "sha256": new.sha256})
@@ -171,7 +161,7 @@ class SqlDocumentRepository:
             )
 
     async def add_version_or_get(self, scope: Scope, document_id: str, new: NewVersion) -> IntakeOutcome:
-        async with self._sessionmaker() as session, session.begin():
+        async with write(self._session) as session:
             doc = await self._document_row(session, scope, document_id)
             await session.execute(_DOC_LOCK, {"document_id": document_id})
             found = (
@@ -205,7 +195,7 @@ class SqlDocumentRepository:
     async def get_version(self, scope: Scope, document_id: str, version_id: str) -> DocumentVersion:
         _canonical_uuid4(document_id)
         _canonical_uuid4(version_id)
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             await self._document_row(session, scope, document_id)
             row = (
                 await session.execute(
@@ -222,7 +212,7 @@ class SqlDocumentRepository:
             return _version(row)
 
     async def list_versions(self, scope: Scope, document_id: str) -> list[DocumentVersion]:
-        async with self._sessionmaker() as session:
+        async with read(self._session) as session:
             await self._document_row(session, scope, document_id)
             rows = (
                 await session.execute(
