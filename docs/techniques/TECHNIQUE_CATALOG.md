@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C01-C07 and C21 are implemented; R01 and R02 are in progress; the remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C01-C07, C15-C17, C19 and C21 are implemented; R01 and R02 are in progress; the remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -22,11 +22,11 @@ The acceptance column describes evidence that must exist before validation. Each
 | C12 | chunking / P4.3 | Table-aware segments | Preserve schema/headers and explicit row groups for large tables. | Retrieve a cell with units, row/column labels and source span. | planned |
 | C13 | chunking / P4.3 | Code separators | Split source with language-specific separators. | Inspect a class, method and docstring across boundaries. | planned |
 | C14 | chunking / P4.3 | AST-aware code | Use a real parser for declarations and nested structures. | Prove syntax-node boundaries and handle unsupported syntax explicitly. | planned |
-| C15 | chunking / P4.4 | Embedding-semantic boundaries | Detect semantic shifts and pack subject to budgets. | Compare threshold settings on topic changes and a cohesive passage. | planned |
-| C16 | chunking / P4.4 | LLM-selected boundaries | Ask for grounded source offsets using structured output. | Reject invented or invalid offsets; record cost and repeat variability. | planned |
-| C17 | chunking / P4.4 | Propositions | Generate atomic supported facts linked to original spans. | Check negation/conditions and detect unsupported generated claims. | planned |
+| C15 | chunking / P4.4 | Embedding-semantic boundaries | Detect semantic shifts and pack subject to budgets. | Compare threshold settings on topic changes and a cohesive passage. | implemented |
+| C16 | chunking / P4.4 | LLM-selected boundaries | Ask for grounded source offsets using structured output. | Reject invented or invalid offsets; record cost and repeat variability. | implemented |
+| C17 | chunking / P4.4 | Propositions | Generate atomic supported facts linked to original spans. | Check negation/conditions and detect unsupported generated claims. | implemented |
 | C18 | chunking / P4.5 | Hierarchical parent-child | Create linked granularities with stable parent references. | Find a specific fact in a child and inspect enclosing context. | planned |
-| C19 | chunking / P4.4 | Adaptive segmentation | Route document regions to explicit segmentation policies. | Compare policy decisions and failures against one fixed policy. | planned |
+| C19 | chunking / P4.4 | Adaptive segmentation | Route document regions to explicit segmentation policies. | Compare policy decisions and failures against one fixed policy. | implemented |
 | C20 | embedding_representation / P7.5 | Late chunking | Pool token representations after wider-context encoding. | Use a compatible encoder; compare early/late with the same model. | planned |
 | C21 | chunking / P4.2 | Multilingual boundary handling | Handle Arabic/English/mixed segmentation and reversible normalization. | Preserve original locators and inspect Arabic diacritics and punctuation. | implemented |
 | R01 | control / P3.4 | No-retrieval baseline | Answer without corpus retrieval as a diagnostic control. | Label absent grounding and compare on corpus-specific questions. | implemented |
