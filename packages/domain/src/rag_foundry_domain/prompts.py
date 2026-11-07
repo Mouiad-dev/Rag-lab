@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, Validat
 
 from rag_foundry_domain.errors import PromptError
 
-PromptPurpose = Literal["grounded", "ungrounded"]
+PromptPurpose = Literal["grounded", "ungrounded", "chunk-boundaries", "propositions"]
 
 
 def prompt_sha256(text: str) -> str:
@@ -55,6 +55,14 @@ def validate_loaded(template: PromptTemplate) -> None:
         raise PromptError("invalid_template")
     if template.purpose == "grounded" and not all(
         marker in template.system_text for marker in ("INSUFFICIENT_EVIDENCE", "[S1]")
+    ):
+        raise PromptError("invalid_template")
+    if template.purpose == "chunk-boundaries" and not all(
+        marker in template.system_text for marker in ("breaks", "starts_with")
+    ):
+        raise PromptError("invalid_template")
+    if template.purpose == "propositions" and not all(
+        marker in template.system_text for marker in ("propositions", "quotes")
     ):
         raise PromptError("invalid_template")
 

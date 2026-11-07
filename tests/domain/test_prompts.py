@@ -1,4 +1,6 @@
 import asyncio
+import importlib.util
+from pathlib import Path
 
 import pytest
 from rag_foundry_domain.errors import PromptError
@@ -9,6 +11,7 @@ from rag_foundry_domain.prompts import (
     PromptTemplate,
     prompt_sha256,
     template_from_row,
+    validate_loaded,
 )
 
 
@@ -293,5 +296,75 @@ def test_load_validation_rejects_delimiter_on_ungrounded_template():
         with pytest.raises(PromptError) as caught:
             await InMemoryPromptTemplateStore().create(template)
         assert caught.value.code == "invalid_template"
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    ("purpose", "text", "valid"),
+    [
+        ("chunk-boundaries", "breaks starts_with", True),
+        ("chunk-boundaries", "breaks only", False),
+        ("propositions", "propositions quotes", True),
+        ("propositions", "propositions only", False),
+    ],
+)
+def test_chunking_prompt_purpose_validation(purpose, text, valid):
+    template = PromptTemplate(
+        id=f"{purpose}-v1",
+        family=purpose,
+        version=1,
+        purpose=purpose,
+        system_text=text,
+        content_sha256=prompt_sha256(text),
+    )
+    if valid:
+        validate_loaded(template)
+    else:
+        with pytest.raises(PromptError) as caught:
+            validate_loaded(template)
+        assert caught.value.code == "invalid_template"
+
+
+def test_chunking_migration_texts_validate_and_have_no_delimiters():
+    migration = (
+        Path(__file__).parents[2]
+        / "packages/storage/src/rag_foundry_storage/sql/migrations/versions/0006_chunking_prompts.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0006", migration)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for family, purpose, text in (
+        ("chunk-boundaries", "chunk-boundaries", module._CHUNK_BOUNDARIES_V1),
+        ("propositions", "propositions", module._PROPOSITIONS_V1),
+    ):
+        template = PromptTemplate(
+            id=f"{family}-v1",
+            family=family,
+            version=1,
+            purpose=purpose,
+            system_text=text,
+            content_sha256=prompt_sha256(text),
+        )
+        validate_loaded(template)
+        assert "<<<" not in text and ">>>" not in text
+
+
+def test_in_memory_activation_rejects_chunking_purpose_mismatch():
+    async def run():
+        text = "propositions and quotes"
+        template = PromptTemplate(
+            id="propositions-v1",
+            family="propositions",
+            version=1,
+            purpose="propositions",
+            system_text=text,
+            content_sha256=prompt_sha256(text),
+        )
+        store = InMemoryPromptTemplateStore((template,))
+        with pytest.raises(PromptError) as caught:
+            await store.activate("chunk-boundaries", template.id, activated_by="test", decision_ref="test")
+        assert caught.value.code == "purpose_mismatch"
 
     asyncio.run(run())
