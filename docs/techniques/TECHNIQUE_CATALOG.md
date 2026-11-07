@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C05 is implemented; R01 and R02 are in progress; the remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C05, C06, C07 and C21 are implemented; R01 and R02 are in progress; the remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -13,8 +13,8 @@ The acceptance column describes evidence that must exist before validation. Each
 | C03 | chunking / P4.1 | Fixed tokens | Split using the selected model tokenizer. | Assert maximum tokens and show character/token differences. | planned |
 | C04 | chunking / P4.1 | Overlap and sliding windows | Reuse a configured span between adjacent chunks. | Quantify duplicates, storage and boundary-fact retrieval. | planned |
 | C05 | chunking / P3.4 | Recursive splitting | Try larger textual separators before smaller ones. | Show fallback on an oversized paragraph and preserved provenance. | implemented |
-| C06 | chunking / P4.2 | Sentence boundaries | Segment by language-aware sentence boundaries then pack. | Test abbreviations, Arabic punctuation and quoted sentences. | planned |
-| C07 | chunking / P4.2 | Paragraph packing | Pack paragraphs within a budget with explicit overflow behavior. | Show when keeping paragraphs improves or hurts retrieval. | planned |
+| C06 | chunking / P4.2 | Sentence boundaries | Segment by language-aware sentence boundaries then pack. | Test abbreviations, Arabic punctuation and quoted sentences. | implemented |
+| C07 | chunking / P4.2 | Paragraph packing | Pack paragraphs within a budget with explicit overflow behavior. | Show when keeping paragraphs improves or hurts retrieval. | implemented |
 | C08 | chunking / P4.3 | Markdown sections | Use heading hierarchy and keep section paths. | Test nested headings and fenced code blocks. | planned |
 | C09 | chunking / P4.3 | HTML structure | Extract meaningful DOM sections and retain locators. | Remove navigation noise without losing content or source identity. | planned |
 | C10 | chunking / P4.3 | JSON structure | Split structured objects/arrays while preserving JSON paths. | Reassociate a retrieved value with its field/object context. | planned |
@@ -28,7 +28,7 @@ The acceptance column describes evidence that must exist before validation. Each
 | C18 | chunking / P4.5 | Hierarchical parent-child | Create linked granularities with stable parent references. | Find a specific fact in a child and inspect enclosing context. | planned |
 | C19 | chunking / P4.4 | Adaptive segmentation | Route document regions to explicit segmentation policies. | Compare policy decisions and failures against one fixed policy. | planned |
 | C20 | embedding_representation / P7.5 | Late chunking | Pool token representations after wider-context encoding. | Use a compatible encoder; compare early/late with the same model. | planned |
-| C21 | chunking / P4.2 | Multilingual boundary handling | Handle Arabic/English/mixed segmentation and reversible normalization. | Preserve original locators and inspect Arabic diacritics and punctuation. | planned |
+| C21 | chunking / P4.2 | Multilingual boundary handling | Handle Arabic/English/mixed segmentation and reversible normalization. | Preserve original locators and inspect Arabic diacritics and punctuation. | implemented |
 | R01 | control / P3.4 | No-retrieval baseline | Answer without corpus retrieval as a diagnostic control. | Label absent grounding and compare on corpus-specific questions. | implemented |
 | R02 | retrieval / P3.4 | Dense two-step RAG | Embed query, retrieve text vectors, generate grounded answer. | Retrieve a known fact and abstain on a missing one. | implemented |
 | R03 | retrieval / P5.1 | BM25 lexical search | Implement genuine BM25 with documented tokenization. | Test exact identifiers and Arabic normalization; do not relabel ts_rank. | planned |
