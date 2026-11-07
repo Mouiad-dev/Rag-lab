@@ -7,9 +7,20 @@ from rag_foundry_chunking.fixed import (
     FixedWordChunker,
     FixedWordConfig,
 )
+from rag_foundry_chunking.model_based import (
+    InMemorySegmentationCache,
+    ModelChunkContext,
+    ModelChunkingError,
+    ModelChunkReport,
+    ModelChunkResult,
+    Rejection,
+    SegmentationCache,
+    segmentation_cache_key,
+)
 from rag_foundry_chunking.multilingual import MultilingualChunker, MultilingualConfig, normalize_with_map
 from rag_foundry_chunking.paragraph import ParagraphChunker, ParagraphConfig
 from rag_foundry_chunking.recursive import RecursiveChunker, RecursiveConfig
+from rag_foundry_chunking.semantic import SemanticChunker, SemanticConfig
 from rag_foundry_chunking.sentence import SentenceChunker, SentenceConfig
 from rag_foundry_chunking.sliding import SlidingWindowChunker, SlidingWindowConfig, WindowStats, window_stats
 
@@ -23,6 +34,7 @@ def register_builtin_plugins(registry) -> None:
     registry.register(SentenceChunker)
     registry.register(ParagraphChunker)
     registry.register(MultilingualChunker)
+    registry.register(SemanticChunker)
 
 
 __all__ = [
@@ -48,4 +60,14 @@ __all__ = [
     "MultilingualChunker",
     "MultilingualConfig",
     "normalize_with_map",
+    "SemanticChunker",
+    "SemanticConfig",
+    "ModelChunkContext",
+    "ModelChunkResult",
+    "ModelChunkReport",
+    "Rejection",
+    "ModelChunkingError",
+    "SegmentationCache",
+    "InMemorySegmentationCache",
+    "segmentation_cache_key",
 ]
