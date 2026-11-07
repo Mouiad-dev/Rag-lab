@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from rag_foundry_techniques.protocol import PluginManifest
 
@@ -15,6 +15,10 @@ class TextBlock(BaseModel):
     block_id: str
     start: int = Field(ge=0)
     end: int = Field(gt=0)
+    kind: Literal["heading", "paragraph", "code", "page"] | None = None
+    section_path: tuple[str, ...] = ()
+    heading_level: int | None = Field(default=None, ge=1, le=6)
+    page_index: int | None = Field(default=None, ge=0)
 
     @field_validator("end")
     @classmethod
@@ -23,6 +27,12 @@ class TextBlock(BaseModel):
         if start is not None and value <= start:
             raise ValueError("end must be greater than start")
         return value
+
+    @model_validator(mode="after")
+    def _consistent(self):
+        if (self.kind == "heading") != (self.heading_level is not None):
+            raise ValueError("heading_level is required for headings and allowed only for headings")
+        return self
 
 
 class ChunkInput(BaseModel):

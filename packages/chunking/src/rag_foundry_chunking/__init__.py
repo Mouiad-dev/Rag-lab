@@ -8,6 +8,7 @@ from rag_foundry_chunking.fixed import (
     FixedWordChunker,
     FixedWordConfig,
 )
+from rag_foundry_chunking.html_structure import HtmlStructureChunker, HtmlStructureConfig
 from rag_foundry_chunking.json_structure import JsonStructureChunker, JsonStructureConfig, json_path_at
 from rag_foundry_chunking.markdown import MarkdownSectionChunker, MarkdownSectionConfig
 from rag_foundry_chunking.multilingual import MultilingualChunker, MultilingualConfig, normalize_with_map
@@ -38,6 +39,7 @@ def register_builtin_plugins(registry) -> None:
     registry.register(MarkdownSectionChunker)
     registry.register(TableChunker)
     registry.register(JsonStructureChunker)
+    registry.register(HtmlStructureChunker)
     registry.register(CodeSeparatorChunker)
     registry.register(AstCodeChunker)
 
@@ -77,6 +79,8 @@ __all__ = [
     "TableCell",
     "table_cells",
     "JsonStructureChunker",
+    "HtmlStructureChunker",
+    "HtmlStructureConfig",
     "JsonStructureConfig",
     "StructureParseError",
     "json_path_at",
