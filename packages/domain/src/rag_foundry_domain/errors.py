@@ -184,3 +184,14 @@ class PromptError(IntakeError):
         if code not in self.CODES:
             raise ValueError("unknown prompt error code")
         super().__init__(code, code)
+
+
+class StoreError(IntakeError):
+    """Content-free persistence failures."""
+
+    CODES = ("store_unavailable", "commit_failed")
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown store error code")
+        super().__init__(code, code)
