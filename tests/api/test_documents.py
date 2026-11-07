@@ -8,11 +8,12 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-from rag_foundry_api.deps import get_document_repository, get_intake_service
+from rag_foundry_api.deps import get_intake_service
 from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
 from rag_foundry_domain.testing import InMemoryDocumentRepository
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_ingestion.intake import IntakeService
 from rag_foundry_storage.local_store import LocalObjectStore
 
@@ -24,11 +25,12 @@ OTHER_PROJECT = "11111111-2222-4333-8444-555555555555"
 
 def _client(tmp_path, *, environment="test", **kwargs) -> TestClient:
     repo = InMemoryDocumentRepository([LOCAL_DEV_SCOPE])
-    service = IntakeService(LocalObjectStore(tmp_path / "objects"), repo, max_bytes=MAX)
+    service = IntakeService(
+        LocalObjectStore(tmp_path / "objects"), InMemoryUnitOfWorkFactory(documents=repo), max_bytes=MAX
+    )
     settings = Settings(environment=environment, max_upload_bytes=MAX, object_store_root=tmp_path / "objects")
     app = create_app(settings)
     app.dependency_overrides[get_intake_service] = lambda: service
-    app.dependency_overrides[get_document_repository] = lambda: repo
     return TestClient(app, **kwargs)
 
 
@@ -113,7 +115,6 @@ def test_early_content_length_413_never_touches_store_or_repo(tmp_path):
     settings = Settings(environment="test", max_upload_bytes=MAX)
     app = create_app(settings)
     app.dependency_overrides[get_intake_service] = lambda: Boom()
-    app.dependency_overrides[get_document_repository] = lambda: Boom()
     c = TestClient(app)
     headers = {"Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX + 70 * 1024)}
     r = c.post(DOCS, content=b"short", headers=headers)

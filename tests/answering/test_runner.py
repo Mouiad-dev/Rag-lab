@@ -21,6 +21,7 @@ from rag_foundry_domain.settings_store import (
     NewSettingOverride,
     RuntimeSettingsService,
 )
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import OllamaChatModel
@@ -49,7 +50,7 @@ def built(tmp_path):
         )
         view = (await extraction.extract(scope, doc_id, version_id)).view
         index = InMemoryIndexRepository(views)
-        anchors = AnchorService(store, views, provider_namespace="test")
+        anchors = AnchorService(store, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
         chunker = RecursiveChunker(RecursiveConfig(chunk_size=300, chunk_overlap=40))
         version = await IndexService(store, views, index, anchors).build(
             scope, (view.id,), chunker, LexicalTestEmbedder()

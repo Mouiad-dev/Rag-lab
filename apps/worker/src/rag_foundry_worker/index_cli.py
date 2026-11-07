@@ -54,7 +54,7 @@ async def _index(settings: Settings, args):
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
         runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
         views, index = per_call_extractions(factory), per_call_indexes(factory)
-        anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
+        anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         if args.command == "build":
             idx = await runtime.indexing(LOCAL_DEV_SCOPE)
             service = IndexService(store, views, index, anchors, batch_size=idx.embed_batch_size)

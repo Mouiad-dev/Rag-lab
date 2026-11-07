@@ -12,7 +12,7 @@ from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
 
 from rag_foundry_api.auth import Auth
-from rag_foundry_api.deps import DocumentsDep, IntakeDep
+from rag_foundry_api.deps import IntakeDep
 from rag_foundry_api.errors import api_error
 
 _READ_SIZE = 1024 * 1024
@@ -50,12 +50,6 @@ def _service(service):
     if service is None:
         raise api_error(503, "storage_unavailable", "storage is not configured")
     return service
-
-
-def _repository(repo):
-    if repo is None:
-        raise api_error(503, "storage_unavailable", "storage is not configured")
-    return repo
 
 
 async def _chunks(upload: UploadFile) -> AsyncIterator[bytes]:
@@ -102,11 +96,11 @@ async def upload_version(
     return _status(response, await _ingest(request, project_id, auth, document_id, service))
 
 
-async def get_version(document_id: str, version_id: str, auth: Auth, repo: DocumentsDep) -> VersionResponse:
-    repo = _repository(repo)
+async def get_version(document_id: str, version_id: str, auth: Auth, service: IntakeDep) -> VersionResponse:
+    service = _service(service)
     for scope in auth.scopes():
         try:
-            version = await repo.get_version(scope, document_id, version_id)
+            version = await service.get_version(scope, document_id, version_id)
         except NotFoundError:
             continue
         return _to_response(document_id, version, False)

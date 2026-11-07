@@ -13,7 +13,6 @@ from collections.abc import Sequence
 from rag_foundry_core.settings import Settings, load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.extraction import ExtractionOutcome
-from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_storage.local_store import LocalObjectStore
@@ -46,11 +45,9 @@ def _summary_lines(outcome: ExtractionOutcome) -> list[str]:
 async def _extract(settings: Settings, document_id: str, version_id: str) -> ExtractionOutcome:
     assert settings.database_url is not None  # checked by the caller
     async with open_database(settings.database_url) as db:
-        factory = db.uow
         service = ExtractionService(
             LocalObjectStore(settings.object_store_root),
-            per_call_documents(factory),
-            per_call_extractions(factory),
+            db.uow,
             extractors=EXTRACTORS,
             limits=ExtractionLimits(),
         )

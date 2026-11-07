@@ -7,7 +7,7 @@ from rag_foundry_contracts.resolve import AnchorResolution, ResolutionReason, Re
 from rag_foundry_contracts.source import SourceAnchor, SourceRef
 from rag_foundry_domain import ObjectStore, Scope
 from rag_foundry_domain.errors import AnchorError, ExtractionError, NotFoundError, ObjectStoreError
-from rag_foundry_domain.ports import ExtractionRepository
+from rag_foundry_domain.uow import UnitOfWorkFactory
 
 from rag_foundry_ingestion.anchors import anchors_for_span as make_anchors_for_span
 from rag_foundry_ingestion.anchors import make_anchor, resolve_anchor
@@ -18,20 +18,21 @@ class AnchorService:
     def __init__(
         self,
         store: ObjectStore,
-        views: ExtractionRepository,
+        uow: UnitOfWorkFactory,
         *,
         provider_namespace: str,
         context: int = 32,
         max_views: int = 10,
     ) -> None:
         self._store = store
-        self._views = views
+        self._uow = uow
         self._provider_namespace = provider_namespace
         self._context = context
         self._max_views = max_views
 
     async def anchor(self, scope: Scope, view_id: str, block_id: str, start: int, end: int) -> SourceAnchor:
-        view = await self._views.get_view(scope, view_id)
+        async with self._uow(read_only=True) as uow:
+            view = await uow.extractions.get_view(scope, view_id)
         payload = await read_payload(self._store, scope, view)
         ref = SourceRef(
             provider_namespace=self._provider_namespace,
@@ -42,7 +43,8 @@ class AnchorService:
         return make_anchor(payload, ref, block_id, start, end, context=self._context)
 
     async def anchors_for_span(self, scope: Scope, view_id: str, start: int, end: int) -> tuple[SourceAnchor, ...]:
-        view = await self._views.get_view(scope, view_id)
+        async with self._uow(read_only=True) as uow:
+            view = await uow.extractions.get_view(scope, view_id)
         payload = await read_payload(self._store, scope, view)
         ref = SourceRef(
             provider_namespace=self._provider_namespace,
@@ -68,10 +70,18 @@ class AnchorService:
         if len(grouped) > self._max_views:
             raise AnchorError("too_many_views")
 
+        views = {}
+        if grouped:
+            async with self._uow(read_only=True) as uow:
+                for view_id in grouped:
+                    try:
+                        views[view_id] = await uow.extractions.get_view(scope, view_id)
+                    except NotFoundError:
+                        views[view_id] = None
+
         for view_id, items in grouped.items():
-            try:
-                view = await self._views.get_view(scope, view_id)
-            except NotFoundError:
+            view = views[view_id]
+            if view is None:
                 for index, anchor in items:
                     results[index] = AnchorResolution(
                         anchor_id=anchor.anchor_id,

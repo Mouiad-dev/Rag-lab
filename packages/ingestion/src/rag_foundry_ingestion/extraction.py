@@ -8,10 +8,10 @@ import hashlib
 import unicodedata
 from collections.abc import AsyncIterator, Mapping
 
-from rag_foundry_domain import DocumentRepository, MediaType, NotFoundError, ObjectStore, Scope, StagedObject
+from rag_foundry_domain import MediaType, NotFoundError, ObjectStore, Scope, StagedObject
 from rag_foundry_domain.errors import ExtractionError
 from rag_foundry_domain.extraction import ExtractionKey, ExtractionOutcome, ExtractionView, NewExtraction
-from rag_foundry_domain.ports import ExtractionRepository
+from rag_foundry_domain.uow import UnitOfWorkFactory
 
 from rag_foundry_ingestion.extract.base import ExtractionLimits, Extractor
 from rag_foundry_ingestion.normalize import CANONICAL_V1
@@ -32,34 +32,33 @@ class ExtractionService:
     def __init__(
         self,
         store: ObjectStore,
-        documents: DocumentRepository,
-        views: ExtractionRepository,
+        uow: UnitOfWorkFactory,
         *,
         extractors: Mapping[MediaType, Extractor],
         limits: ExtractionLimits,
     ) -> None:
         self._store = store
-        self._documents = documents
-        self._views = views
+        self._uow = uow
         self._extractors = extractors
         self._limits = limits
 
     async def extract(self, scope: Scope, document_id: str, version_id: str) -> ExtractionOutcome:
-        version = await self._documents.get_version(scope, document_id, version_id)
-        try:
-            extractor = self._extractors.get(MediaType(version.media_type))
-        except ValueError:
-            extractor = None
-        if extractor is None:
-            raise ExtractionError("unsupported_extractor", "no extractor is available for this media type")
-        key = ExtractionKey(
-            document_version_id=version.id,
-            extractor=extractor.name,
-            extractor_version=extractor.version,
-            profile_id=CANONICAL_V1.profile_id,
-            unicode_version=unicodedata.unidata_version,
-        )
-        existing = await self._views.find_view(scope, key)
+        async with self._uow(read_only=True) as uow:
+            version = await uow.documents.get_version(scope, document_id, version_id)
+            try:
+                extractor = self._extractors.get(MediaType(version.media_type))
+            except ValueError:
+                extractor = None
+            if extractor is None:
+                raise ExtractionError("unsupported_extractor", "no extractor is available for this media type")
+            key = ExtractionKey(
+                document_version_id=version.id,
+                extractor=extractor.name,
+                extractor_version=extractor.version,
+                profile_id=CANONICAL_V1.profile_id,
+                unicode_version=unicodedata.unidata_version,
+            )
+            existing = await uow.extractions.find_view(scope, key)
         if existing is not None:
             return ExtractionOutcome(view=existing, created=False)
 
@@ -101,7 +100,10 @@ class ExtractionService:
             payload_key=payload_key,
             warnings=result.warnings,
         )
-        return await self._views.create_view_or_get(scope, new)
+        async with self._uow() as uow:
+            outcome = await uow.extractions.create_view_or_get(scope, new)
+            await uow.commit()
+        return outcome
 
     async def load_payload(self, scope: Scope, view: ExtractionView) -> ExtractionPayload:
         return await read_payload(self._store, scope, view)

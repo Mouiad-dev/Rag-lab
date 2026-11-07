@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import AsyncIterable, AsyncIterator
 
 from rag_foundry_domain import (
-    DocumentRepository,
+    DocumentVersion,
     IntakeOutcome,
     NewVersion,
     NotFoundError,
@@ -12,14 +12,15 @@ from rag_foundry_domain import (
     Scope,
     StagedObject,
 )
+from rag_foundry_domain.uow import UnitOfWorkFactory
 
 from rag_foundry_ingestion.media import ContentInspector, parse_media_type, validate_filename
 
 
 class IntakeService:
-    def __init__(self, store: ObjectStore, repo: DocumentRepository, *, max_bytes: int) -> None:
+    def __init__(self, store: ObjectStore, uow: UnitOfWorkFactory, *, max_bytes: int) -> None:
         self._store = store
-        self._repo = repo
+        self._uow = uow
         self._max_bytes = max_bytes
 
     async def ingest(
@@ -31,10 +32,11 @@ class IntakeService:
         filename: str,
         document_id: str | None = None,
     ) -> IntakeOutcome:
-        if not await self._repo.project_exists(scope):
-            raise NotFoundError()
-        if document_id is not None:
-            await self._repo.get_document(scope, document_id)
+        async with self._uow(read_only=True) as uow:
+            if not await uow.documents.project_exists(scope):
+                raise NotFoundError()
+            if document_id is not None:
+                await uow.documents.get_document(scope, document_id)
         declared = parse_media_type(media_type)
         name = validate_filename(filename)
         inspector = ContentInspector(declared, name)
@@ -59,13 +61,21 @@ class IntakeService:
                 original_filename=name,
                 object_key=key,
             )
-            if document_id is None:
-                return await self._repo.create_document_or_get(scope, new, display_name=name)
-            return await self._repo.add_version_or_get(scope, document_id, new)
+            async with self._uow() as uow:
+                if document_id is None:
+                    outcome = await uow.documents.create_document_or_get(scope, new, display_name=name)
+                else:
+                    outcome = await uow.documents.add_version_or_get(scope, document_id, new)
+                await uow.commit()
+            return outcome
         except BaseException:
             if not committed:
                 await self._discard_quietly(staged)
             raise
+
+    async def get_version(self, scope: Scope, document_id: str, version_id: str) -> DocumentVersion:
+        async with self._uow(read_only=True) as uow:
+            return await uow.documents.get_version(scope, document_id, version_id)
 
     async def _discard_quietly(self, staged: StagedObject) -> None:
         try:

@@ -5,6 +5,7 @@ from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_contracts.resolve import ResolutionStatus
 from rag_foundry_contracts.source import SourceAnchor
 from rag_foundry_domain.errors import AnchorError
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
@@ -17,12 +18,13 @@ def test_c05_rechunk_preserves_fact_anchors(tmp_path):
     async def run():
         _svc, intake, spy, _store, docs, views, scope = setup(tmp_path)
         doc_id, version_id = await ingest(intake, scope, MARKDOWN.encode(), name="rechunk.md", media="text/markdown")
-        extraction = ExtractionService(spy, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+        uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+        extraction = ExtractionService(spy, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
         view = (await extraction.extract(scope, doc_id, version_id)).view
         payload = await extraction.load_payload(scope, view)
         blocks = payload.blocks
         assert len(blocks) == 6
-        svc = AnchorService(spy, views, provider_namespace="test")
+        svc = AnchorService(spy, uow, provider_namespace="test")
         facts = [
             (blocks[2], ARABIC.index("\u0646\u064e\u0635\u064c\u0651"), "\u0646\u064e\u0635\u064c\u0651"),
             (blocks[3], MIXED.index("\U0001f680 keeps"), "\U0001f680 keeps"),
@@ -59,7 +61,7 @@ def test_c05_rechunk_preserves_fact_anchors(tmp_path):
                     continue
                 serialized.append([anchor.model_dump_json() for anchor in anchors])
             loaded = [[SourceAnchor.model_validate_json(raw) for raw in group] for group in serialized]
-            fresh = AnchorService(spy, views, provider_namespace="test")
+            fresh = AnchorService(spy, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
             resolutions = await fresh.resolve(scope, tuple(anchor for group in loaded for anchor in group))
             assert all(item.status is ResolutionStatus.EXACT for item in resolutions)
             for block, start, quote in facts:

@@ -18,7 +18,6 @@ from rag_foundry_domain.runtime_settings import RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_domain.testing import make_scope
 from rag_foundry_domain.uow_adapters import (
-    per_call_documents,
     per_call_extractions,
     per_call_indexes,
     per_call_prompts,
@@ -74,20 +73,19 @@ def test_live_answer_fixture(tmp_path):
                     )
                 )
             scope = make_scope()
-            docs = per_call_documents(db.uow)
             await ensure_local_scope(db.uow, scope)
             views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
-            intake = IntakeService(store, docs, max_bytes=100_000)
+            intake = IntakeService(store, db.uow, max_bytes=100_000)
             doc_id, ver_id = await ingest(
                 intake, scope, corpus_markdown().encode("utf-8"), name="live-answers.md", media="text/markdown"
             )
             view = (
-                await ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits()).extract(
+                await ExtractionService(store, db.uow, extractors=EXTRACTORS, limits=ExtractionLimits()).extract(
                     scope, doc_id, ver_id
                 )
             ).view
-            anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
+            anchors = AnchorService(store, db.uow, provider_namespace=settings.provider_namespace)
             chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
             embedder = OllamaEmbeddingModel(ollama_embedding_profile(), api_base=settings.ollama_base_url)
             indexing = IndexService(store, views, index, anchors)

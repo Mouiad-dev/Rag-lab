@@ -7,7 +7,6 @@ from typing import Annotated
 from fastapi import Depends, Request
 from rag_foundry_answering.runner import LocalRunner
 from rag_foundry_core.settings import Settings
-from rag_foundry_domain import DocumentRepository
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.intake import IntakeService
 
@@ -29,10 +28,6 @@ def get_intake_service(container: ContainerDep):
     return container.intake if container else None
 
 
-def get_document_repository(container: ContainerDep):
-    return container.documents if container else None
-
-
 def get_anchor_service(container: ContainerDep):
     return container.anchors if container else None
 
@@ -43,6 +38,5 @@ def get_run_service(container: ContainerDep):
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 IntakeDep = Annotated[IntakeService | None, Depends(get_intake_service)]
-DocumentsDep = Annotated[DocumentRepository | None, Depends(get_document_repository)]
 AnchorsDep = Annotated[AnchorService | None, Depends(get_anchor_service)]
 RunsDep = Annotated[LocalRunner | None, Depends(get_run_service)]

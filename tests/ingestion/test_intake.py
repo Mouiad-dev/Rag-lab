@@ -1,6 +1,8 @@
 import asyncio
 import functools
+import hashlib
 import os
+import uuid
 
 import pytest
 from rag_foundry_domain import (
@@ -9,11 +11,13 @@ from rag_foundry_domain import (
     MediaTypeMismatchError,
     NotFoundError,
     Scope,
+    StagedObject,
     UnsupportedMediaTypeError,
     UploadTooLargeError,
     new_id,
 )
 from rag_foundry_domain.testing import InMemoryDocumentRepository, make_scope
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_storage import LocalObjectStore
 
@@ -53,7 +57,69 @@ def setup(tmp_path, *scopes, max_bytes=1000):
     scopes = scopes or (make_scope(),)
     store = LocalObjectStore(tmp_path)
     repo = InMemoryDocumentRepository(scopes)
-    return IntakeService(store, repo, max_bytes=max_bytes), store, repo, scopes[0]
+    return IntakeService(store, InMemoryUnitOfWorkFactory(documents=repo), max_bytes=max_bytes), store, repo, scopes[0]
+
+
+class RecordingStore:
+    def __init__(self, inner, open_now):
+        self.inner = inner
+        self.open_now = open_now
+        self.calls = []
+
+    def key_for(self, *args):
+        return self.inner.key_for(*args)
+
+    def open_read(self, *args):
+        self._record("open_read")
+        return self.inner.open_read(*args)
+
+    async def stage(self, *args, **kwargs):
+        self._record("stage")
+        return await self.inner.stage(*args, **kwargs)
+
+    async def commit(self, *args, **kwargs):
+        self._record("commit")
+        return await self.inner.commit(*args, **kwargs)
+
+    async def discard(self, *args, **kwargs):
+        self._record("discard")
+        return await self.inner.discard(*args, **kwargs)
+
+    def _record(self, name):
+        assert self.open_now() == 0
+        self.calls.append(name)
+
+
+class MemoryObjectStore:
+    def __init__(self):
+        self.staged = {}
+        self.objects = {}
+
+    def key_for(self, scope, sha256):
+        return f"{scope.tenant_id}/{scope.project_id}/{sha256}"
+
+    async def stage(self, chunks, *, max_bytes):
+        body = bytearray()
+        async for chunk in chunks:
+            body.extend(chunk)
+            if len(body) > max_bytes:
+                raise RuntimeError("too large")
+        digest = hashlib.sha256(body).hexdigest()
+        obj = StagedObject(token=uuid.uuid4().hex, sha256=digest, size_bytes=len(body))
+        self.staged[obj.token] = bytes(body)
+        return obj
+
+    async def commit(self, staged, key):
+        self.objects[key] = self.staged.pop(staged.token)
+
+    async def discard(self, staged):
+        self.staged.pop(staged.token, None)
+
+    def open_read(self, key):
+        async def chunks():
+            yield self.objects[key]
+
+        return chunks()
 
 
 A = b"alpha text"
@@ -104,7 +170,7 @@ async def test_unknown_project_and_foreign_document_never_read_stream(tmp_path):
         await svc.ingest(other, stream, media_type="text/plain", filename="a.txt")
     assert not stream.started
     both = InMemoryDocumentRepository([scope, other])
-    svc2 = IntakeService(store, both, max_bytes=1000)
+    svc2 = IntakeService(store, InMemoryUnitOfWorkFactory(documents=both), max_bytes=1000)
     doc = await up(svc2, other, A)
     for doc_id in (doc.document.id, new_id()):
         stream = Stream(A2)
@@ -168,3 +234,49 @@ async def test_pdf_and_arabic_filename_stored(tmp_path):
     out = await up(svc, scope, b"%PDF-1.4 x", name=name, media="application/pdf")
     assert out.version.text_encoding is None
     assert out.document.display_name == name
+
+
+@sync
+async def test_ingest_stream_and_object_store_calls_have_no_open_uow(tmp_path):
+    scope = make_scope()
+    repo = InMemoryDocumentRepository([scope])
+    uow = InMemoryUnitOfWorkFactory(documents=repo)
+    store = RecordingStore(MemoryObjectStore(), lambda: uow.open_now)
+    service = IntakeService(store, uow, max_bytes=1000)
+
+    async def chunks():
+        assert uow.open_now == 0
+        yield A
+
+    outcome = await service.ingest(scope, chunks(), media_type="text/plain", filename="a.txt")
+    assert store.calls == ["stage", "commit"]
+    assert uow.committed == 1
+    assert b"".join([part async for part in store.open_read(outcome.version.object_key)]) == A
+    assert store.calls[-1] == "open_read"
+    with pytest.raises(InvalidTextEncodingError):
+        await service.ingest(scope, Stream(b"ab\xd9"), media_type="text/plain", filename="bad.txt")
+    assert store.calls[-2:] == ["stage", "discard"]
+
+
+@sync
+async def test_unknown_project_opens_no_write_uow(tmp_path):
+    scope = make_scope()
+    factory = InMemoryUnitOfWorkFactory(documents=InMemoryDocumentRepository([scope]))
+    service = IntakeService(RecordingStore(MemoryObjectStore(), lambda: factory.open_now), factory, max_bytes=1000)
+    with pytest.raises(NotFoundError):
+        await service.ingest(
+            Scope(tenant_id=new_id(), project_id=new_id()), Stream(A), media_type="text/plain", filename="a.txt"
+        )
+    assert factory.opened == 1
+    assert factory.committed == 0
+    assert factory.rolled_back == 0
+
+
+@sync
+async def test_successful_ingest_commits_one_write_uow(tmp_path):
+    scope = make_scope()
+    factory = InMemoryUnitOfWorkFactory(documents=InMemoryDocumentRepository([scope]))
+    service = IntakeService(RecordingStore(MemoryObjectStore(), lambda: factory.open_now), factory, max_bytes=1000)
+    await service.ingest(scope, Stream(A), media_type="text/plain", filename="a.txt")
+    assert factory.opened == 2
+    assert factory.committed == 1

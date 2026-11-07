@@ -15,7 +15,7 @@ from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.errors import PromptError, SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
 from rag_foundry_domain.settings_store import RuntimeSettingsService
-from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes, per_call_prompts, per_call_settings
+from rag_foundry_domain.uow_adapters import per_call_indexes, per_call_prompts, per_call_settings
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.errors import ProviderError
 from rag_foundry_storage.local_store import LocalObjectStore
@@ -36,8 +36,7 @@ async def _ask(settings, request: RunRequest) -> RunResponse:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
         runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
         store = LocalObjectStore(settings.object_store_root)
-        views = per_call_extractions(factory)
-        anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
+        anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         runner = LocalRunner(
             per_call_indexes(factory),
             anchors,

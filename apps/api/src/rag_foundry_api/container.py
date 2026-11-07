@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_core.settings import Settings
-from rag_foundry_domain import LOCAL_DEV_SCOPE, DocumentRepository
+from rag_foundry_domain import LOCAL_DEV_SCOPE
 from rag_foundry_domain.runtime_settings import RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -19,7 +19,6 @@ from rag_foundry_ingestion.intake import IntakeService
 class AppContainer:
     settings: Settings
     intake: IntakeService | None
-    documents: DocumentRepository | None
     anchors: AnchorService | None
     runs: LocalRunner | None
 
@@ -30,12 +29,10 @@ async def open_container(
 ) -> AsyncIterator[AppContainer]:
     base, file_keys = runtime_settings
     if settings.database_url is None:
-        yield AppContainer(settings, None, None, None, None)
+        yield AppContainer(settings, None, None, None)
         return
 
     from rag_foundry_domain.uow_adapters import (
-        per_call_documents,
-        per_call_extractions,
         per_call_indexes,
         per_call_prompts,
         per_call_settings,
@@ -48,11 +45,9 @@ async def open_container(
     try:
         factory = database.uow
         runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
-        documents = per_call_documents(factory)
         store = LocalObjectStore(settings.object_store_root)
-        intake = IntakeService(store, documents, max_bytes=settings.max_upload_bytes)
-        views = per_call_extractions(factory)
-        anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
+        intake = IntakeService(store, factory, max_bytes=settings.max_upload_bytes)
+        anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         runs = LocalRunner(
             per_call_indexes(factory),
             anchors,
@@ -62,6 +57,6 @@ async def open_container(
         )
         if settings.environment in ("dev", "test"):
             await ensure_local_scope(factory, LOCAL_DEV_SCOPE)
-        yield AppContainer(settings, intake, documents, anchors, runs)
+        yield AppContainer(settings, intake, anchors, runs)
     finally:
         await database.dispose()

@@ -7,6 +7,7 @@ from _pdf_fixtures import build_pdf
 from rag_foundry_contracts.resolve import ResolutionReason, ResolutionStatus
 from rag_foundry_contracts.source import SourceAnchor
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
@@ -37,7 +38,8 @@ async def extract_fixture(tmp_path, data=None, name="rechunk.md", media="text/ma
         data = MARKDOWN.encode("utf-8")
     _svc, intake, _spy, _store, docs, views, scope = setup(tmp_path)
     doc_id, version_id = await ingest(intake, scope, data, name=name, media=media)
-    extraction = ExtractionService(_spy, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    extraction = ExtractionService(_spy, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     view = (await extraction.extract(scope, doc_id, version_id)).view
     payload = await extraction.load_payload(scope, view)
     return scope, _spy, docs, views, extraction, view, payload
@@ -61,10 +63,11 @@ def _chunks_b(payload):
 async def test_anchors_resolve_across_synthetic_rechunkings(tmp_path):
     _setup_svc, intake, spy, _store, docs, views, scope = setup(tmp_path)
     doc_id, version_id = await ingest(intake, scope, MARKDOWN.encode("utf-8"), name="rechunk.md", media="text/markdown")
-    extraction = ExtractionService(spy, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    extraction = ExtractionService(spy, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     view = (await extraction.extract(scope, doc_id, version_id)).view
     payload = await extraction.load_payload(scope, view)
-    svc = AnchorService(spy, views, provider_namespace="test")
+    svc = AnchorService(spy, uow, provider_namespace="test")
     assert len(payload.blocks) == 6
     blocks = payload.blocks
     facts = [
@@ -88,7 +91,7 @@ async def test_anchors_resolve_across_synthetic_rechunkings(tmp_path):
             chunk_anchors.append(anchors)
         serialized = [[anchor.model_dump_json() for anchor in group] for group in chunk_anchors]
         reloaded = [[SourceAnchor.model_validate_json(raw) for raw in group] for group in serialized]
-        fresh = AnchorService(spy, views, provider_namespace="test")
+        fresh = AnchorService(spy, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
         for chunk_index, ((start, end), group) in enumerate(zip(spans, reloaded, strict=True)):
             assert all(set(json.loads(raw)) == set(SourceAnchor.model_fields) for raw in serialized[chunk_index])
             results = await fresh.resolve(scope, group)
@@ -129,12 +132,11 @@ async def test_anchors_resolve_across_synthetic_rechunkings(tmp_path):
     reverse_doc_id, reverse_version_id = await ingest(
         reverse_intake, reverse_scope, MARKDOWN.encode("utf-8"), name="rechunk.md", media="text/markdown"
     )
-    reverse_extraction = ExtractionService(
-        reverse_spy, reverse_docs, reverse_views, extractors=EXTRACTORS, limits=ExtractionLimits()
-    )
+    reverse_uow = InMemoryUnitOfWorkFactory(documents=reverse_docs, extractions=reverse_views)
+    reverse_extraction = ExtractionService(reverse_spy, reverse_uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     reverse_view = (await reverse_extraction.extract(reverse_scope, reverse_doc_id, reverse_version_id)).view
     reverse_payload = await reverse_extraction.load_payload(reverse_scope, reverse_view)
-    reverse_svc = AnchorService(reverse_spy, reverse_views, provider_namespace="test")
+    reverse_svc = AnchorService(reverse_spy, reverse_uow, provider_namespace="test")
     reverse_facts = [
         await reverse_svc.anchor(
             reverse_scope, reverse_view.id, reverse_payload.blocks[index].block_id, start, start + len(quote)
@@ -243,7 +245,7 @@ async def test_pdf_anchor_uses_page_text_without_regions(tmp_path):
     )
     block = next(b for b in payload.blocks if b.page_index == 1)
     page_text = payload.canonical_text[block.start : block.end]
-    svc = AnchorService(spy, views, provider_namespace="test")
+    svc = AnchorService(spy, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
     anchor = await svc.anchor(scope, view.id, block.block_id, 0, len(page_text))
     assert anchor.page_index == 1
     assert anchor.regions == ()

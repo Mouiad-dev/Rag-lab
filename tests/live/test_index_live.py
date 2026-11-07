@@ -10,7 +10,7 @@ from pydantic import SecretStr
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_core.settings import load_settings
 from rag_foundry_domain.testing import make_scope
-from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions, per_call_indexes
+from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes
 from rag_foundry_indexing import DenseConfig, DenseRetriever, IndexService, NoRetrieval, NoRetrievalConfig
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -49,18 +49,17 @@ def test_live_index_retrieves_known_facts(tmp_path):
                     )
                 )
             scope = make_scope()
-            docs = per_call_documents(db.uow)
             await ensure_local_scope(db.uow, scope)
             views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
-            intake = IntakeService(store, docs, max_bytes=100_000)
+            intake = IntakeService(store, db.uow, max_bytes=100_000)
             doc_id, version_id = await ingest(
                 intake, scope, MARKDOWN.encode(), name="live-index.md", media="text/markdown"
             )
-            extraction = ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+            extraction = ExtractionService(store, db.uow, extractors=EXTRACTORS, limits=ExtractionLimits())
             view = (await extraction.extract(scope, doc_id, version_id)).view
             embedder = OllamaEmbeddingModel(ollama_embedding_profile(), api_base=settings.ollama_base_url)
-            anchors = AnchorService(store, views, provider_namespace="test")
+            anchors = AnchorService(store, db.uow, provider_namespace="test")
             chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
             service = IndexService(store, views, index, anchors)
             version = await service.build(scope, (view.id,), chunker, embedder)

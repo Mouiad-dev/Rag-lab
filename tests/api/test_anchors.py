@@ -4,11 +4,12 @@ import asyncio
 import uuid
 
 from fastapi.testclient import TestClient
-from rag_foundry_api.deps import get_anchor_service, get_document_repository, get_intake_service
+from rag_foundry_api.deps import get_anchor_service, get_intake_service
 from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
 from rag_foundry_domain.testing import InMemoryDocumentRepository, InMemoryExtractionRepository
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
@@ -32,12 +33,12 @@ def _env(tmp_path, *, max_upload_bytes=3 * MIB):
     store = LocalObjectStore(tmp_path / "objects")
     docs = InMemoryDocumentRepository([LOCAL_DEV_SCOPE])
     views = InMemoryExtractionRepository(docs)
-    intake = IntakeService(store, docs, max_bytes=max_upload_bytes)
-    extraction = ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
-    anchors = AnchorService(store, views, provider_namespace="rag-foundry-local")
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    intake = IntakeService(store, uow, max_bytes=max_upload_bytes)
+    extraction = ExtractionService(store, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
+    anchors = AnchorService(store, uow, provider_namespace="rag-foundry-local")
     app = create_app(Settings(environment="test", max_upload_bytes=max_upload_bytes))
     app.dependency_overrides[get_intake_service] = lambda: intake
-    app.dependency_overrides[get_document_repository] = lambda: docs
     app.dependency_overrides[get_anchor_service] = lambda: anchors
     return TestClient(app), store, docs, views, intake, extraction, anchors
 

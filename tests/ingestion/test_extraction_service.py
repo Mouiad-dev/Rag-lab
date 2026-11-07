@@ -11,12 +11,14 @@ from rag_foundry_domain.documents import MediaType
 from rag_foundry_domain.errors import ExtractionError, ObjectStoreError
 from rag_foundry_domain.extraction import ExtractionKey
 from rag_foundry_domain.testing import InMemoryDocumentRepository, InMemoryExtractionRepository, make_scope
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_ingestion.normalize import CANONICAL_V1, SEARCH_AR_EN_V1, apply
 from rag_foundry_ingestion.payload import ExtractionPayload
 from rag_foundry_storage import LocalObjectStore
+from test_intake import MemoryObjectStore, RecordingStore
 
 
 def sync(fn):
@@ -45,10 +47,29 @@ class SpyStore:
     def __init__(self, inner: LocalObjectStore) -> None:
         self.inner = inner
         self.reads: list[str] = []
+        self.open_now = lambda: 0
+        self.calls: list[str] = []
 
     def open_read(self, key):
+        self._record("open_read")
         self.reads.append(key)
         return self.inner.open_read(key)
+
+    async def stage(self, *args, **kwargs):
+        self._record("stage")
+        return await self.inner.stage(*args, **kwargs)
+
+    async def commit(self, *args, **kwargs):
+        self._record("commit")
+        return await self.inner.commit(*args, **kwargs)
+
+    async def discard(self, *args, **kwargs):
+        self._record("discard")
+        return await self.inner.discard(*args, **kwargs)
+
+    def _record(self, name):
+        assert self.open_now() == 0
+        self.calls.append(name)
 
     def __getattr__(self, name):
         return getattr(self.inner, name)
@@ -59,9 +80,10 @@ def setup(tmp_path, *scopes):
     store = LocalObjectStore(tmp_path)
     docs = InMemoryDocumentRepository(scopes)
     views = InMemoryExtractionRepository(docs)
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
     spy = SpyStore(store)
-    intake = IntakeService(store, docs, max_bytes=100_000)
-    svc = ExtractionService(spy, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+    intake = IntakeService(store, uow, max_bytes=100_000)
+    svc = ExtractionService(spy, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     return svc, intake, spy, store, docs, views, scopes[0]
 
 
@@ -264,8 +286,9 @@ async def test_unsupported_media_type_without_extractor(tmp_path):
     scope = make_scope()
     docs = InMemoryDocumentRepository([scope])
     views = InMemoryExtractionRepository(docs)
-    intake = IntakeService(store, docs, max_bytes=1000)
-    svc = ExtractionService(store, docs, views, extractors={}, limits=ExtractionLimits())
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    intake = IntakeService(store, uow, max_bytes=1000)
+    svc = ExtractionService(store, uow, extractors={}, limits=ExtractionLimits())
     doc_id, ver_id = await ingest(intake, scope, b"plain", name="a.txt", media="text/plain")
     with pytest.raises(ExtractionError) as exc:
         await svc.extract(scope, doc_id, ver_id)
@@ -305,7 +328,8 @@ async def test_commit_failure_discards_staged_object_and_surfaces_original_error
     svc, intake, _spy, store, docs, views, scope = setup(tmp_path)
     doc_id, ver_id = await ingest(intake, scope, MD.encode("utf-8"), name="a.md", media="text/markdown")
     failing = FailingCommitStore(store)
-    bad = ExtractionService(failing, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    bad = ExtractionService(failing, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     with pytest.raises(ObjectStoreError) as exc:
         await bad.extract(scope, doc_id, ver_id)
     assert str(exc.value) == "boom"
@@ -331,11 +355,61 @@ async def test_invalid_stored_media_type_is_unsupported_extractor(tmp_path):
     doc_id, ver_id = await ingest(intake, scope, MD.encode("utf-8"), name="a.md", media="text/markdown")
     good = await docs.get_version(scope, doc_id, ver_id)
 
-    class BrokenDocs:
-        async def get_version(self, _scope, _doc, _ver):
-            return good.model_copy(update={"media_type": "text/x-unknown"})
+    async def broken_get_version(_scope, _doc, _ver):
+        return good.model_copy(update={"media_type": "text/x-unknown"})
 
-    broken = ExtractionService(store, BrokenDocs(), views, extractors=EXTRACTORS, limits=ExtractionLimits())
+    docs.get_version = broken_get_version
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    broken = ExtractionService(store, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     with pytest.raises(ExtractionError) as exc:
         await broken.extract(scope, doc_id, ver_id)
     assert exc.value.code == "unsupported_extractor"
+
+
+@sync
+async def test_extraction_object_store_calls_have_no_open_uow(tmp_path):
+    scope = make_scope()
+    docs = InMemoryDocumentRepository([scope])
+    views = InMemoryExtractionRepository(docs)
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    store = RecordingStore(MemoryObjectStore(), lambda: uow.open_now)
+    spy = SpyStore(store)
+    spy.open_now = lambda: uow.open_now
+    intake = IntakeService(store, uow, max_bytes=100_000)
+    extraction = ExtractionService(spy, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
+    doc_id, ver_id = await ingest(intake, scope, MD.encode("utf-8"), name="a.md", media="text/markdown")
+    store.calls.clear()
+    spy.calls.clear()
+    outcome = await extraction.extract(scope, doc_id, ver_id)
+    assert store.calls == ["open_read", "stage", "commit"]
+    assert outcome.created
+
+
+@sync
+async def test_payload_write_failure_opens_no_write_uow_for_view(tmp_path):
+    scope = make_scope()
+    docs = InMemoryDocumentRepository([scope])
+    views = InMemoryExtractionRepository(docs)
+    uow = InMemoryUnitOfWorkFactory(documents=docs, extractions=views)
+    recording_store = RecordingStore(MemoryObjectStore(), lambda: uow.open_now)
+    spy = SpyStore(recording_store)
+    spy.open_now = lambda: uow.open_now
+    intake = IntakeService(recording_store, uow, max_bytes=100_000)
+    doc_id, ver_id = await ingest(intake, scope, MD.encode("utf-8"), name="a.md", media="text/markdown")
+    recording_store.calls.clear()
+
+    async def fail_payload_commit(_staged, _key):
+        spy._record("commit")
+        raise ObjectStoreError("payload write failed")
+
+    spy.commit = fail_payload_commit
+    spy.open_now = lambda: uow.open_now
+    extraction = ExtractionService(spy, uow, extractors=EXTRACTORS, limits=ExtractionLimits())
+    opened_before = uow.opened
+    committed_before = uow.committed
+    with pytest.raises(ObjectStoreError, match="payload write failed"):
+        await extraction.extract(scope, doc_id, ver_id)
+    assert uow.opened - opened_before == 1
+    assert uow.committed == committed_before
+    assert spy.calls == ["open_read", "stage", "commit", "discard"]
+    assert await views.list_views(scope, ver_id) == []

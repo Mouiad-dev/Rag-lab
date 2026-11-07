@@ -14,6 +14,7 @@ from rag_foundry_domain.errors import IndexingError, NotFoundError
 from rag_foundry_domain.index_testing import InMemoryIndexRepository
 from rag_foundry_domain.indexing import IndexState, corpus_sha256_for, embedding_key_for
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_indexing import (
     DenseConfig,
     DenseRetriever,
@@ -68,7 +69,7 @@ async def _env(tmp_path) -> Env:
         views=views,
         view=view,
         index=InMemoryIndexRepository(views),
-        anchors=AnchorService(store, views, provider_namespace="test"),
+        anchors=AnchorService(store, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test"),
         chunker=RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP)),
     )
 

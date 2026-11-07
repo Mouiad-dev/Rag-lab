@@ -8,7 +8,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-from rag_foundry_api.deps import get_anchor_service, get_document_repository, get_intake_service
+from rag_foundry_api.deps import get_anchor_service, get_intake_service
 from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
@@ -62,11 +62,11 @@ def sql_repositories():
             )
         docs = per_call_documents(db.uow)
         await ensure_local_scope(db.uow, LOCAL_DEV_SCOPE)
-        return docs, per_call_extractions(db.uow)
+        return docs, per_call_extractions(db.uow), db
 
     factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
     with asyncio.Runner(loop_factory=factory) as runner:
-        docs, views = runner.run(setup())
+        docs, views, _db = runner.run(setup())
     try:
         yield docs, views, db
     finally:
@@ -84,21 +84,20 @@ def _run(coro):
         return runner.run(coro)
 
 
-def _services(tmp_path, docs, views):
+def _services(tmp_path, docs, views, db):
     store = LocalObjectStore(tmp_path / "objects")
-    intake = IntakeService(store, docs, max_bytes=1000)
-    extraction = ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
-    anchors = AnchorService(store, views, provider_namespace="rag-foundry-local")
+    intake = IntakeService(store, db.uow, max_bytes=1000)
+    extraction = ExtractionService(store, db.uow, extractors=EXTRACTORS, limits=ExtractionLimits())
+    anchors = AnchorService(store, db.uow, provider_namespace="rag-foundry-local")
     app = create_app(Settings(environment="test", max_upload_bytes=1000))
     app.dependency_overrides[get_intake_service] = lambda: intake
-    app.dependency_overrides[get_document_repository] = lambda: docs
     app.dependency_overrides[get_anchor_service] = lambda: anchors
     return store, intake, extraction, anchors, app
 
 
 def test_sql_upload_extract_and_resolve_exact(tmp_path, sql_repositories):
-    docs, views, _db = sql_repositories
-    _store, _intake, extraction, anchors, app = _services(tmp_path, docs, views)
+    docs, views, db = sql_repositories
+    _store, _intake, extraction, anchors, app = _services(tmp_path, docs, views, db)
     backend_options = {"loop_factory": asyncio.SelectorEventLoop} if sys.platform == "win32" else {}
     with TestClient(app, backend_options=backend_options) as client:
         unique = uuid.uuid4().hex
@@ -125,10 +124,10 @@ def test_sql_upload_extract_and_resolve_exact(tmp_path, sql_repositories):
 
 
 def test_sql_foreign_scope_anchor_is_unavailable(tmp_path, sql_repositories, monkeypatch):
-    docs, views, _db = sql_repositories
-    _store, intake, extraction, anchors, app = _services(tmp_path, docs, views)
+    docs, views, db = sql_repositories
+    _store, intake, extraction, anchors, app = _services(tmp_path, docs, views, db)
     foreign = make_scope()
-    _run(ensure_local_scope(_db.uow, foreign))
+    _run(ensure_local_scope(db.uow, foreign))
     unique = uuid.uuid4().hex
     uploaded = _run(
         intake.ingest(
@@ -168,8 +167,8 @@ def test_sql_foreign_scope_anchor_is_unavailable(tmp_path, sql_repositories, mon
 
 
 def test_sql_malformed_extraction_view_id_is_unavailable(tmp_path, sql_repositories, monkeypatch):
-    docs, views, _db = sql_repositories
-    _store, intake, extraction, anchors, app = _services(tmp_path, docs, views)
+    docs, views, db = sql_repositories
+    _store, intake, extraction, anchors, app = _services(tmp_path, docs, views, db)
     # Upload bytes are unique so the SQL version is never a deduplicated fixture artifact.
     unique = uuid.uuid4().hex
     uploaded = _run(

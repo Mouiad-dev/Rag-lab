@@ -12,6 +12,7 @@ from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_domain.errors import NotFoundError, RunError
 from rag_foundry_domain.index_testing import InMemoryIndexRepository
 from rag_foundry_domain.testing import make_scope
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_indexing import DenseConfig, DenseRetriever, IndexService, NoRetrieval, NoRetrievalConfig
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.ledger import RecordingChatModel, RecordingEmbeddingModel, UsageLedger
@@ -29,7 +30,7 @@ def built(tmp_path):
         )
         view = (await extraction.extract(scope, doc_id, version_id)).view
         index = InMemoryIndexRepository(views)
-        anchors = AnchorService(store, views, provider_namespace="test")
+        anchors = AnchorService(store, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
         embedder = LexicalTestEmbedder()
         service = IndexService(store, views, index, anchors)
         chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
@@ -329,7 +330,7 @@ def test_unresolved_anchor_abstains_and_redacts(built):
             index=index,
             embedder=RecordingEmbeddingModel(embedder, ledger),
         )
-        result = await AnswerService(MismatchAnchors(anchors._store, anchors._views, provider_namespace="test")).answer(
+        result = await AnswerService(MismatchAnchors(anchors._store, anchors._uow, provider_namespace="test")).answer(
             scope,
             "How often does Port Sallow record sea levels?",
             prompts=RunPrompts(*prompt_templates()),

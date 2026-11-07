@@ -40,12 +40,12 @@ async def _build(tmp_path):
     await ensure_local_scope(db.uow, scope)
     views, indexes = per_call_extractions(db.uow), per_call_indexes(db.uow)
     store = LocalObjectStore(tmp_path / "objects")
-    intake = IntakeService(store, docs, max_bytes=100_000)
+    intake = IntakeService(store, db.uow, max_bytes=100_000)
     payload = ("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu " * 20).encode()
     outcome = await intake.ingest(scope, _bytes(payload), media_type="text/plain", filename="source.txt")
-    extraction = ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
+    extraction = ExtractionService(store, db.uow, extractors=EXTRACTORS, limits=ExtractionLimits())
     view = (await extraction.extract(scope, outcome.document.id, outcome.version.id)).view
-    anchors = AnchorService(store, views, provider_namespace="test")
+    anchors = AnchorService(store, db.uow, provider_namespace="test")
     chunker = RecursiveChunker(RecursiveConfig(chunk_size=32, chunk_overlap=0))
 
     def index_service(index, batch_size):
