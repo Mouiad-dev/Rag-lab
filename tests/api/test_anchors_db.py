@@ -8,6 +8,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from rag_foundry_api.deps import get_anchor_service, get_document_repository, get_intake_service
 from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
@@ -88,12 +89,10 @@ def _services(tmp_path, docs, views):
     intake = IntakeService(store, docs, max_bytes=1000)
     extraction = ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
     anchors = AnchorService(store, views, provider_namespace="rag-foundry-local")
-    app = create_app(
-        Settings(environment="test", max_upload_bytes=1000),
-        intake_service=intake,
-        repository=docs,
-        anchor_service=anchors,
-    )
+    app = create_app(Settings(environment="test", max_upload_bytes=1000))
+    app.dependency_overrides[get_intake_service] = lambda: intake
+    app.dependency_overrides[get_document_repository] = lambda: docs
+    app.dependency_overrides[get_anchor_service] = lambda: anchors
     return store, intake, extraction, anchors, app
 
 

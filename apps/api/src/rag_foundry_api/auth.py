@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from rag_foundry_domain import LOCAL_DEV_SCOPE, NotFoundError, Scope
 
+from rag_foundry_api.deps import SettingsDep
 from rag_foundry_api.errors import api_error
 
 
@@ -26,8 +27,8 @@ class AuthContext:
         return [Scope(tenant_id=self.tenant_id, project_id=p) for p in sorted(self.project_ids)]
 
 
-def get_auth_context(request: Request) -> AuthContext:
-    if request.app.state.settings.environment == "prod":
+def get_auth_context(settings: SettingsDep) -> AuthContext:
+    if settings.environment == "prod":
         raise api_error(401, "auth_not_configured", "authentication is not configured")
     return AuthContext(tenant_id=LOCAL_DEV_SCOPE.tenant_id, project_ids=(LOCAL_DEV_SCOPE.project_id,))
 

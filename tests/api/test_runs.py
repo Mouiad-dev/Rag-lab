@@ -5,6 +5,7 @@ import pytest
 from _templates import seeded_prompt_store
 from fastapi.testclient import TestClient
 from rag_foundry_answering.runner import LocalRunner
+from rag_foundry_api.deps import get_run_service, get_settings
 from rag_foundry_api.main import create_app
 from rag_foundry_contracts.runs import Citation, Evidence, RunResponse
 from rag_foundry_contracts.source import Precision, SourceAnchor, SourceRef, TextRange
@@ -69,7 +70,10 @@ class StubRunner:
 
 
 def _client(runner=None, settings=None):
-    return TestClient(create_app(settings or Settings(environment="test"), run_service=runner))
+    app = create_app(settings or Settings(environment="test"))
+    if runner is not None:
+        app.dependency_overrides[get_run_service] = lambda: runner
+    return TestClient(app)
 
 
 class IndexDouble:
@@ -188,6 +192,39 @@ def test_long_question_validation_maps_to_422():
 def test_prod_authentication_maps_to_401():
     response = _post(_client(StubRunner(), Settings(environment="prod")))
     assert response.status_code == 401
+
+
+def test_unknown_project_and_malformed_body_without_storage_keep_order():
+    client = _client()
+    unknown = client.post(f"/api/v1/projects/{uuid.uuid4()}/runs", json={"question": "Q"})
+    malformed = client.post(URL, json={"question": ""})
+    assert (unknown.status_code, unknown.json()["error"]["code"]) == (404, "not_found")
+    assert (malformed.status_code, malformed.json()["error"]["code"]) == (422, "validation_error")
+
+
+def test_overridden_settings_dependency_changes_auth():
+    app = create_app(Settings(environment="test"))
+    app.dependency_overrides[get_settings] = lambda: Settings(environment="prod")
+    response = TestClient(app).post(URL, json={"question": "Q"})
+    assert response.status_code == 401
+
+
+def test_lifespan_disposes_database_once(monkeypatch):
+    from pydantic import SecretStr
+    from rag_foundry_storage.sql.database import Database
+
+    disposed = []
+
+    async def dispose(self):
+        disposed.append(self)
+
+    monkeypatch.setattr(Database, "dispose", dispose)
+    app = create_app(
+        Settings(environment="prod", database_url=SecretStr("postgresql+psycopg://user:pass@localhost/db"))
+    )
+    with TestClient(app):
+        assert disposed == []
+    assert len(disposed) == 1
 
 
 def test_missing_run_service_maps_to_503():

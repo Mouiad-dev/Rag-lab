@@ -4,6 +4,7 @@ import asyncio
 import uuid
 
 from fastapi.testclient import TestClient
+from rag_foundry_api.deps import get_anchor_service, get_document_repository, get_intake_service
 from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
@@ -34,12 +35,10 @@ def _env(tmp_path, *, max_upload_bytes=3 * MIB):
     intake = IntakeService(store, docs, max_bytes=max_upload_bytes)
     extraction = ExtractionService(store, docs, views, extractors=EXTRACTORS, limits=ExtractionLimits())
     anchors = AnchorService(store, views, provider_namespace="rag-foundry-local")
-    app = create_app(
-        Settings(environment="test", max_upload_bytes=max_upload_bytes),
-        intake_service=intake,
-        repository=docs,
-        anchor_service=anchors,
-    )
+    app = create_app(Settings(environment="test", max_upload_bytes=max_upload_bytes))
+    app.dependency_overrides[get_intake_service] = lambda: intake
+    app.dependency_overrides[get_document_repository] = lambda: docs
+    app.dependency_overrides[get_anchor_service] = lambda: anchors
     return TestClient(app), store, docs, views, intake, extraction, anchors
 
 
@@ -134,12 +133,35 @@ def test_service_missing_and_response_has_no_storage_details(tmp_path):
     assert str(tmp_path) not in response.text
 
 
+def test_unknown_project_and_malformed_body_without_storage_keep_order():
+    client = TestClient(create_app(Settings(environment="test", database_url=None)))
+    anchor = {
+        "anchor_id": "a1",
+        "source": {
+            "provider_namespace": "test",
+            "document_id": "d1",
+            "document_version_id": "v1",
+            "extraction_view_id": "e1",
+        },
+        "block_id": "b00000",
+        "precision": "exact_text",
+        "exact": "hello",
+        "text_range": {"start": 0, "end": 5},
+    }
+    unknown = client.post(f"/api/v1/projects/{uuid.uuid4()}/anchors:resolve", json={"anchors": [anchor]})
+    malformed = client.post(RESOLVE, json={})
+    assert (unknown.status_code, unknown.json()["error"]["code"]) == (404, "not_found")
+    assert (malformed.status_code, malformed.json()["error"]["code"]) == (422, "validation_error")
+
+
 def test_non_upload_post_body_over_one_mib_is_rejected_before_service():
     class Boom:
         async def resolve(self, *_args):
             raise AssertionError("anchor service was called")
 
-    client = TestClient(create_app(Settings(environment="test"), anchor_service=Boom()))
+    app = create_app(Settings(environment="test"))
+    app.dependency_overrides[get_anchor_service] = lambda: Boom()
+    client = TestClient(app)
     response = client.post(RESOLVE, content=b"x" * (MIB + 1))
     assert _error(response, 413)["code"] == "request_too_large"
 
@@ -150,7 +172,8 @@ def test_chunked_non_upload_post_body_over_one_mib_is_rejected_before_service():
             raise AssertionError("anchor service was called")
 
     observed = {}
-    app = create_app(Settings(environment="test"), anchor_service=Boom())
+    app = create_app(Settings(environment="test"))
+    app.dependency_overrides[get_anchor_service] = lambda: Boom()
 
     class RecordTransferEncoding:
         def __init__(self, wrapped):

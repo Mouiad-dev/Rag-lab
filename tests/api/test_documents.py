@@ -8,6 +8,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from rag_foundry_api.deps import get_document_repository, get_intake_service
 from rag_foundry_api.main import create_app
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
@@ -25,7 +26,10 @@ def _client(tmp_path, *, environment="test", **kwargs) -> TestClient:
     repo = InMemoryDocumentRepository([LOCAL_DEV_SCOPE])
     service = IntakeService(LocalObjectStore(tmp_path / "objects"), repo, max_bytes=MAX)
     settings = Settings(environment=environment, max_upload_bytes=MAX, object_store_root=tmp_path / "objects")
-    return TestClient(create_app(settings, intake_service=service, repository=repo), **kwargs)
+    app = create_app(settings)
+    app.dependency_overrides[get_intake_service] = lambda: service
+    app.dependency_overrides[get_document_repository] = lambda: repo
+    return TestClient(app, **kwargs)
 
 
 @pytest.fixture
@@ -107,7 +111,10 @@ def test_early_content_length_413_never_touches_store_or_repo(tmp_path):
             raise AssertionError(f"touched {name}")
 
     settings = Settings(environment="test", max_upload_bytes=MAX)
-    c = TestClient(create_app(settings, intake_service=Boom(), repository=Boom()))
+    app = create_app(settings)
+    app.dependency_overrides[get_intake_service] = lambda: Boom()
+    app.dependency_overrides[get_document_repository] = lambda: Boom()
+    c = TestClient(app)
     headers = {"Content-Type": "multipart/form-data; boundary=x", "Content-Length": str(MAX + 70 * 1024)}
     r = c.post(DOCS, content=b"short", headers=headers)
     assert _assert_envelope(r, 413)["code"] == "upload_too_large"
@@ -187,6 +194,18 @@ def test_no_database_and_no_injection_is_503_and_health_ok():
     assert error["code"] == "storage_unavailable" and error["retryable"] is True
     _assert_envelope(c.get(f"/api/v1/documents/{uuid.uuid4()}/versions/{uuid.uuid4()}"), 503)
     assert c.get("/health").status_code == 200
+
+
+def test_unknown_project_and_malformed_body_without_storage_keep_order():
+    client = TestClient(create_app(Settings(environment="test", database_url=None)))
+    unknown = client.post("/api/v1/projects/unknown/documents", files=_file(b"x"))
+    malformed = client.post(DOCS, data="broken", headers={"content-type": "multipart/form-data; boundary=bad"})
+    unknown_version = client.post("/api/v1/projects/unknown/documents/document/versions", files=_file(b"x"))
+    malformed_version = client.post(
+        f"{DOCS}/document/versions", data="broken", headers={"content-type": "multipart/form-data; boundary=bad"}
+    )
+    for response in (unknown, malformed, unknown_version, malformed_version):
+        assert (response.status_code, response.json()["error"]["code"]) == (503, "storage_unavailable")
 
 
 def test_unknown_route_has_envelope(client):

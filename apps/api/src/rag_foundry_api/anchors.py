@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from rag_foundry_contracts.resolve import AnchorResolveRequest, AnchorResolveResponse
 
 from rag_foundry_api.auth import Auth
+from rag_foundry_api.deps import AnchorsDep
 from rag_foundry_api.errors import api_error
 
 
 async def resolve_anchors(
-    project_id: str, body: AnchorResolveRequest, request: Request, auth: Auth
+    project_id: str, body: AnchorResolveRequest, auth: Auth, service: AnchorsDep
 ) -> AnchorResolveResponse:
     scope = auth.scope_for(project_id)
-    service = getattr(request.app.state, "anchor_service", None)
     if service is None:
         raise api_error(503, "storage_unavailable", "storage is not configured")
     results = await service.resolve(scope, body.anchors)

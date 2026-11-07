@@ -7,12 +7,12 @@ from datetime import datetime
 
 from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel
-from rag_foundry_domain import DocumentRepository, DocumentVersion, IntakeOutcome, NotFoundError
-from rag_foundry_ingestion.intake import IntakeService
+from rag_foundry_domain import DocumentVersion, IntakeOutcome, NotFoundError
 from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
 
 from rag_foundry_api.auth import Auth
+from rag_foundry_api.deps import DocumentsDep, IntakeDep
 from rag_foundry_api.errors import api_error
 
 _READ_SIZE = 1024 * 1024
@@ -46,15 +46,13 @@ def _to_response(document_id: str, v: DocumentVersion, deduplicated: bool) -> Ve
     )
 
 
-def _service(request: Request) -> IntakeService:
-    service = getattr(request.app.state, "intake_service", None)
+def _service(service):
     if service is None:
         raise api_error(503, "storage_unavailable", "storage is not configured")
     return service
 
 
-def _repository(request: Request) -> DocumentRepository:
-    repo = getattr(request.app.state, "repository", None)
+def _repository(repo):
     if repo is None:
         raise api_error(503, "storage_unavailable", "storage is not configured")
     return repo
@@ -65,8 +63,8 @@ async def _chunks(upload: UploadFile) -> AsyncIterator[bytes]:
         yield chunk
 
 
-async def _ingest(request: Request, project_id: str, auth: Auth, document_id: str | None) -> IntakeOutcome:
-    service = _service(request)
+async def _ingest(request: Request, project_id: str, auth: Auth, document_id: str | None, service) -> IntakeOutcome:
+    service = _service(service)
     scope = auth.scope_for(project_id)
     try:
         async with request.form(max_files=1, max_fields=0) as form:
@@ -92,18 +90,20 @@ def _status(response: Response, outcome: IntakeOutcome) -> VersionResponse:
     return _to_response(outcome.document.id, outcome.version, outcome.deduplicated)
 
 
-async def upload_document(project_id: str, request: Request, response: Response, auth: Auth) -> VersionResponse:
-    return _status(response, await _ingest(request, project_id, auth, None))
+async def upload_document(
+    project_id: str, request: Request, response: Response, auth: Auth, service: IntakeDep
+) -> VersionResponse:
+    return _status(response, await _ingest(request, project_id, auth, None, service))
 
 
 async def upload_version(
-    project_id: str, document_id: str, request: Request, response: Response, auth: Auth
+    project_id: str, document_id: str, request: Request, response: Response, auth: Auth, service: IntakeDep
 ) -> VersionResponse:
-    return _status(response, await _ingest(request, project_id, auth, document_id))
+    return _status(response, await _ingest(request, project_id, auth, document_id, service))
 
 
-async def get_version(document_id: str, version_id: str, request: Request, auth: Auth) -> VersionResponse:
-    repo = _repository(request)
+async def get_version(document_id: str, version_id: str, auth: Auth, repo: DocumentsDep) -> VersionResponse:
+    repo = _repository(repo)
     for scope in auth.scopes():
         try:
             version = await repo.get_version(scope, document_id, version_id)
