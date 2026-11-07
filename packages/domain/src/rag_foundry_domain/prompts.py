@@ -137,21 +137,28 @@ class InMemoryPromptTemplateStore:
         return sorted((a for a in self._activations if a.purpose == purpose), key=lambda a: a.seq)
 
 
+class PromptTemplateCache:
+    """Share validated prompt rows across per-run prompt stores."""
+
+    def __init__(self) -> None:
+        self.templates: dict[str, PromptTemplate] = {}
+
+
 class CachedPromptTemplateStore:
-    def __init__(self, inner: PromptTemplateStore) -> None:
+    def __init__(self, inner: PromptTemplateStore, cache: PromptTemplateCache | None = None) -> None:
         self._inner = inner
-        self._cache: dict[str, PromptTemplate] = {}
+        self._cache = cache or PromptTemplateCache()
 
     async def get(self, template_id: str) -> PromptTemplate:
-        template = self._cache.get(template_id)
+        template = self._cache.templates.get(template_id)
         if template is None:
             template = await self._inner.get(template_id)
         try:
             validate_loaded(template)
         except PromptError:
-            self._cache.pop(template_id, None)
+            self._cache.templates.pop(template_id, None)
             raise
-        self._cache[template_id] = template
+        self._cache.templates[template_id] = template
         return template
 
     async def active_id(self, purpose: PromptPurpose) -> str:

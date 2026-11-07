@@ -10,7 +10,6 @@ from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE
 from rag_foundry_domain.runtime_settings import RuntimeSettings
-from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.intake import IntakeService
 
@@ -32,11 +31,6 @@ async def open_container(
         yield AppContainer(settings, None, None, None)
         return
 
-    from rag_foundry_domain.uow_adapters import (
-        per_call_indexes,
-        per_call_prompts,
-        per_call_settings,
-    )
     from rag_foundry_storage.local_store import LocalObjectStore
     from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.uow import ensure_local_scope
@@ -44,16 +38,15 @@ async def open_container(
     database = create_database(settings.database_url)
     try:
         factory = database.uow
-        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
         store = LocalObjectStore(settings.object_store_root)
         intake = IntakeService(store, factory, max_bytes=settings.max_upload_bytes)
         anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         runs = LocalRunner(
-            per_call_indexes(factory),
+            factory,
             anchors,
             model_factory=ollama_model_factory(settings.ollama_base_url),
-            settings=runtime,
-            prompts=per_call_prompts(factory),
+            base=base,
+            file_keys=file_keys,
         )
         if settings.environment in ("dev", "test"):
             await ensure_local_scope(factory, LOCAL_DEV_SCOPE)

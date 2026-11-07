@@ -14,7 +14,6 @@ from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.errors import SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
 from rag_foundry_domain.settings_store import RuntimeSettingsService
-from rag_foundry_domain.uow_adapters import per_call_settings
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import ollama_embedding_profile
@@ -52,10 +51,12 @@ async def _index(settings: Settings, args):
         base, file_keys = (RuntimeSettings(), frozenset())
         if settings.runtime_config_path is not None:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
-        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
         anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         if args.command == "build":
-            idx = await runtime.indexing(LOCAL_DEV_SCOPE)
+            async with factory(read_only=True) as uow:
+                runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=uow.settings)
+                idx = await runtime.indexing(LOCAL_DEV_SCOPE)
+                run_settings = await runtime.run_settings(LOCAL_DEV_SCOPE)
             service = IndexService(store, factory, anchors, batch_size=idx.embed_batch_size)
             chunker = RecursiveChunker(
                 RecursiveConfig(
@@ -71,7 +72,7 @@ async def _index(settings: Settings, args):
                     ),
                     UsageLedger(),
                 ),
-                retry_policy(await runtime.run_settings(LOCAL_DEV_SCOPE)),
+                retry_policy(run_settings),
             )
             version = await service.build(LOCAL_DEV_SCOPE, tuple(args.view_id), chunker, embedder)
             return [

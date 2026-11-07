@@ -8,6 +8,7 @@ import pytest
 from rag_foundry_domain.errors import SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_worker import index_cli
 from rag_foundry_worker.index_cli import main
 
@@ -102,7 +103,7 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
             return (SimpleNamespace(level="global", key="answer.max_output_tokens", value=0),)
 
     class Maker:
-        uow = object()
+        uow = InMemoryUnitOfWorkFactory(settings=Repository())
 
     @asynccontextmanager
     async def open_db(_url):
@@ -128,7 +129,6 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
             )
 
     monkeypatch.setattr(index_cli, "open_database", open_db)
-    monkeypatch.setattr(index_cli, "per_call_settings", lambda _factory: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
     monkeypatch.setattr(index_cli, "AnchorService", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(index_cli, "IndexService", Service)
@@ -159,7 +159,7 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
             return (SimpleNamespace(level="global", key="indexing.c05_chunk_size", value=1),)
 
     class Maker:
-        uow = object()
+        uow = InMemoryUnitOfWorkFactory(settings=Repository())
 
     @asynccontextmanager
     async def open_db(_url):
@@ -176,7 +176,6 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
             return []
 
     monkeypatch.setattr(index_cli, "open_database", open_db)
-    monkeypatch.setattr(index_cli, "per_call_settings", lambda _factory: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
     monkeypatch.setattr(index_cli, "AnchorService", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(index_cli, "IndexService", Service)

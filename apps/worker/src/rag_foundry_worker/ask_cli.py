@@ -14,8 +14,6 @@ from rag_foundry_core.settings import load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.errors import PromptError, SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
-from rag_foundry_domain.settings_store import RuntimeSettingsService
-from rag_foundry_domain.uow_adapters import per_call_indexes, per_call_prompts, per_call_settings
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.errors import ProviderError
 from rag_foundry_storage.local_store import LocalObjectStore
@@ -34,15 +32,14 @@ async def _ask(settings, request: RunRequest) -> RunResponse:
         base, file_keys = (RuntimeSettings(), frozenset())
         if settings.runtime_config_path is not None:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
-        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
         store = LocalObjectStore(settings.object_store_root)
         anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         runner = LocalRunner(
-            per_call_indexes(factory),
+            factory,
             anchors,
             model_factory=ollama_model_factory(settings.ollama_base_url),
-            settings=runtime,
-            prompts=per_call_prompts(factory),
+            base=base,
+            file_keys=file_keys,
         )
         return await runner.run(LOCAL_DEV_SCOPE, request)
 

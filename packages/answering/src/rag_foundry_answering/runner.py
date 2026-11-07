@@ -9,10 +9,11 @@ from rag_foundry_contracts.runs import RunRequest, RunResponse
 from rag_foundry_domain import Scope
 from rag_foundry_domain.errors import IndexingError, RunError
 from rag_foundry_domain.indexing import IndexState
-from rag_foundry_domain.ports import IndexRepository
-from rag_foundry_domain.prompts import CachedPromptTemplateStore, PromptTemplateStore, active_template
-from rag_foundry_domain.runtime_settings import RunSettings
+from rag_foundry_domain.prompts import CachedPromptTemplateStore, PromptTemplateCache, active_template
+from rag_foundry_domain.runtime_settings import RunSettings, RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
+from rag_foundry_domain.uow import UnitOfWorkFactory
+from rag_foundry_domain.uow_adapters import per_call_indexes
 from rag_foundry_indexing import DenseConfig, DenseRetriever, NoRetrieval, NoRetrievalConfig
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import ollama_chat_profile, ollama_embedding_profile
@@ -68,23 +69,22 @@ def ollama_model_factory(base_url: str, *, adapters: AdapterRegistry | None = No
 class LocalRunner:
     def __init__(
         self,
-        index: IndexRepository,
+        uow: UnitOfWorkFactory,
         anchors: AnchorService,
         *,
         model_factory: ModelFactory,
-        settings: RuntimeSettingsService,
-        prompts: PromptTemplateStore,
+        base: RuntimeSettings,
+        file_keys: frozenset[str] = frozenset(),
+        prompt_cache: PromptTemplateCache | None = None,
         service: AnswerService | None = None,
     ) -> None:
-        self._index = index
+        self._uow = uow
         self._anchors = anchors
         self._model_factory = model_factory
-        self._settings = settings
-        self._prompts = (
-            prompts if isinstance(prompts, CachedPromptTemplateStore) else CachedPromptTemplateStore(prompts)
-        )
+        self._base, self._file_keys = base, frozenset(file_keys)
+        self._cache = prompt_cache or PromptTemplateCache()
         self._service = service or AnswerService(anchors)
-        self._max_concurrent = settings.base.run.max_concurrent
+        self._max_concurrent = base.run.max_concurrent
         self._active = 0
 
     async def run(self, scope: Scope, request: RunRequest) -> RunResponse:
@@ -97,20 +97,23 @@ class LocalRunner:
             if retriever_cls is None:
                 raise RunError("unsupported_technique")
             version = None
-            if request.technique_id == "R02":
-                if request.index_version_id is None:
-                    raise RunError("index_version_required")
-                version = await self._index.get_index_version(scope, request.index_version_id)
-                if version.state is not IndexState.READY:
-                    raise IndexingError("not_ready")
-            elif request.index_version_id is not None:
+            if request.technique_id == "R02" and request.index_version_id is None:
+                raise RunError("index_version_required")
+            if request.technique_id != "R02" and request.index_version_id is not None:
                 raise RunError("index_version_not_allowed")
-
-            snap = await self._settings.run_snapshot(scope)
-            run_prompts = RunPrompts(
-                await active_template(self._prompts, "grounded"),
-                await active_template(self._prompts, "ungrounded"),
-            )
+            async with self._uow(read_only=True) as uow:
+                if request.technique_id == "R02":
+                    version = await uow.indexes.get_index_version(scope, request.index_version_id)
+                    if version.state is not IndexState.READY:
+                        raise IndexingError("not_ready")
+                snap = await RuntimeSettingsService(
+                    self._base, file_keys=self._file_keys, repo=uow.settings
+                ).run_snapshot(scope)
+                prompts = CachedPromptTemplateStore(uow.prompts, self._cache)
+                run_prompts = RunPrompts(
+                    await active_template(prompts, "grounded"),
+                    await active_template(prompts, "ungrounded"),
+                )
             validate_template(run_prompts.grounded, "grounded")
             validate_template(run_prompts.ungrounded, "ungrounded")
             run_retry = retry_policy(snap.run)
@@ -135,7 +138,11 @@ class LocalRunner:
                 retriever = NoRetrieval(NoRetrievalConfig())
             else:
                 retriever = DenseRetriever(
-                    DenseConfig(k=request.k), scope=scope, index_version=version, index=self._index, embedder=embedder
+                    DenseConfig(k=request.k),
+                    scope=scope,
+                    index_version=version,
+                    index=per_call_indexes(self._uow),
+                    embedder=embedder,
                 )
             try:
                 async with asyncio.timeout(snap.run.deadline_s):

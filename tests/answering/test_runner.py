@@ -14,7 +14,7 @@ from rag_foundry_contracts.runs import RunRequest
 from rag_foundry_domain.errors import IndexingError, PromptError, RunError, SettingsError
 from rag_foundry_domain.index_testing import InMemoryIndexRepository
 from rag_foundry_domain.indexing import IndexState, NewIndexVersion
-from rag_foundry_domain.prompts import InMemoryPromptTemplateStore, PromptTemplate, prompt_sha256
+from rag_foundry_domain.prompts import InMemoryPromptTemplateStore, PromptTemplate, PromptTemplateCache, prompt_sha256
 from rag_foundry_domain.runtime_settings import RunSettings, RuntimeSettings
 from rag_foundry_domain.settings_store import (
     InMemorySettingsOverrideRepository,
@@ -73,9 +73,13 @@ def _factory(chat, embed):
 
 
 def _runner(*args, **kwargs):
-    kwargs.setdefault("settings", RuntimeSettingsService(RuntimeSettings()))
-    kwargs.setdefault("prompts", seeded_prompt_store())
-    return LocalRunner(*args, **kwargs)
+    settings = kwargs.pop("settings", RuntimeSettingsService(RuntimeSettings()))
+    prompts = kwargs.pop("prompts", seeded_prompt_store())
+    uow = InMemoryUnitOfWorkFactory(indexes=args[0], settings=settings._repo, prompts=prompts)
+    kwargs.setdefault("base", settings.base)
+    runner = LocalRunner(uow, *args[1:], **kwargs)
+    runner.test_uow = uow
+    return runner
 
 
 def test_runner_answers_r02_with_explicit_threshold(built):
@@ -86,6 +90,7 @@ def test_runner_answers_r02_with_explicit_threshold(built):
         runner.run(env.scope, RunRequest(question="How often?", index_version_id=version.id, min_score=0.0))
     )
     assert response.status == "answered" and response.usage.model_calls == 2
+    assert runner.test_uow.opened == 2 and runner.test_uow.open_now == 0
 
 
 def test_unknown_embedding_threshold_abstains_before_calls(built):
@@ -246,7 +251,7 @@ def test_default_runtime_settings_pin_and_model_parameters(built, caplog):
     assert captured["budget"].max_calls == 4
     assert captured["max_output_tokens"] == 512
     assert chat.requests[0].max_output_tokens == 512
-    snap = _run(runner._settings.run_snapshot(env.scope))
+    snap = _run(RuntimeSettingsService(RuntimeSettings()).run_snapshot(env.scope))
     assert snap.run.deadline_s == 300.0
     assert snap.answer.min_scores["ollama/bge-m3/1024"] == 0.45
     assert response.pins.settings_sha256 == snap.sha256()
@@ -362,18 +367,41 @@ def test_prompt_cache_reads_active_pointer_each_run_and_rows_once():
     from rag_foundry_domain.testing import make_scope
 
     store = CountingStore()
+    cache = PromptTemplateCache()
+    factory = InMemoryUnitOfWorkFactory(indexes=EmptyIndex(), prompts=store)
     runner = LocalRunner(
-        EmptyIndex(),
+        factory,
         None,
         model_factory=_factory(ScriptedChatModel(lambda _request: ("reply", "stop")), LexicalTestEmbedder()),
-        settings=RuntimeSettingsService(RuntimeSettings()),
-        prompts=store,
+        base=RuntimeSettings(),
+        prompt_cache=cache,
     )
     scope = make_scope()
     _run(runner.run(scope, RunRequest(question="Q", technique_id="R01")))
     assert (store.active_calls, store.get_calls) == (2, 2)
     _run(runner.run(scope, RunRequest(question="Q", technique_id="R01")))
     assert (store.active_calls, store.get_calls) == (4, 2)
+
+
+def test_run_read_uow_closes_before_first_model_call():
+    from rag_foundry_domain.testing import make_scope
+
+    uow = InMemoryUnitOfWorkFactory(prompts=seeded_prompt_store())
+    chat, embed = ScriptedChatModel(lambda _request: ("reply", "stop")), LexicalTestEmbedder()
+    original_complete, original_embed = chat.complete, embed.embed
+
+    async def complete(request):
+        assert uow.open_now == 0
+        return await original_complete(request)
+
+    async def embedding(texts):
+        assert uow.open_now == 0
+        return await original_embed(texts)
+
+    chat.complete, embed.embed = complete, embedding
+    runner = LocalRunner(uow, None, model_factory=_factory(chat, embed), base=RuntimeSettings())
+    _run(runner.run(make_scope(), RunRequest(question="Q", technique_id="R01")))
+    assert uow.opened == 1 and uow.open_now == 0
 
 
 def test_r02_uses_newly_activated_prompt_and_hash(built):
@@ -450,13 +478,86 @@ def test_prompt_errors_fail_before_model_factory(code):
     from rag_foundry_domain.testing import make_scope
 
     runner = LocalRunner(
-        object(),
+        InMemoryUnitOfWorkFactory(prompts=prompt_store),
         None,
         model_factory=factory,
-        settings=RuntimeSettingsService(RuntimeSettings()),
-        prompts=prompt_store,
+        base=RuntimeSettings(),
     )
     expected_code = "invalid_template" if code == "wrong_purpose" else code
     with pytest.raises(PromptError, match=expected_code):
         _run(runner.run(make_scope(), RunRequest(question="Q", technique_id="R01")))
     assert calls == []
+
+
+def test_r02_model_calls_never_see_an_open_uow(built):
+    env, version = built
+    chat, embed = ScriptedChatModel(cite_where(FACT_EN, FACT_EN)), LexicalTestEmbedder()
+    runner = _runner(env.index, env.anchors, model_factory=_factory(chat, embed))
+    original_complete, original_embed = chat.complete, embed.embed
+    events = []
+
+    async def complete(request):
+        assert runner.test_uow.open_now == 0
+        events.append(("chat", runner.test_uow.opened))
+        return await original_complete(request)
+
+    async def embedding(texts, **kwargs):
+        assert runner.test_uow.open_now == 0
+        events.append(("embed", runner.test_uow.opened))
+        return await original_embed(texts, **kwargs)
+
+    chat.complete, embed.embed = complete, embedding
+    response = _run(
+        runner.run(env.scope, RunRequest(question="How often?", index_version_id=version.id, min_score=0.0))
+    )
+    assert response.status == "answered"
+    # One read UoW before the first model call; retrieval search opens its own read UoW after the embed call.
+    assert events[0] == ("embed", 1)
+    assert ("chat", 2) in events
+    assert runner.test_uow.opened == 2 and runner.test_uow.committed == 0
+
+
+def test_file_keys_reach_the_run_snapshot(monkeypatch):
+    import rag_foundry_answering.runner as runner_module
+    from rag_foundry_domain.testing import make_scope
+
+    seen = []
+
+    class Recording(RuntimeSettingsService):
+        def __init__(self, base, *, file_keys=frozenset(), repo=None):
+            seen.append(frozenset(file_keys))
+            super().__init__(base, file_keys=file_keys, repo=repo)
+
+    monkeypatch.setattr(runner_module, "RuntimeSettingsService", Recording)
+    chat, embed = ScriptedChatModel(lambda _request: ("reply", "stop")), LexicalTestEmbedder()
+    uow = InMemoryUnitOfWorkFactory(prompts=seeded_prompt_store())
+    runner = LocalRunner(
+        uow,
+        None,
+        model_factory=_factory(chat, embed),
+        base=RuntimeSettings(),
+        file_keys=frozenset({"answer.temperature"}),
+    )
+    _run(runner.run(make_scope(), RunRequest(question="Q", technique_id="R01")))
+    assert seen == [frozenset({"answer.temperature"})]
+
+
+def test_settings_store_unavailable_makes_no_model_call_and_no_write():
+    from rag_foundry_domain.testing import make_scope
+
+    class Unavailable(InMemorySettingsOverrideRepository):
+        async def current(self, _scope):
+            raise SettingsError("store_unavailable")
+
+    calls = []
+
+    def factory(*_args):
+        calls.append("model_factory")
+        raise AssertionError("model factory called")
+
+    uow = InMemoryUnitOfWorkFactory(settings=Unavailable(), prompts=seeded_prompt_store())
+    runner = LocalRunner(uow, None, model_factory=factory, base=RuntimeSettings())
+    with pytest.raises(SettingsError, match="store_unavailable"):
+        _run(runner.run(make_scope(), RunRequest(question="Q", technique_id="R01")))
+    assert calls == []
+    assert uow.opened == 1 and uow.committed == 0 and uow.open_now == 0

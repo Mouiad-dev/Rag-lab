@@ -14,7 +14,7 @@ from rag_foundry_domain import LOCAL_DEV_SCOPE, NotFoundError
 from rag_foundry_domain.errors import PromptError, SettingsError
 from rag_foundry_domain.prompts import InMemoryPromptTemplateStore, PromptTemplate, prompt_sha256
 from rag_foundry_domain.runtime_settings import RuntimeSettings
-from rag_foundry_domain.settings_store import RuntimeSettingsService
+from rag_foundry_domain.uow_testing import InMemoryUnitOfWorkFactory
 from rag_foundry_providers.errors import BudgetExceededError, ProviderUnavailableError
 
 PROJECT = LOCAL_DEV_SCOPE.project_id
@@ -94,11 +94,10 @@ def _local_runner(index):
         raise AssertionError("factory must not be reached for this request")
 
     runner = LocalRunner(
-        index,
+        InMemoryUnitOfWorkFactory(indexes=index, prompts=seeded_prompt_store()),
         None,
         model_factory=factory,
-        settings=RuntimeSettingsService(RuntimeSettings()),
-        prompts=seeded_prompt_store(),
+        base=RuntimeSettings(),
     )
     runner.model_calls = calls
     return runner
@@ -168,11 +167,10 @@ def test_provider_error_body_omits_exception_text():
         raise error
 
     runner = LocalRunner(
-        IndexDouble(),
+        InMemoryUnitOfWorkFactory(indexes=IndexDouble(), prompts=seeded_prompt_store()),
         None,
         model_factory=factory,
-        settings=RuntimeSettingsService(RuntimeSettings()),
-        prompts=seeded_prompt_store(),
+        base=RuntimeSettings(),
     )
     response = _post(_client(runner))
     assert response.status_code == 503 and response.json()["error"]["code"] == "provider_unavailable"
@@ -257,11 +255,10 @@ def _assert_settings_error(repository, status, code, message):
         raise AssertionError("model factory must not be reached")
 
     runner = LocalRunner(
-        IndexDouble(),
+        InMemoryUnitOfWorkFactory(indexes=IndexDouble(), settings=repository, prompts=seeded_prompt_store()),
         None,
         model_factory=factory,
-        settings=RuntimeSettingsService(RuntimeSettings(), repo=repository),
-        prompts=seeded_prompt_store(),
+        base=RuntimeSettings(),
     )
     response = _post(_client(runner))
     assert response.status_code == status
@@ -329,7 +326,7 @@ def test_local_runner_invalid_prompt_maps_to_500_without_model_calls():
         raise AssertionError("model factory must not be reached")
 
     runner = LocalRunner(
-        object(), None, model_factory=factory, settings=RuntimeSettingsService(RuntimeSettings()), prompts=RawStore()
+        InMemoryUnitOfWorkFactory(prompts=RawStore()), None, model_factory=factory, base=RuntimeSettings()
     )
     response = _post(_client(runner))
     assert response.status_code == 500

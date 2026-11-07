@@ -15,13 +15,7 @@ from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_contracts.runs import RunRequest
 from rag_foundry_core.settings import load_settings
 from rag_foundry_domain.runtime_settings import RuntimeSettings
-from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_domain.testing import make_scope
-from rag_foundry_domain.uow_adapters import (
-    per_call_indexes,
-    per_call_prompts,
-    per_call_settings,
-)
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -100,11 +94,10 @@ def test_live_answer_fixture(tmp_path):
                 return recorder, embedding
 
             runner = LocalRunner(
-                per_call_indexes(db.uow),
+                db.uow,
                 anchors,
                 model_factory=factory,
-                settings=RuntimeSettingsService(RuntimeSettings(), repo=per_call_settings(db.uow)),
-                prompts=per_call_prompts(db.uow),
+                base=RuntimeSettings(),
             )
             measured, results = [], {}
             for case in fixture["cases"]:
