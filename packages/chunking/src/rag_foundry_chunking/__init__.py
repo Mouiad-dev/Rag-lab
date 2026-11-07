@@ -27,6 +27,12 @@ from rag_foundry_chunking.model_based import (
 )
 from rag_foundry_chunking.multilingual import MultilingualChunker, MultilingualConfig, normalize_with_map
 from rag_foundry_chunking.paragraph import ParagraphChunker, ParagraphConfig
+from rag_foundry_chunking.propositions import (
+    PropositionChunker,
+    PropositionConfig,
+    PropositionRecord,
+    PropositionResult,
+)
 from rag_foundry_chunking.recursive import RecursiveChunker, RecursiveConfig
 from rag_foundry_chunking.semantic import SemanticChunker, SemanticConfig
 from rag_foundry_chunking.sentence import SentenceChunker, SentenceConfig
@@ -45,6 +51,7 @@ def register_builtin_plugins(registry) -> None:
     registry.register(MultilingualChunker)
     registry.register(SemanticChunker)
     registry.register(LlmBoundaryChunker)
+    registry.register(PropositionChunker)
 
 
 __all__ = [
@@ -88,4 +95,8 @@ __all__ = [
     "SegmentationCache",
     "InMemorySegmentationCache",
     "segmentation_cache_key",
+    "PropositionChunker",
+    "PropositionConfig",
+    "PropositionRecord",
+    "PropositionResult",
 ]
