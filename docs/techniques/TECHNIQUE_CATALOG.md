@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C05 is implemented; R01 and R02 are in progress; the remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C01-C05 are implemented; R01 and R02 are in progress; the remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -8,10 +8,10 @@ The acceptance column describes evidence that must exist before validation. Each
 
 | ID | Family / roadmap step | Technique | Mechanism | Specific acceptance evidence | Status |
 |---|---|---|---|---|---|
-| C01 | chunking / P4.1 | Fixed characters | Split at a configured character budget. | Verify offsets and behavior on a sentence cut in half. | planned |
-| C02 | chunking / P4.1 | Fixed words | Split by word count with explicit tokenizer assumptions. | Compare Arabic punctuation and mixed-language word boundaries. | planned |
-| C03 | chunking / P4.1 | Fixed tokens | Split using the selected model tokenizer. | Assert maximum tokens and show character/token differences. | planned |
-| C04 | chunking / P4.1 | Overlap and sliding windows | Reuse a configured span between adjacent chunks. | Quantify duplicates, storage and boundary-fact retrieval. | planned |
+| C01 | chunking / P4.1 | Fixed characters | Split at a configured character budget. | Verify offsets and behavior on a sentence cut in half. | implemented |
+| C02 | chunking / P4.1 | Fixed words | Split by word count with explicit tokenizer assumptions. | Compare Arabic punctuation and mixed-language word boundaries. | implemented |
+| C03 | chunking / P4.1 | Fixed tokens | Split using the selected model tokenizer. | Assert maximum tokens and show character/token differences. | implemented |
+| C04 | chunking / P4.1 | Overlap and sliding windows | Reuse a configured span between adjacent chunks. | Quantify duplicates, storage and boundary-fact retrieval. | implemented |
 | C05 | chunking / P3.4 | Recursive splitting | Try larger textual separators before smaller ones. | Show fallback on an oversized paragraph and preserved provenance. | implemented |
 | C06 | chunking / P4.2 | Sentence boundaries | Segment by language-aware sentence boundaries then pack. | Test abbreviations, Arabic punctuation and quoted sentences. | planned |
 | C07 | chunking / P4.2 | Paragraph packing | Pack paragraphs within a budget with explicit overflow behavior. | Show when keeping paragraphs improves or hurts retrieval. | planned |
