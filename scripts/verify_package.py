@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP_DIRS = {".git", ".idea", ".venv", "node_modules", "private", "__pycache__", "worktrees"}  # worktrees: app session checkouts under .claude/
+# "worktrees": app session checkouts under .claude/worktrees are copies of the repo.
+SKIP_DIRS = {".git", ".idea", ".venv", "node_modules", "private", "__pycache__", "worktrees"}
 PHASES, STEPS_PER_PHASE = 10, 5
 EXPECTED_AGENTS = {"planner": "opus", "coder": "sonnet", "coder-light": "haiku", "reviewer": "opus"}
 EXPECTED_RULES = 9
