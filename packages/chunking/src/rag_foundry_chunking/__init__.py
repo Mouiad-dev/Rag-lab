@@ -7,6 +7,7 @@ from rag_foundry_chunking.fixed import (
     FixedWordChunker,
     FixedWordConfig,
 )
+from rag_foundry_chunking.llm_boundaries import LlmBoundaryChunker, LlmBoundaryConfig, boundary_agreement
 from rag_foundry_chunking.model_based import (
     InMemorySegmentationCache,
     ModelChunkContext,
@@ -35,6 +36,7 @@ def register_builtin_plugins(registry) -> None:
     registry.register(ParagraphChunker)
     registry.register(MultilingualChunker)
     registry.register(SemanticChunker)
+    registry.register(LlmBoundaryChunker)
 
 
 __all__ = [
@@ -62,6 +64,9 @@ __all__ = [
     "normalize_with_map",
     "SemanticChunker",
     "SemanticConfig",
+    "LlmBoundaryChunker",
+    "LlmBoundaryConfig",
+    "boundary_agreement",
     "ModelChunkContext",
     "ModelChunkResult",
     "ModelChunkReport",
