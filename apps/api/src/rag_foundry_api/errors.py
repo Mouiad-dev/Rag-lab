@@ -19,7 +19,7 @@ from rag_foundry_domain import (
     UnsupportedMediaTypeError,
     UploadTooLargeError,
 )
-from rag_foundry_domain.errors import IndexingError, RunError, SettingsError
+from rag_foundry_domain.errors import IndexingError, PromptError, RunError, SettingsError
 from rag_foundry_providers.errors import BudgetError, ProviderError
 from starlette.exceptions import HTTPException
 
@@ -111,6 +111,13 @@ async def _settings_error(_: Request, exc: Exception) -> JSONResponse:
     return error_response(500, "settings_invalid", "settings invalid")
 
 
+async def _prompt_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, PromptError)
+    if exc.code in ("store_unavailable", "no_active_template"):
+        return error_response(503, "prompt_unavailable", "prompt template unavailable")
+    return error_response(500, "prompt_invalid", "prompt template invalid")
+
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(HTTPException, _http_exception)
     app.add_exception_handler(RequestValidationError, _validation_error)
@@ -121,3 +128,4 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(BudgetError, _budget_error)
     app.add_exception_handler(ProviderError, _provider_error)
     app.add_exception_handler(SettingsError, _settings_error)
+    app.add_exception_handler(PromptError, _prompt_error)

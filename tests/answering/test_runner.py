@@ -7,12 +7,14 @@ from _fixture import FACT_EN
 from _lexical_embedder import LexicalTestEmbedder
 from _qa import corpus_markdown
 from _scripted_chat import ScriptedChatModel, cite_where
+from _templates import seeded_prompt_store
 from rag_foundry_answering.runner import LocalRunner, ollama_model_factory, retry_policy
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_contracts.runs import RunRequest
-from rag_foundry_domain.errors import IndexingError, RunError, SettingsError
+from rag_foundry_domain.errors import IndexingError, PromptError, RunError, SettingsError
 from rag_foundry_domain.index_testing import InMemoryIndexRepository
 from rag_foundry_domain.indexing import IndexState, NewIndexVersion
+from rag_foundry_domain.prompts import InMemoryPromptTemplateStore, PromptTemplate, prompt_sha256
 from rag_foundry_domain.runtime_settings import RunSettings, RuntimeSettings
 from rag_foundry_domain.settings_store import (
     InMemorySettingsOverrideRepository,
@@ -72,6 +74,7 @@ def _factory(chat, embed):
 
 def _runner(*args, **kwargs):
     kwargs.setdefault("settings", RuntimeSettingsService(RuntimeSettings()))
+    kwargs.setdefault("prompts", seeded_prompt_store())
     return LocalRunner(*args, **kwargs)
 
 
@@ -336,3 +339,124 @@ def test_canary_leak_metric_detects_answer_text(built):
     canary_leaked = canary in (response.answer or "") or any(canary in warning for warning in response.warnings)
     assert response.status == "answered"
     assert canary_leaked is True
+
+
+def test_prompt_cache_reads_active_pointer_each_run_and_rows_once():
+    class CountingStore:
+        def __init__(self):
+            self.inner = seeded_prompt_store()
+            self.active_calls = 0
+            self.get_calls = 0
+
+        async def active_id(self, purpose):
+            self.active_calls += 1
+            return await self.inner.active_id(purpose)
+
+        async def get(self, template_id):
+            self.get_calls += 1
+            return await self.inner.get(template_id)
+
+    class EmptyIndex:
+        pass
+
+    from rag_foundry_domain.testing import make_scope
+
+    store = CountingStore()
+    runner = LocalRunner(
+        EmptyIndex(),
+        None,
+        model_factory=_factory(ScriptedChatModel(lambda _request: ("reply", "stop")), LexicalTestEmbedder()),
+        settings=RuntimeSettingsService(RuntimeSettings()),
+        prompts=store,
+    )
+    scope = make_scope()
+    _run(runner.run(scope, RunRequest(question="Q", technique_id="R01")))
+    assert (store.active_calls, store.get_calls) == (2, 2)
+    _run(runner.run(scope, RunRequest(question="Q", technique_id="R01")))
+    assert (store.active_calls, store.get_calls) == (4, 2)
+
+
+def test_r02_uses_newly_activated_prompt_and_hash(built):
+    env, version = built
+    store = seeded_prompt_store()
+    runner = _runner(
+        env.index,
+        env.anchors,
+        model_factory=_factory(ScriptedChatModel(lambda _request: ("reply", "stop")), LexicalTestEmbedder()),
+        prompts=store,
+    )
+    first = _run(
+        runner.run(env.scope, RunRequest(question="Q", technique_id="R02", index_version_id=version.id, min_score=0.0))
+    )
+    assert first.pins.prompt_template == "grounded-answer-v2"
+    assert first.pins.prompt_sha256 == "fc18e5aa821a6678522db84e009ee1e6d4d4a80bcbad633c645f573cd82766ed"
+    _run(store.activate("grounded", "grounded-answer-v1", activated_by="test", decision_ref="test"))
+    second = _run(
+        runner.run(env.scope, RunRequest(question="Q", technique_id="R02", index_version_id=version.id, min_score=0.0))
+    )
+    assert second.pins.prompt_template == "grounded-answer-v1"
+    assert second.pins.prompt_sha256 == "73e46a3d97b96d5d2663e42b039310afb900629247dd7fb4a86403a3c8ddf07d"
+
+
+@pytest.mark.parametrize(
+    "code", ["no_active_template", "store_unavailable", "hash_mismatch", "invalid_template", "wrong_purpose"]
+)
+def test_prompt_errors_fail_before_model_factory(code):
+    class MissingStore:
+        async def active_id(self, purpose):
+            if code in ("no_active_template", "store_unavailable"):
+                raise PromptError(code)
+            return "grounded-answer-v2" if purpose == "grounded" else "ungrounded-v1"
+
+        async def get(self, template_id):
+            raise PromptError(code)
+
+    if code in ("hash_mismatch", "invalid_template", "wrong_purpose"):
+        good_text = (
+            "Answer carefully. INSUFFICIENT_EVIDENCE [S1]"
+            if code in ("hash_mismatch", "wrong_purpose")
+            else "Answer carefully. INSUFFICIENT_EVIDENCE"
+        )
+        row = PromptTemplate.model_construct(
+            id="grounded-answer-v2",
+            family="grounded-answer",
+            version=2,
+            purpose="ungrounded" if code == "wrong_purpose" else "grounded",
+            system_text=good_text,
+            content_sha256="0" * 64 if code == "hash_mismatch" else prompt_sha256(good_text),
+        )
+
+        class RawTemplateStore(InMemoryPromptTemplateStore):
+            def __init__(self):
+                super().__init__((seeded_prompt_store()._templates["ungrounded-v1"],))
+                self._templates[row.id] = row
+
+            async def get(self, template_id):
+                return self._templates[template_id]
+
+            async def active_id(self, purpose):
+                return "grounded-answer-v2" if purpose == "grounded" else "ungrounded-v1"
+
+        prompt_store = RawTemplateStore()
+    else:
+        prompt_store = MissingStore()
+
+    calls = []
+
+    def factory(*_args):
+        calls.append("factory")
+        raise AssertionError("model factory must not be reached")
+
+    from rag_foundry_domain.testing import make_scope
+
+    runner = LocalRunner(
+        object(),
+        None,
+        model_factory=factory,
+        settings=RuntimeSettingsService(RuntimeSettings()),
+        prompts=prompt_store,
+    )
+    expected_code = "invalid_template" if code == "wrong_purpose" else code
+    with pytest.raises(PromptError, match=expected_code):
+        _run(runner.run(make_scope(), RunRequest(question="Q", technique_id="R01")))
+    assert calls == []

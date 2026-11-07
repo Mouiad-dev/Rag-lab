@@ -10,7 +10,6 @@ import pytest
 from _fixture import TEST_CHUNK_SIZE, TEST_OVERLAP
 from _qa import answer_matches, corpus_markdown, load_fixture
 from pydantic import SecretStr
-from rag_foundry_answering.prompt import GROUNDED_TEMPLATE_ID
 from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_contracts.runs import RunRequest
@@ -29,6 +28,7 @@ from rag_foundry_storage.sql.engine import create_sessionmaker
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
+from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
 from rag_foundry_storage.sql.repository import SqlDocumentRepository
 from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 from sqlalchemy import text
@@ -104,6 +104,7 @@ def test_live_answer_fixture(tmp_path):
                 anchors,
                 model_factory=factory,
                 settings=RuntimeSettingsService(RuntimeSettings(), repo=SqlSettingsOverrideRepository(maker)),
+                prompts=SqlPromptTemplateStore(maker),
             )
             measured, results = [], {}
             for case in fixture["cases"]:
@@ -173,10 +174,14 @@ def test_live_answer_fixture(tmp_path):
             r02_pins = [results[c["id"]]["response"].pins for c in fixture["cases"]]
             print(
                 f"prompt_template={r02_pins[0].prompt_template} threshold={r02_pins[0].min_score} "
-                f"settings_sha256={r02_pins[0].settings_sha256}"
+                f"settings_sha256={r02_pins[0].settings_sha256} prompt_sha256={r02_pins[0].prompt_sha256}"
             )
             for case, pins in zip(fixture["cases"], r02_pins, strict=True):
-                pin_mismatch = pins.prompt_template != GROUNDED_TEMPLATE_ID or pins.min_score != expected_threshold
+                pin_mismatch = (
+                    pins.prompt_template != "grounded-answer-v2"
+                    or pins.prompt_sha256 != "fc18e5aa821a6678522db84e009ee1e6d4d4a80bcbad633c645f573cd82766ed"
+                    or pins.min_score != expected_threshold
+                )
                 print(f"pins_mismatch id={case['id']} value={pin_mismatch}")
             print(f"answerable_answered={len(answered)}/7 correct={len(correct)}/7")
             unanswerable = [c for c in fixture["cases"] if not c["answerable"]]

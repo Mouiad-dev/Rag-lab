@@ -4,8 +4,6 @@ import hashlib
 import importlib.util
 from pathlib import Path
 
-from rag_foundry_answering.prompt import GROUNDED_SYSTEM, GROUNDED_SYSTEM_V1, UNGROUNDED_SYSTEM
-
 _MIGRATION = (
     Path(__file__).parents[2]
     / "packages/storage/src/rag_foundry_storage/sql/migrations/versions/0004_prompt_templates.py"
@@ -16,12 +14,7 @@ _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 
 
-def test_prompt_seed_texts_match_current_prompts_byte_for_byte():
-    assert (_MODULE._GROUNDED_V1, _MODULE._GROUNDED_V2, _MODULE._UNGROUNDED_V1) == (
-        GROUNDED_SYSTEM_V1,
-        GROUNDED_SYSTEM,
-        UNGROUNDED_SYSTEM,
-    )
+def test_prompt_seed_texts_are_ascii():
     assert all(text.isascii() for text in (_MODULE._GROUNDED_V1, _MODULE._GROUNDED_V2, _MODULE._UNGROUNDED_V1))
 
 

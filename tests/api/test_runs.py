@@ -2,6 +2,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from _templates import seeded_prompt_store
 from fastapi.testclient import TestClient
 from rag_foundry_answering.runner import LocalRunner
 from rag_foundry_api.main import create_app
@@ -9,7 +10,8 @@ from rag_foundry_contracts.runs import Citation, Evidence, RunResponse
 from rag_foundry_contracts.source import Precision, SourceAnchor, SourceRef, TextRange
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, NotFoundError
-from rag_foundry_domain.errors import SettingsError
+from rag_foundry_domain.errors import PromptError, SettingsError
+from rag_foundry_domain.prompts import InMemoryPromptTemplateStore, PromptTemplate, prompt_sha256
 from rag_foundry_domain.runtime_settings import RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_providers.errors import BudgetExceededError, ProviderUnavailableError
@@ -87,7 +89,13 @@ def _local_runner(index):
         calls.append("factory")
         raise AssertionError("factory must not be reached for this request")
 
-    runner = LocalRunner(index, None, model_factory=factory, settings=RuntimeSettingsService(RuntimeSettings()))
+    runner = LocalRunner(
+        index,
+        None,
+        model_factory=factory,
+        settings=RuntimeSettingsService(RuntimeSettings()),
+        prompts=seeded_prompt_store(),
+    )
     runner.model_calls = calls
     return runner
 
@@ -155,7 +163,13 @@ def test_provider_error_body_omits_exception_text():
     def factory(_ledger, _budget, _retry, _tokens):
         raise error
 
-    runner = LocalRunner(IndexDouble(), None, model_factory=factory, settings=RuntimeSettingsService(RuntimeSettings()))
+    runner = LocalRunner(
+        IndexDouble(),
+        None,
+        model_factory=factory,
+        settings=RuntimeSettingsService(RuntimeSettings()),
+        prompts=seeded_prompt_store(),
+    )
     response = _post(_client(runner))
     assert response.status_code == 503 and response.json()["error"]["code"] == "provider_unavailable"
     assert "sentinel-7731" not in response.text
@@ -210,6 +224,7 @@ def _assert_settings_error(repository, status, code, message):
         None,
         model_factory=factory,
         settings=RuntimeSettingsService(RuntimeSettings(), repo=repository),
+        prompts=seeded_prompt_store(),
     )
     response = _post(_client(runner))
     assert response.status_code == status
@@ -230,3 +245,56 @@ def test_settings_store_unavailable_maps_to_503_without_model_calls():
 
 def test_bad_stored_answer_setting_maps_to_500_without_model_calls():
     _assert_settings_error(BadSettingsRepository(), 500, "settings_invalid", "settings invalid")
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code", "message"),
+    [
+        (PromptError("store_unavailable"), 503, "prompt_unavailable", "prompt template unavailable"),
+        (PromptError("no_active_template"), 503, "prompt_unavailable", "prompt template unavailable"),
+        (PromptError("hash_mismatch"), 500, "prompt_invalid", "prompt template invalid"),
+        (PromptError("invalid_template"), 500, "prompt_invalid", "prompt template invalid"),
+    ],
+)
+def test_prompt_errors_map_to_fixed_api_envelopes(error, status, code, message):
+    response = _post(_client(StubRunner(error=error)))
+    assert response.status_code == status
+    assert response.json()["error"]["code"] == code
+    assert response.json()["error"]["message"] == message
+
+
+def test_local_runner_invalid_prompt_maps_to_500_without_model_calls():
+    text = "Answer carefully. INSUFFICIENT_EVIDENCE"
+    row = PromptTemplate(
+        id="grounded-answer-v2",
+        family="grounded-answer",
+        version=2,
+        purpose="grounded",
+        system_text=text,
+        content_sha256=prompt_sha256(text),
+    )
+
+    class RawStore(InMemoryPromptTemplateStore):
+        def __init__(self):
+            super().__init__()
+            self._templates[row.id] = row
+
+        async def active_id(self, purpose):
+            return "grounded-answer-v2" if purpose == "grounded" else "ungrounded-v1"
+
+        async def get(self, template_id):
+            return self._templates[template_id]
+
+    calls = []
+
+    def factory(*_args):
+        calls.append("called")
+        raise AssertionError("model factory must not be reached")
+
+    runner = LocalRunner(
+        object(), None, model_factory=factory, settings=RuntimeSettingsService(RuntimeSettings()), prompts=RawStore()
+    )
+    response = _post(_client(runner))
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "prompt_invalid"
+    assert calls == []

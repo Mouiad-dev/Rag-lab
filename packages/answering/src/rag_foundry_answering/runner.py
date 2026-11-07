@@ -10,6 +10,7 @@ from rag_foundry_domain import Scope
 from rag_foundry_domain.errors import IndexingError, RunError
 from rag_foundry_domain.indexing import IndexState
 from rag_foundry_domain.ports import IndexRepository
+from rag_foundry_domain.prompts import CachedPromptTemplateStore, PromptTemplateStore, active_template
 from rag_foundry_domain.runtime_settings import RunSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_indexing import DenseConfig, DenseRetriever, NoRetrieval, NoRetrievalConfig
@@ -23,7 +24,8 @@ from rag_foundry_providers.ports import ChatModel, EmbeddingModel
 from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbeddingModel, RetryPolicy
 
 from rag_foundry_answering.gate import default_min_score
-from rag_foundry_answering.service import AnswerConfig, AnswerService
+from rag_foundry_answering.prompt import validate_template
+from rag_foundry_answering.service import AnswerConfig, AnswerService, RunPrompts
 
 
 def retry_policy(run: RunSettings) -> RetryPolicy:
@@ -71,12 +73,16 @@ class LocalRunner:
         *,
         model_factory: ModelFactory,
         settings: RuntimeSettingsService,
+        prompts: PromptTemplateStore,
         service: AnswerService | None = None,
     ) -> None:
         self._index = index
         self._anchors = anchors
         self._model_factory = model_factory
         self._settings = settings
+        self._prompts = (
+            prompts if isinstance(prompts, CachedPromptTemplateStore) else CachedPromptTemplateStore(prompts)
+        )
         self._service = service or AnswerService(anchors)
         self._max_concurrent = settings.base.run.max_concurrent
         self._active = 0
@@ -101,6 +107,12 @@ class LocalRunner:
                 raise RunError("index_version_not_allowed")
 
             snap = await self._settings.run_snapshot(scope)
+            run_prompts = RunPrompts(
+                await active_template(self._prompts, "grounded"),
+                await active_template(self._prompts, "ungrounded"),
+            )
+            validate_template(run_prompts.grounded, "grounded")
+            validate_template(run_prompts.ungrounded, "ungrounded")
             run_retry = retry_policy(snap.run)
             ledger = UsageLedger()
             budget = RunBudget(
@@ -142,6 +154,7 @@ class LocalRunner:
                             temperature=snap.answer.temperature,
                             max_evidence_chars=snap.answer.max_evidence_chars,
                         ),
+                        prompts=run_prompts,
                         settings_sha256=snap.sha256(),
                     )
             except TimeoutError:

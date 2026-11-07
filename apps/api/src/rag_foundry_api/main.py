@@ -43,6 +43,7 @@ def create_app(
         from rag_foundry_storage.sql.engine import create_sessionmaker
         from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
         from rag_foundry_storage.sql.index_repository import SqlIndexRepository
+        from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
         from rag_foundry_storage.sql.repository import SqlDocumentRepository
         from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
@@ -62,6 +63,7 @@ def create_app(
             anchor_service,
             model_factory=ollama_model_factory(resolved.ollama_base_url),
             settings=runtime,
+            prompts=SqlPromptTemplateStore(sessionmaker),
         )
 
     @asynccontextmanager

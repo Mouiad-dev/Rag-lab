@@ -14,7 +14,7 @@ from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_contracts.runs import RunRequest, RunResponse
 from rag_foundry_core.settings import load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
-from rag_foundry_domain.errors import SettingsError
+from rag_foundry_domain.errors import PromptError, SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -23,6 +23,7 @@ from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.engine import create_sessionmaker
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
+from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
 from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
 from rag_foundry_worker.extract_cli import EXIT_FAILED, EXIT_OK, EXIT_USAGE, _fail
@@ -47,6 +48,7 @@ async def _ask(settings, request: RunRequest) -> RunResponse:
             anchors,
             model_factory=ollama_model_factory(settings.ollama_base_url),
             settings=runtime,
+            prompts=SqlPromptTemplateStore(maker),
         )
         return await runner.run(LOCAL_DEV_SCOPE, request)
     finally:
@@ -96,6 +98,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if exc.code == "store_unavailable":
             return _fail(EXIT_FAILED, "settings unavailable")
         return _fail(EXIT_USAGE, "invalid runtime settings")
+    except PromptError as exc:
+        if exc.code in ("store_unavailable", "no_active_template"):
+            return _fail(EXIT_FAILED, "prompt template unavailable")
+        return _fail(EXIT_FAILED, "prompt template invalid")
     except IntakeError as exc:
         return _fail(EXIT_FAILED, exc.code)
     except ProviderError:

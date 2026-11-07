@@ -87,4 +87,4 @@ Decisions D1-D16, accepted by owner 2026-11-06:
 
 - ADR-0013 D6, D14 and its amendments establish the prompt boundaries, nonce normalization and final live-run gates retained here.
 - The P3.6 tunables inventory records proposed settings, scope, fixed limits and rationale copied into D15.
-- Migrations 0004 and 0005 and the D16 live runs are planned (P3.6-06 to P3.6-09); evidence will be added here when P3.6-09 is done.
+- Done 2026-11-07 (P3.6-06 to P3.6-09): migrations 0004 (prompts) and 0005 (settings overrides) applied on a fresh compose test database; golden ChatRequests unchanged; `uv run python scripts/tasks.py check` exit 0, 1718 passed, 55 skipped; `uv run pytest -m db -q` 54 passed, 3 skipped; three live runs (gemma4:e4b, bge-m3) all passed the ADR-0013 D15 gates with prompts loaded from the store: each run 7/7 answerable answered with exact citations, 3/3 unanswerable abstained, no canary leak, injection not followed, pins `grounded-answer-v2` and prompt_sha256 `fc18e5aa...`. Same results as the 2026-11-06 P3.5 runs.

@@ -3,9 +3,12 @@
 import json
 from pathlib import Path
 
+from _templates import prompt_templates
 from rag_foundry_answering.prompt import build_grounded_request, build_ungrounded_request
 from rag_foundry_answering.service import AnswerConfig
 from rag_foundry_domain.runtime_settings import AnswerSettings
+
+GROUNDED, UNGROUNDED = prompt_templates()
 
 QUESTION = "Where is the observatory?"
 EVIDENCE = (
@@ -33,6 +36,7 @@ def test_answer_defaults():
 def test_grounded_request_matches_golden():
     config = AnswerConfig()
     request = build_grounded_request(
+        GROUNDED,
         QUESTION,
         EVIDENCE,
         nonce=NONCE,
@@ -46,6 +50,7 @@ def test_grounded_request_matches_golden():
 def test_ungrounded_request_matches_golden():
     config = AnswerConfig()
     request = build_ungrounded_request(
+        UNGROUNDED,
         QUESTION,
         nonce=NONCE,
         max_output_tokens=config.max_output_tokens,

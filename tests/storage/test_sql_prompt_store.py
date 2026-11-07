@@ -2,8 +2,10 @@
 
 import asyncio
 import functools
+import importlib.util
 import os
 import sys
+from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
@@ -57,12 +59,37 @@ async def test_prompt_migration_seeds_and_active_templates():
     maker = create_sessionmaker(_url())
     try:
         async with maker() as session:
-            templates = (await session.execute(text("SELECT id FROM prompt_templates ORDER BY id"))).scalars().all()
-            activations = (
-                await session.execute(text("SELECT purpose, template_id FROM prompt_activations ORDER BY seq"))
+            templates = (
+                await session.execute(
+                    text("SELECT id, system_text FROM prompt_templates WHERE created_by = 'migration:0004' ORDER BY id")
+                )
             ).all()
-        assert set(templates) >= {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
-        assert activations[:3] == [
+            activations = (
+                await session.execute(
+                    text(
+                        "SELECT purpose, template_id FROM prompt_activations "
+                        "WHERE activated_by = 'migration:0004' ORDER BY seq"
+                    )
+                )
+            ).all()
+        assert {row.id for row in templates} == {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
+        migration = (
+            Path(__file__).parents[2]
+            / "packages/storage/src/rag_foundry_storage/sql/migrations/versions/0004_prompt_templates.py"
+        )
+        spec = importlib.util.spec_from_file_location("migration_0004", migration)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        seeded_texts = {
+            "grounded-answer-v1": module._GROUNDED_V1,
+            "grounded-answer-v2": module._GROUNDED_V2,
+            "ungrounded-v1": module._UNGROUNDED_V1,
+        }
+        for row in templates:
+            assert row.system_text == seeded_texts[row.id]
+        assert len(activations) == 3
+        assert activations == [
             ("grounded", "grounded-answer-v1"),
             ("grounded", "grounded-answer-v2"),
             ("ungrounded", "ungrounded-v1"),
@@ -178,8 +205,15 @@ def test_prompt_migration_downgrade_and_upgrade_restores_seeds():
         maker = create_sessionmaker(_url())
         try:
             async with maker() as session:
-                ids = (await session.execute(text("SELECT id FROM prompt_templates"))).scalars().all()
-            assert {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"} <= set(ids)
+                ids = (
+                    (await session.execute(text("SELECT id FROM prompt_templates WHERE created_by = 'migration:0004'")))
+                    .scalars()
+                    .all()
+                )
+            active_g = await SqlPromptTemplateStore(maker).active_id("grounded")
+            active_u = await SqlPromptTemplateStore(maker).active_id("ungrounded")
+            assert set(ids) == {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
+            assert active_g == "grounded-answer-v2" and active_u == "ungrounded-v1"
         finally:
             await maker.kw["bind"].dispose()
 

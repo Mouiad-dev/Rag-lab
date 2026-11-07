@@ -3,6 +3,7 @@
 import secrets
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field
 from rag_foundry_contracts.runs import (
@@ -16,6 +17,7 @@ from rag_foundry_contracts.runs import (
 )
 from rag_foundry_domain.errors import RunError
 from rag_foundry_domain.indexing import IndexVersion
+from rag_foundry_domain.prompts import PromptTemplate
 from rag_foundry_domain.runtime_settings import (
     ANSWER_K_DEFAULT,
     ANSWER_K_MAX,
@@ -35,13 +37,13 @@ from rag_foundry_techniques.kinds import Retriever
 
 from rag_foundry_answering.citations import check_answer, normalize_nonce_markers, parse_markers
 from rag_foundry_answering.gate import apply_gate
-from rag_foundry_answering.prompt import (
-    GROUNDED_TEMPLATE_ID,
-    UNGROUNDED_TEMPLATE_ID,
-    build_grounded_request,
-    build_ungrounded_request,
-    nonce_conflicts,
-)
+from rag_foundry_answering.prompt import build_grounded_request, build_ungrounded_request, nonce_conflicts
+
+
+@dataclass(frozen=True)
+class RunPrompts:
+    grounded: PromptTemplate
+    ungrounded: PromptTemplate
 
 
 class AnswerConfig(BaseModel):
@@ -77,6 +79,7 @@ class AnswerService:
         scope,
         question: str,
         *,
+        prompts: RunPrompts,
         retriever: Retriever,
         technique_version: str,
         index_version: IndexVersion | None,
@@ -108,7 +111,10 @@ class AnswerService:
             chat_profile_id=profile.id,
             chat_provider=profile.provider,
             chat_model=profile.model,
-            prompt_template=UNGROUNDED_TEMPLATE_ID if result.grounding == "none" else GROUNDED_TEMPLATE_ID,
+            prompt_template=prompts.ungrounded.id if result.grounding == "none" else prompts.grounded.id,
+            prompt_sha256=prompts.ungrounded.content_sha256
+            if result.grounding == "none"
+            else prompts.grounded.content_sha256,
             min_score=config.min_score if result.grounding != "none" else None,
             k=config.k if result.grounding != "none" else None,
             settings_sha256=settings_sha256,
@@ -135,6 +141,7 @@ class AnswerService:
 
         if result.grounding == "none":
             request = build_ungrounded_request(
+                prompts.ungrounded,
                 question,
                 nonce=nonce,
                 max_output_tokens=config.max_output_tokens,
@@ -172,6 +179,7 @@ class AnswerService:
             return response(RunStatus.ABSTAINED, reason=reason, evidence=evidence)
 
         request = build_grounded_request(
+            prompts.grounded,
             question,
             tuple((f"S{hit.rank}", hit.text) for hit in gate.used),
             nonce=nonce,
