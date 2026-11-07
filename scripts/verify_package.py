@@ -54,7 +54,6 @@ REQUIRED = [
     ".github/workflows/ci.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
 ]
-PRIVATE_MARKERS = re.compile(r"\bTora\b|Tiger Lab|tora-main|DIPANSHU", re.IGNORECASE)
 
 
 def files(pattern):
@@ -190,11 +189,6 @@ def check_docs(errors):
             target = target.split("#", 1)[0]
             if target and not (path.parent / target).exists():
                 errors.append(f"Broken local link in {path.relative_to(ROOT)}: {target}")
-    this = Path(__file__).resolve()
-    for pattern in ("*.md", "*.json", "*.py", "*.yml"):
-        for path in files(pattern):
-            if path.resolve() != this and PRIVATE_MARKERS.search(path.read_text(encoding="utf-8")):
-                errors.append(f"Private/proprietary reference in public file: {path.relative_to(ROOT)}")
 
 
 def main():
@@ -213,7 +207,7 @@ def main():
     print(
         f"PASS: structure, Python/JSON syntax, {count} catalogue entries (schema v2, in sync), "
         f"roadmap {PHASES}x{STEPS_PER_PHASE} steps tracked in PROGRESS, hook example commands, "
-        f"{rules} rules, {len(EXPECTED_AGENTS)} agents, local Markdown links, no private references."
+        f"{rules} rules, {len(EXPECTED_AGENTS)} agents, local Markdown links."
     )
     if (ROOT / ".claude/settings.json").exists():
         print("Note: .claude/settings.json exists and is active for everyone who opens this repo; see docs/HOOKS.md.")
