@@ -2,6 +2,7 @@
 
 import asyncio
 import functools
+import hashlib
 import importlib.util
 import os
 import sys
@@ -73,6 +74,11 @@ async def test_prompt_migration_seeds_and_active_templates():
                     )
                 )
             ).all()
+            chunk_templates = (
+                await session.execute(
+                    text("SELECT id, system_text FROM prompt_templates WHERE created_by = 'migration:0006' ORDER BY id")
+                )
+            ).all()
         assert {row.id for row in templates} == {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
         migration = (
             Path(__file__).parents[2]
@@ -97,6 +103,18 @@ async def test_prompt_migration_seeds_and_active_templates():
         ]
         assert await per_call_prompts(db.uow).active_id("grounded") == "grounded-answer-v2"
         assert await per_call_prompts(db.uow).active_id("ungrounded") == "ungrounded-v1"
+        assert {row.id for row in chunk_templates} == {"chunk-boundaries-v1", "propositions-v1"}
+        migration_0006 = migration.with_name("0006_chunking_prompts.py")
+        spec_0006 = importlib.util.spec_from_file_location("migration_0006", migration_0006)
+        assert spec_0006 is not None and spec_0006.loader is not None
+        module_0006 = importlib.util.module_from_spec(spec_0006)
+        spec_0006.loader.exec_module(module_0006)
+        assert {row.id: row.system_text for row in chunk_templates} == {
+            "chunk-boundaries-v1": module_0006._CHUNK_BOUNDARIES_V1,
+            "propositions-v1": module_0006._PROPOSITIONS_V1,
+        }
+        assert await per_call_prompts(db.uow).active_id("chunk-boundaries") == "chunk-boundaries-v1"
+        assert await per_call_prompts(db.uow).active_id("propositions") == "propositions-v1"
     finally:
         await db.dispose()
 
@@ -192,6 +210,26 @@ async def test_database_rejects_incorrect_prompt_hash():
 
 
 @run
+async def test_database_rejects_unknown_prompt_purpose():
+    db = create_database(_url())
+    maker = db.sessionmaker
+    try:
+        async with maker() as session:
+            with pytest.raises(DBAPIError):
+                async with session.begin():
+                    await session.execute(
+                        text(
+                            """INSERT INTO prompt_templates
+                            (id, family, version, purpose, system_text, content_sha256, created_by)
+                            VALUES ('other-v1', 'other', 1, 'other', 'text', :hash, 'test')"""
+                        ),
+                        {"hash": hashlib.sha256(b"text").hexdigest()},
+                    )
+    finally:
+        await db.dispose()
+
+
+@run
 async def test_unavailable_prompt_database_is_sanitized():
     broken_url = make_url(_url().get_secret_value()).set(port=1)
     db = create_database(SecretStr(str(broken_url)))
@@ -218,9 +256,17 @@ def test_prompt_migration_downgrade_and_upgrade_restores_seeds():
                     .scalars()
                     .all()
                 )
+                chunking_ids = (
+                    (await session.execute(text("SELECT id FROM prompt_templates WHERE created_by = 'migration:0006'")))
+                    .scalars()
+                    .all()
+                )
             active_g = await per_call_prompts(db.uow).active_id("grounded")
             active_u = await per_call_prompts(db.uow).active_id("ungrounded")
             assert set(ids) == {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
+            assert chunking_ids.count("chunk-boundaries-v1") == 1
+            assert chunking_ids.count("propositions-v1") == 1
+            assert len(chunking_ids) == 2
             assert active_g == "grounded-answer-v2" and active_u == "ungrounded-v1"
         finally:
             await db.dispose()

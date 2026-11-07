@@ -7,13 +7,8 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from rag_foundry_techniques import ChunkInput, ChunkSpan, Fidelity, PluginKind, PluginManifest
 
-from rag_foundry_chunking.boundaries import (
-    DEFAULT_ABBREVIATIONS,
-    pack,
-    safe_cut_ranges,
-    sentence_ranges,
-    word_ranges,
-)
+from rag_foundry_chunking.boundaries import DEFAULT_ABBREVIATIONS, pack
+from rag_foundry_chunking.model_based import build_units
 
 
 class SentenceConfig(BaseModel):
@@ -50,18 +45,6 @@ class SentenceChunker:
 
     def chunk(self, doc: ChunkInput) -> tuple[ChunkSpan, ...]:
         text = doc.text
-        units: list[tuple[int, int, int]] = []
-        for start, end in sentence_ranges(text, 0, len(text), self.config.abbreviations):
-            if end - start <= self.config.chunk_size:
-                units.append((start, end, 0))
-                continue
-            for word_start, word_end in word_ranges(text, start, end):
-                if word_end - word_start <= self.config.chunk_size:
-                    units.append((word_start, word_end, 1))
-                else:
-                    units.extend(
-                        (cut_start, cut_end, 2)
-                        for cut_start, cut_end in safe_cut_ranges(text, word_start, word_end, self.config.chunk_size)
-                    )
+        units = build_units(text, self.config.chunk_size, self.config.abbreviations)
         packed = pack(text, units, self.config.chunk_size, self.config.overlap_sentences)
         return tuple(ChunkSpan(start=start, end=end, split_level=level) for start, end, level in packed)
