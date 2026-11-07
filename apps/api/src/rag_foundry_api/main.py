@@ -12,6 +12,8 @@ from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_core import __version__
 from rag_foundry_core.settings import Settings, load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, DocumentRepository
+from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
+from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.intake import IntakeService
 
@@ -33,14 +35,19 @@ def create_app(
     """`intake_service` and `repository` are injected together (tests); otherwise built from settings."""
     resolved = settings if settings is not None else load_settings()
     sql_repo = None
+    base, file_keys = (RuntimeSettings(), frozenset())
+    if resolved.runtime_config_path is not None:
+        base, file_keys = load_runtime_settings_file(resolved.runtime_config_path)
     if intake_service is None and resolved.database_url is not None:
         from rag_foundry_storage.local_store import LocalObjectStore
         from rag_foundry_storage.sql.engine import create_sessionmaker
         from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
         from rag_foundry_storage.sql.index_repository import SqlIndexRepository
         from rag_foundry_storage.sql.repository import SqlDocumentRepository
+        from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
         sessionmaker = create_sessionmaker(resolved.database_url)
+        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=SqlSettingsOverrideRepository(sessionmaker))
         sql_repo = SqlDocumentRepository(sessionmaker)
         views = SqlExtractionRepository(sessionmaker)
         intake_service = IntakeService(
@@ -54,6 +61,7 @@ def create_app(
             SqlIndexRepository(sessionmaker),
             anchor_service,
             model_factory=ollama_model_factory(resolved.ollama_base_url),
+            settings=runtime,
         )
 
     @asynccontextmanager

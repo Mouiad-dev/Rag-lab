@@ -5,6 +5,7 @@ from pathlib import Path
 
 from rag_foundry_answering.prompt import build_grounded_request, build_ungrounded_request
 from rag_foundry_answering.service import AnswerConfig
+from rag_foundry_domain.runtime_settings import AnswerSettings
 
 QUESTION = "Where is the observatory?"
 EVIDENCE = (
@@ -21,9 +22,11 @@ GOLDEN_DIR = Path(__file__).parent / "golden"
 def test_answer_defaults():
     config = AnswerConfig()
     assert config.k == 5
-    assert config.max_output_tokens == 512
-    assert config.temperature == 0.0
-    assert config.max_evidence_chars == 12000
+    defaults = AnswerSettings()
+    # Frozen values (ADR-0014 D16): both the config and the runtime-settings defaults must keep them.
+    assert config.max_output_tokens == defaults.max_output_tokens == 512
+    assert config.temperature == defaults.temperature == 0.0
+    assert config.max_evidence_chars == defaults.max_evidence_chars == 12000
     assert config.min_score is None
 
 

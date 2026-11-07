@@ -40,5 +40,6 @@ def test_gate_character_cap_keeps_first_and_marks_truncated():
 
 
 def test_default_min_score():
-    assert default_min_score("ollama", "bge-m3", 1024) == 0.45
-    assert default_min_score("other", "model", 10) is None
+    table = {"ollama/bge-m3/1024": 0.45}
+    assert default_min_score("ollama", "bge-m3", 1024, table) == 0.45
+    assert default_min_score("other", "model", 10, table) is None

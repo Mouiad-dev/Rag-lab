@@ -2,6 +2,7 @@ import json
 
 import pytest
 from rag_foundry_contracts.runs import RunResponse
+from rag_foundry_domain.errors import SettingsError
 from rag_foundry_worker import ask_cli
 from rag_foundry_worker.ask_cli import format_response, main
 
@@ -47,6 +48,22 @@ def test_unknown_setting_name(monkeypatch, capsys):
     monkeypatch.setenv("RAG_FOUNDRY_NOT_A_SETTING", "secret")
     assert main(["--question", "Q"]) == 2
     assert capsys.readouterr().err.strip() == "error: invalid RAG_FOUNDRY_* settings"
+
+
+def test_invalid_runtime_settings_file_exits_two(monkeypatch, tmp_path, capsys):
+    config = tmp_path / "runtime.json"
+    config.write_text("{", encoding="utf-8")
+    monkeypatch.setenv("RAG_FOUNDRY_RUNTIME_CONFIG_PATH", str(config))
+    monkeypatch.setenv("RAG_FOUNDRY_DATABASE_URL", "postgresql+psycopg://u:p@localhost/db")
+    assert main(["--question", "Q"]) == 2
+    assert capsys.readouterr().err.strip() == "error: invalid runtime settings"
+
+
+def test_unavailable_settings_store_exits_failed(monkeypatch, capsys):
+    monkeypatch.setenv("RAG_FOUNDRY_DATABASE_URL", "postgresql+psycopg://u:p@localhost/db")
+    monkeypatch.setattr(ask_cli, "_run", lambda *_: (_ for _ in ()).throw(SettingsError("store_unavailable")))
+    assert main(["--question", "Q"]) == 1
+    assert capsys.readouterr().err.strip() == "error: settings unavailable"
 
 
 def test_format_response_is_ascii_and_round_trips():

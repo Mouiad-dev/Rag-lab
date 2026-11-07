@@ -17,10 +17,14 @@ from rag_foundry_domain.runtime_settings import (
     KEY_SCOPES,
     AnswerSettings,
     IndexingSettings,
+    LayerOverride,
     Level,
     RunSettings,
     RunSnapshot,
     RuntimeSettings,
+    resolve_indexing,
+    resolve_run,
+    resolve_run_settings,
 )
 
 _CREATED_BY = re.compile(r"^[A-Za-z0-9._:@-]{1,128}$")
@@ -182,8 +186,6 @@ class RuntimeSettingsService:
         return self._base
 
     async def run_snapshot(self, scope: Scope | None) -> RunSnapshot:
-        from rag_foundry_domain.runtime_settings import LayerOverride, resolve_run
-
         rows = await self._repo.current(scope) if self._repo is not None else ()
         return resolve_run(
             self._base,
@@ -192,10 +194,16 @@ class RuntimeSettingsService:
         )
 
     async def indexing(self, scope: Scope | None) -> IndexingSettings:
-        from rag_foundry_domain.runtime_settings import LayerOverride, resolve_indexing
-
         rows = await self._repo.current(scope) if self._repo is not None else ()
         return resolve_indexing(
+            self._base,
+            tuple(LayerOverride(row.level, row.key, row.value) for row in rows),
+            file_keys=self._file_keys,
+        )
+
+    async def run_settings(self, scope: Scope | None) -> RunSettings:
+        rows = await self._repo.current(scope) if self._repo is not None else ()
+        return resolve_run_settings(
             self._base,
             tuple(LayerOverride(row.level, row.key, row.value) for row in rows),
             file_keys=self._file_keys,

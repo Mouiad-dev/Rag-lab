@@ -16,6 +16,18 @@ from rag_foundry_contracts.runs import (
 )
 from rag_foundry_domain.errors import RunError
 from rag_foundry_domain.indexing import IndexVersion
+from rag_foundry_domain.runtime_settings import (
+    ANSWER_K_DEFAULT,
+    ANSWER_K_MAX,
+    ANSWER_K_MIN,
+    ANSWER_MAX_EVIDENCE_CHARS_MAX,
+    ANSWER_MAX_EVIDENCE_CHARS_MIN,
+    ANSWER_MAX_OUTPUT_TOKENS_MAX,
+    ANSWER_MAX_OUTPUT_TOKENS_MIN,
+    ANSWER_TEMPERATURE_MAX,
+    ANSWER_TEMPERATURE_MIN,
+    AnswerSettings,
+)
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.ledger import UsageLedger
 from rag_foundry_providers.ports import ChatModel
@@ -35,11 +47,17 @@ from rag_foundry_answering.prompt import (
 class AnswerConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    k: int = Field(default=5, ge=1, le=20)
+    k: int = Field(default=ANSWER_K_DEFAULT, ge=ANSWER_K_MIN, le=ANSWER_K_MAX)  # fixed: ADR-0014 D3
     min_score: float | None = Field(default=None, ge=-1, le=1, allow_inf_nan=False)
-    max_output_tokens: int = Field(default=512, ge=1, le=4096)
-    temperature: float | None = Field(default=0.0)
-    max_evidence_chars: int = Field(default=12000, ge=500, le=100000)
+    max_output_tokens: int = Field(
+        default=AnswerSettings().max_output_tokens, ge=ANSWER_MAX_OUTPUT_TOKENS_MIN, le=ANSWER_MAX_OUTPUT_TOKENS_MAX
+    )  # fixed: ADR-0014 D3
+    temperature: float | None = Field(
+        default=AnswerSettings().temperature, ge=ANSWER_TEMPERATURE_MIN, le=ANSWER_TEMPERATURE_MAX
+    )  # fixed: ADR-0014 D3
+    max_evidence_chars: int = Field(
+        default=AnswerSettings().max_evidence_chars, ge=ANSWER_MAX_EVIDENCE_CHARS_MIN, le=ANSWER_MAX_EVIDENCE_CHARS_MAX
+    )  # fixed: ADR-0014 D3
 
 
 class AnswerService:
@@ -65,6 +83,7 @@ class AnswerService:
         chat: ChatModel,
         ledger: UsageLedger,
         config: AnswerConfig,
+        settings_sha256: str | None = None,
     ) -> RunResponse:
         if index_version is not None and config.min_score is None:
             raise RunError("abstention_threshold_unset")
@@ -92,6 +111,7 @@ class AnswerService:
             prompt_template=UNGROUNDED_TEMPLATE_ID if result.grounding == "none" else GROUNDED_TEMPLATE_ID,
             min_score=config.min_score if result.grounding != "none" else None,
             k=config.k if result.grounding != "none" else None,
+            settings_sha256=settings_sha256,
         )
 
         def response(status, *, reason=None, answer=None, citations=(), evidence=(), warnings=()):

@@ -6,13 +6,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from rag_foundry_techniques.kinds import RetrievedChunk
 
-# Unvalidated coarse floor; see ADR-0013 D5.
-DEFAULT_MIN_SCORES: Mapping[tuple[str, str, int], float] = {("ollama", "bge-m3", 1024): 0.45}
 
-
-def default_min_score(provider: str, model: str, dim: int) -> float | None:
+def default_min_score(provider: str, model: str, dim: int, table: Mapping[str, float]) -> float | None:
     """Return the configured default score floor, if known."""
-    return DEFAULT_MIN_SCORES.get((provider, model, dim))
+    return table.get(f"{provider}/{model}/{dim}")
 
 
 class GateResult(BaseModel):

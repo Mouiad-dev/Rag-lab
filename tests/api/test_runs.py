@@ -1,6 +1,7 @@
 import uuid
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from rag_foundry_answering.runner import LocalRunner
 from rag_foundry_api.main import create_app
@@ -8,6 +9,9 @@ from rag_foundry_contracts.runs import Citation, Evidence, RunResponse
 from rag_foundry_contracts.source import Precision, SourceAnchor, SourceRef, TextRange
 from rag_foundry_core.settings import Settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, NotFoundError
+from rag_foundry_domain.errors import SettingsError
+from rag_foundry_domain.runtime_settings import RuntimeSettings
+from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_providers.errors import BudgetExceededError, ProviderUnavailableError
 
 PROJECT = LOCAL_DEV_SCOPE.project_id
@@ -79,11 +83,11 @@ class IndexDouble:
 def _local_runner(index):
     calls = []
 
-    def factory(_ledger, _budget):
+    def factory(_ledger, _budget, _retry, _tokens):
         calls.append("factory")
         raise AssertionError("factory must not be reached for this request")
 
-    runner = LocalRunner(index, None, model_factory=factory)
+    runner = LocalRunner(index, None, model_factory=factory, settings=RuntimeSettingsService(RuntimeSettings()))
     runner.model_calls = calls
     return runner
 
@@ -148,10 +152,10 @@ def test_provider_error_body_omits_exception_text():
     error = ProviderUnavailableError("local")
     error.args = ("sentinel-7731",)
 
-    def factory(_ledger, _budget):
+    def factory(_ledger, _budget, _retry, _tokens):
         raise error
 
-    runner = LocalRunner(IndexDouble(), None, model_factory=factory)
+    runner = LocalRunner(IndexDouble(), None, model_factory=factory, settings=RuntimeSettingsService(RuntimeSettings()))
     response = _post(_client(runner))
     assert response.status_code == 503 and response.json()["error"]["code"] == "provider_unavailable"
     assert "sentinel-7731" not in response.text
@@ -175,3 +179,54 @@ def test_prod_authentication_maps_to_401():
 def test_missing_run_service_maps_to_503():
     response = _post(_client())
     assert response.status_code == 503 and response.json()["error"]["code"] == "storage_unavailable"
+
+
+def test_invalid_runtime_settings_file_fails_app_creation(tmp_path):
+    config = tmp_path / "runtime.json"
+    config.write_text("{", encoding="utf-8")
+    with pytest.raises(SettingsError, match="invalid_file"):
+        create_app(Settings(environment="test", runtime_config_path=config))
+
+
+class BadSettingsRepository:
+    def __init__(self, error=None):
+        self.error = error
+
+    async def current(self, _scope):
+        if self.error:
+            raise self.error
+        return (SimpleNamespace(level="global", key="answer.max_output_tokens", value=0),)
+
+
+def _assert_settings_error(repository, status, code, message):
+    calls = []
+
+    def factory(*_args):
+        calls.append("model")
+        raise AssertionError("model factory must not be reached")
+
+    runner = LocalRunner(
+        IndexDouble(),
+        None,
+        model_factory=factory,
+        settings=RuntimeSettingsService(RuntimeSettings(), repo=repository),
+    )
+    response = _post(_client(runner))
+    assert response.status_code == status
+    assert response.json()["error"] == {
+        "code": code,
+        "message": message,
+        "request_id": response.json()["error"]["request_id"],
+        "retryable": status == 503,
+    }
+    assert calls == []
+
+
+def test_settings_store_unavailable_maps_to_503_without_model_calls():
+    _assert_settings_error(
+        BadSettingsRepository(SettingsError("store_unavailable")), 503, "settings_unavailable", "settings unavailable"
+    )
+
+
+def test_bad_stored_answer_setting_maps_to_500_without_model_calls():
+    _assert_settings_error(BadSettingsRepository(), 500, "settings_invalid", "settings invalid")

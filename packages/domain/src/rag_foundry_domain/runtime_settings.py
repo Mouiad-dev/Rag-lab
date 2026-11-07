@@ -17,6 +17,10 @@ from rag_foundry_domain.errors import SettingsError
 
 MIN_SCORE_KEY = r"^[a-z0-9._-]{1,64}/[A-Za-z0-9._:-]{1,128}/[1-9][0-9]{0,4}$"
 RUNTIME_CONFIG_MAX_BYTES = 64 * 1024
+ANSWER_K_MIN, ANSWER_K_MAX, ANSWER_K_DEFAULT = 1, 20, 5
+ANSWER_MAX_OUTPUT_TOKENS_MIN, ANSWER_MAX_OUTPUT_TOKENS_MAX = 1, 4096
+ANSWER_MAX_EVIDENCE_CHARS_MIN, ANSWER_MAX_EVIDENCE_CHARS_MAX = 500, 100000
+ANSWER_TEMPERATURE_MIN, ANSWER_TEMPERATURE_MAX = 0.0, 2.0
 Level = Literal["global", "tenant", "project"]
 
 
@@ -25,9 +29,13 @@ class _SettingsModel(BaseModel):
 
 
 class AnswerSettings(_SettingsModel):
-    max_output_tokens: int = Field(default=512, strict=True, ge=1, le=4096)
-    temperature: float = Field(default=0.0, strict=True, ge=0, le=2)
-    max_evidence_chars: int = Field(default=12000, strict=True, ge=500, le=100000)
+    max_output_tokens: int = Field(
+        default=512, strict=True, ge=ANSWER_MAX_OUTPUT_TOKENS_MIN, le=ANSWER_MAX_OUTPUT_TOKENS_MAX
+    )
+    temperature: float = Field(default=0.0, strict=True, ge=ANSWER_TEMPERATURE_MIN, le=ANSWER_TEMPERATURE_MAX)
+    max_evidence_chars: int = Field(
+        default=12000, strict=True, ge=ANSWER_MAX_EVIDENCE_CHARS_MIN, le=ANSWER_MAX_EVIDENCE_CHARS_MAX
+    )
     min_scores: dict[str, float] = Field(default_factory=lambda: {"ollama/bge-m3/1024": 0.45})
 
     @field_validator("min_scores")
@@ -159,6 +167,16 @@ def resolve_run(
 ) -> RunSnapshot:
     validated, sources = _resolve(base, tuple(overrides), sections=frozenset(("answer", "run")), file_keys=file_keys)
     return RunSnapshot(validated["answer"], validated["run"], sources)
+
+
+def resolve_run_settings(
+    base: RuntimeSettings,
+    overrides: tuple[LayerOverride, ...] | list[LayerOverride],
+    *,
+    file_keys: frozenset[str] = frozenset(),
+) -> RunSettings:
+    validated, _ = _resolve(base, tuple(overrides), sections=frozenset(("run",)), file_keys=file_keys)
+    return validated["run"]
 
 
 def resolve_indexing(

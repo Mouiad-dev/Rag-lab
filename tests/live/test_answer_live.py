@@ -10,12 +10,13 @@ import pytest
 from _fixture import TEST_CHUNK_SIZE, TEST_OVERLAP
 from _qa import answer_matches, corpus_markdown, load_fixture
 from pydantic import SecretStr
-from rag_foundry_answering.gate import DEFAULT_MIN_SCORES
 from rag_foundry_answering.prompt import GROUNDED_TEMPLATE_ID
 from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_contracts.runs import RunRequest
 from rag_foundry_core.settings import load_settings
+from rag_foundry_domain.runtime_settings import RuntimeSettings
+from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_domain.testing import make_scope
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion import IntakeService
@@ -29,6 +30,7 @@ from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepositor
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
 from rag_foundry_storage.sql.repository import SqlDocumentRepository
+from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 from sqlalchemy import text
 from test_extraction_service import ingest
 
@@ -89,13 +91,20 @@ def test_live_answer_fixture(tmp_path):
             fixture = load_fixture()
             raw_replies = []
 
-            def factory(ledger, budget):
-                chat, embedding = ollama_model_factory(settings.ollama_base_url)(ledger, budget)
+            def factory(ledger, budget, retry, max_output_tokens):
+                chat, embedding = ollama_model_factory(settings.ollama_base_url)(
+                    ledger, budget, retry, max_output_tokens
+                )
                 recorder = RawReplyRecorder(chat)
                 raw_replies.append(recorder)
                 return recorder, embedding
 
-            runner = LocalRunner(index, anchors, model_factory=factory)
+            runner = LocalRunner(
+                index,
+                anchors,
+                model_factory=factory,
+                settings=RuntimeSettingsService(RuntimeSettings(), repo=SqlSettingsOverrideRepository(maker)),
+            )
             measured, results = [], {}
             for case in fixture["cases"]:
                 started = time.perf_counter()
@@ -160,9 +169,12 @@ def test_live_answer_fixture(tmp_path):
             answerable = [c for c in fixture["cases"] if c["answerable"]]
             answered = [c for c in answerable if results[c["id"]]["response"].status == "answered"]
             correct = [c for c in answered if results[c["id"]]["match"] and results[c["id"]]["fact_cited"]]
-            expected_threshold = DEFAULT_MIN_SCORES[("ollama", "bge-m3", 1024)]
+            expected_threshold = RuntimeSettings().answer.min_scores["ollama/bge-m3/1024"]
             r02_pins = [results[c["id"]]["response"].pins for c in fixture["cases"]]
-            print(f"prompt_template={r02_pins[0].prompt_template} threshold={r02_pins[0].min_score}")
+            print(
+                f"prompt_template={r02_pins[0].prompt_template} threshold={r02_pins[0].min_score} "
+                f"settings_sha256={r02_pins[0].settings_sha256}"
+            )
             for case, pins in zip(fixture["cases"], r02_pins, strict=True):
                 pin_mismatch = pins.prompt_template != GROUNDED_TEMPLATE_ID or pins.min_score != expected_threshold
                 print(f"pins_mismatch id={case['id']} value={pin_mismatch}")

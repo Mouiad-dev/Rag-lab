@@ -10,6 +10,8 @@ from rag_foundry_domain import Scope
 from rag_foundry_domain.errors import IndexingError, RunError
 from rag_foundry_domain.indexing import IndexState
 from rag_foundry_domain.ports import IndexRepository
+from rag_foundry_domain.runtime_settings import RunSettings
+from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_indexing import DenseConfig, DenseRetriever, NoRetrieval, NoRetrievalConfig
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import ollama_chat_profile, ollama_embedding_profile
@@ -23,29 +25,37 @@ from rag_foundry_providers.resilience import ResilientChatModel, ResilientEmbedd
 from rag_foundry_answering.gate import default_min_score
 from rag_foundry_answering.service import AnswerConfig, AnswerService
 
-RUN_RETRY = RetryPolicy(max_attempts=2, attempt_timeout_s=120.0, retry_timeouts_for_local=False)
-# Provisional until the live run measures them (ADR-0013 D7).
-DEFAULT_MAX_CONCURRENT = 1
-DEFAULT_RUN_TIMEOUT_S = 300.0
-ModelFactory = Callable[[UsageLedger, RunBudget], tuple[ChatModel, EmbeddingModel]]
+
+def retry_policy(run: RunSettings) -> RetryPolicy:
+    return RetryPolicy(
+        max_attempts=run.max_attempts,
+        attempt_timeout_s=run.attempt_timeout_s,
+        retry_timeouts_for_local=run.retry_timeouts_for_local,
+    )
+
+
+ModelFactory = Callable[[UsageLedger, RunBudget, RetryPolicy, int], tuple[ChatModel, EmbeddingModel]]
 
 _RETRIEVERS = {"R01": NoRetrieval, "R02": DenseRetriever}
 _LOG = logging.getLogger(__name__)
 
 
-def ollama_model_factory(
-    base_url: str, *, retry: RetryPolicy = RUN_RETRY, adapters: AdapterRegistry | None = None
-) -> ModelFactory:
+def ollama_model_factory(base_url: str, *, adapters: AdapterRegistry | None = None) -> ModelFactory:
     """Build the local Resilient(Budgeted(Recording(adapter))) model chain."""
     endpoint = Endpoint(id="ollama", adapter="ollama", base_url=base_url, local=True)
     registry = adapters or default_adapter_registry()
 
-    def factory(ledger: UsageLedger, budget: RunBudget) -> tuple[ChatModel, EmbeddingModel]:
+    def factory(
+        ledger: UsageLedger, budget: RunBudget, retry: RetryPolicy, max_output_tokens: int
+    ) -> tuple[ChatModel, EmbeddingModel]:
         chat = registry.build(ollama_chat_profile(), endpoint)
         embedder = registry.build(ollama_embedding_profile(), endpoint)
         return (
             ResilientChatModel(
-                BudgetedChatModel(RecordingChatModel(chat, ledger), budget, default_max_output_tokens=512), retry
+                BudgetedChatModel(
+                    RecordingChatModel(chat, ledger), budget, default_max_output_tokens=max_output_tokens
+                ),
+                retry,
             ),
             ResilientEmbeddingModel(BudgetedEmbeddingModel(RecordingEmbeddingModel(embedder, ledger), budget), retry),
         )
@@ -60,18 +70,15 @@ class LocalRunner:
         anchors: AnchorService,
         *,
         model_factory: ModelFactory,
+        settings: RuntimeSettingsService,
         service: AnswerService | None = None,
-        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
-        run_timeout_s: float = DEFAULT_RUN_TIMEOUT_S,
-        max_attempts: int = RUN_RETRY.max_attempts,
     ) -> None:
         self._index = index
         self._anchors = anchors
         self._model_factory = model_factory
+        self._settings = settings
         self._service = service or AnswerService(anchors)
-        self._max_concurrent = max_concurrent
-        self._run_timeout_s = run_timeout_s
-        self._max_attempts = max_attempts
+        self._max_concurrent = settings.base.run.max_concurrent
         self._active = 0
 
     async def run(self, scope: Scope, request: RunRequest) -> RunResponse:
@@ -93,15 +100,23 @@ class LocalRunner:
             elif request.index_version_id is not None:
                 raise RunError("index_version_not_allowed")
 
+            snap = await self._settings.run_snapshot(scope)
+            run_retry = retry_policy(snap.run)
             ledger = UsageLedger()
-            budget = RunBudget(Decimal("0"), max_calls=2 * self._max_attempts)
-            chat, embedder = self._model_factory(ledger, budget)
+            budget = RunBudget(
+                Decimal("0"), max_calls=2 * snap.run.max_attempts
+            )  # fixed: ADR-0014 D3, two model calls per attempt
+            chat, embedder = self._model_factory(ledger, budget, run_retry, snap.answer.max_output_tokens)
             if chat.profile.capabilities.local is not True or embedder.profile.capabilities.local is not True:
                 raise RunError("non_local_model")
             min_score = request.min_score
             if version is not None and min_score is None:
                 dim = embedder.profile.capabilities.embedding_dim
-                min_score = default_min_score(embedder.profile.provider, embedder.profile.model, dim) if dim else None
+                min_score = (
+                    default_min_score(embedder.profile.provider, embedder.profile.model, dim, snap.answer.min_scores)
+                    if dim
+                    else None
+                )
                 if min_score is None:
                     raise RunError("abstention_threshold_unset")
             if version is None:
@@ -111,7 +126,7 @@ class LocalRunner:
                     DenseConfig(k=request.k), scope=scope, index_version=version, index=self._index, embedder=embedder
                 )
             try:
-                async with asyncio.timeout(self._run_timeout_s):
+                async with asyncio.timeout(snap.run.deadline_s):
                     response = await self._service.answer(
                         scope,
                         request.question,
@@ -120,7 +135,14 @@ class LocalRunner:
                         index_version=version,
                         chat=chat,
                         ledger=ledger,
-                        config=AnswerConfig(k=request.k, min_score=min_score, temperature=0.0),
+                        config=AnswerConfig(
+                            k=request.k,
+                            min_score=min_score,
+                            max_output_tokens=snap.answer.max_output_tokens,
+                            temperature=snap.answer.temperature,
+                            max_evidence_chars=snap.answer.max_evidence_chars,
+                        ),
+                        settings_sha256=snap.sha256(),
                     )
             except TimeoutError:
                 # Only the run deadline maps to run_timeout; other timeouts keep their own type.
@@ -132,6 +154,7 @@ class LocalRunner:
                 response.abstention_reason,
                 response.usage.model_calls,
             )
+            _LOG.info("run_id=%s settings=%s", response.run_id, snap.effective_json())
             return response
         except Exception as exc:
             # Codes and type names only; never question, answer or exception text.

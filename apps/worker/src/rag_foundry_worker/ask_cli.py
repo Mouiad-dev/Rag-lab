@@ -14,12 +14,16 @@ from rag_foundry_answering.runner import LocalRunner, ollama_model_factory
 from rag_foundry_contracts.runs import RunRequest, RunResponse
 from rag_foundry_core.settings import load_settings
 from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
+from rag_foundry_domain.errors import SettingsError
+from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
+from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.errors import ProviderError
 from rag_foundry_storage.local_store import LocalObjectStore
 from rag_foundry_storage.sql.engine import create_sessionmaker
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
+from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
 from rag_foundry_worker.extract_cli import EXIT_FAILED, EXIT_OK, EXIT_USAGE, _fail
 
@@ -31,6 +35,10 @@ def format_response(resp: RunResponse) -> str:
 async def _ask(settings, request: RunRequest) -> RunResponse:
     maker = create_sessionmaker(settings.database_url)
     try:
+        base, file_keys = (RuntimeSettings(), frozenset())
+        if settings.runtime_config_path is not None:
+            base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
+        runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=SqlSettingsOverrideRepository(maker))
         store = LocalObjectStore(settings.object_store_root)
         views = SqlExtractionRepository(maker)
         anchors = AnchorService(store, views, provider_namespace=settings.provider_namespace)
@@ -38,6 +46,7 @@ async def _ask(settings, request: RunRequest) -> RunResponse:
             SqlIndexRepository(maker),
             anchors,
             model_factory=ollama_model_factory(settings.ollama_base_url),
+            settings=runtime,
         )
         return await runner.run(LOCAL_DEV_SCOPE, request)
     finally:
@@ -83,6 +92,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _fail(EXIT_USAGE, "invalid run request")
     try:
         response = _run(settings, request)
+    except SettingsError as exc:
+        if exc.code == "store_unavailable":
+            return _fail(EXIT_FAILED, "settings unavailable")
+        return _fail(EXIT_USAGE, "invalid runtime settings")
     except IntakeError as exc:
         return _fail(EXIT_FAILED, exc.code)
     except ProviderError:

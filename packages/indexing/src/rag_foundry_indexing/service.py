@@ -16,6 +16,7 @@ from rag_foundry_domain.indexing import (
     embedding_key_for,
 )
 from rag_foundry_domain.ports import ExtractionRepository, IndexRepository
+from rag_foundry_domain.runtime_settings import IndexingSettings
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extraction import read_payload
 from rag_foundry_techniques import ChunkInput, TextBlock
@@ -33,8 +34,8 @@ class IndexService:
         index: IndexRepository,
         anchors: AnchorService,
         *,
-        batch_size: int = 32,
-        max_views: int = 100,
+        batch_size: int = IndexingSettings().embed_batch_size,
+        max_views: int = 100,  # fixed: ADR-0014 D3
     ) -> None:
         self._store, self._views, self._index, self._anchors = store, views, index, anchors
         self._batch_size, self._max_views = batch_size, max_views

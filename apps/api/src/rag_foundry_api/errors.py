@@ -19,7 +19,7 @@ from rag_foundry_domain import (
     UnsupportedMediaTypeError,
     UploadTooLargeError,
 )
-from rag_foundry_domain.errors import IndexingError, RunError
+from rag_foundry_domain.errors import IndexingError, RunError, SettingsError
 from rag_foundry_providers.errors import BudgetError, ProviderError
 from starlette.exceptions import HTTPException
 
@@ -104,6 +104,13 @@ async def _provider_error(_: Request, __: Exception) -> JSONResponse:
     return error_response(503, "provider_unavailable", "model provider unavailable")
 
 
+async def _settings_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, SettingsError)
+    if exc.code == "store_unavailable":
+        return error_response(503, "settings_unavailable", "settings unavailable")
+    return error_response(500, "settings_invalid", "settings invalid")
+
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(HTTPException, _http_exception)
     app.add_exception_handler(RequestValidationError, _validation_error)
@@ -113,3 +120,4 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(IndexingError, _indexing_error)
     app.add_exception_handler(BudgetError, _budget_error)
     app.add_exception_handler(ProviderError, _provider_error)
+    app.add_exception_handler(SettingsError, _settings_error)
