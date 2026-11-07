@@ -11,7 +11,7 @@ from pydantic import SecretStr
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_domain.errors import NotFoundError
 from rag_foundry_domain.testing import make_scope
-from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes
+from rag_foundry_domain.uow_adapters import per_call_indexes
 from rag_foundry_indexing import DenseConfig, DenseRetriever, IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
@@ -45,7 +45,6 @@ def test_sql_index_retrieves_fixture_facts_and_scopes_search(tmp_path):
                 )
             scope = make_scope()
             await ensure_local_scope(db.uow, scope)
-            views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
             from rag_foundry_ingestion import IntakeService
 
@@ -56,7 +55,7 @@ def test_sql_index_retrieves_fixture_facts_and_scopes_search(tmp_path):
             embedder = LexicalTestEmbedder()
             anchors = AnchorService(store, db.uow, provider_namespace="test")
             chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
-            service = IndexService(store, views, index, anchors)
+            service = IndexService(store, db.uow, anchors)
             version = await service.build(scope, (view.id,), chunker, embedder)
             assert version.state.value == "ready"
             assert version.chunk_count >= 15
@@ -65,14 +64,14 @@ def test_sql_index_retrieves_fixture_facts_and_scopes_search(tmp_path):
             resolutions = await anchors.resolve(scope, tuple(a for row in inspected for a in row.anchors))
             assert resolutions and all(item.status.value == "exact" for item in resolutions)
             retriever = DenseRetriever(
-                DenseConfig(k=5), scope=scope, index_version=version, index=index, embedder=embedder
+                DenseConfig(k=5), scope=scope, index_version=version, index=per_call_indexes(db.uow), embedder=embedder
             )
             for query, fact in ((QUERY_EN, FACT_EN), (QUERY_AR, FACT_AR)):
                 result = await retriever.retrieve(query)
                 hit = next(hit for hit in result.hits if fact in hit.text)
                 assert hit.rank <= 2
             with pytest.raises(NotFoundError):
-                await index.search(make_scope(), version.id, (1.0,) * 256, 5)
+                await per_call_indexes(db.uow).search(make_scope(), version.id, (1.0,) * 256, 5)
         finally:
             await db.dispose()
 

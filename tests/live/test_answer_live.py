@@ -18,7 +18,6 @@ from rag_foundry_domain.runtime_settings import RuntimeSettings
 from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_domain.testing import make_scope
 from rag_foundry_domain.uow_adapters import (
-    per_call_extractions,
     per_call_indexes,
     per_call_prompts,
     per_call_settings,
@@ -74,7 +73,6 @@ def test_live_answer_fixture(tmp_path):
                 )
             scope = make_scope()
             await ensure_local_scope(db.uow, scope)
-            views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
             intake = IntakeService(store, db.uow, max_bytes=100_000)
             doc_id, ver_id = await ingest(
@@ -88,7 +86,7 @@ def test_live_answer_fixture(tmp_path):
             anchors = AnchorService(store, db.uow, provider_namespace=settings.provider_namespace)
             chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
             embedder = OllamaEmbeddingModel(ollama_embedding_profile(), api_base=settings.ollama_base_url)
-            indexing = IndexService(store, views, index, anchors)
+            indexing = IndexService(store, db.uow, anchors)
             version = await indexing.build(scope, (view.id,), chunker, embedder)
             fixture = load_fixture()
             raw_replies = []
@@ -102,7 +100,7 @@ def test_live_answer_fixture(tmp_path):
                 return recorder, embedding
 
             runner = LocalRunner(
-                index,
+                per_call_indexes(db.uow),
                 anchors,
                 model_factory=factory,
                 settings=RuntimeSettingsService(RuntimeSettings(), repo=per_call_settings(db.uow)),

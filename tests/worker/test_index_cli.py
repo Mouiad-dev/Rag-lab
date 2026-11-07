@@ -130,8 +130,6 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
     monkeypatch.setattr(index_cli, "open_database", open_db)
     monkeypatch.setattr(index_cli, "per_call_settings", lambda _factory: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
-    monkeypatch.setattr(index_cli, "per_call_extractions", lambda *_: object())
-    monkeypatch.setattr(index_cli, "per_call_indexes", lambda *_: object())
     monkeypatch.setattr(index_cli, "AnchorService", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(index_cli, "IndexService", Service)
     monkeypatch.setattr(index_cli, "RecursiveChunker", lambda *_: object())
@@ -180,8 +178,6 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
     monkeypatch.setattr(index_cli, "open_database", open_db)
     monkeypatch.setattr(index_cli, "per_call_settings", lambda _factory: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
-    monkeypatch.setattr(index_cli, "per_call_extractions", lambda *_: object())
-    monkeypatch.setattr(index_cli, "per_call_indexes", lambda *_: object())
     monkeypatch.setattr(index_cli, "AnchorService", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(index_cli, "IndexService", Service)
     settings = SimpleNamespace(

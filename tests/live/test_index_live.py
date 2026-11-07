@@ -10,7 +10,7 @@ from pydantic import SecretStr
 from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
 from rag_foundry_core.settings import load_settings
 from rag_foundry_domain.testing import make_scope
-from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes
+from rag_foundry_domain.uow_adapters import per_call_indexes
 from rag_foundry_indexing import DenseConfig, DenseRetriever, IndexService, NoRetrieval, NoRetrievalConfig
 from rag_foundry_ingestion import IntakeService
 from rag_foundry_ingestion.anchor_service import AnchorService
@@ -50,7 +50,6 @@ def test_live_index_retrieves_known_facts(tmp_path):
                 )
             scope = make_scope()
             await ensure_local_scope(db.uow, scope)
-            views, index = per_call_extractions(db.uow), per_call_indexes(db.uow)
             store = LocalObjectStore(tmp_path / "objects")
             intake = IntakeService(store, db.uow, max_bytes=100_000)
             doc_id, version_id = await ingest(
@@ -61,7 +60,7 @@ def test_live_index_retrieves_known_facts(tmp_path):
             embedder = OllamaEmbeddingModel(ollama_embedding_profile(), api_base=settings.ollama_base_url)
             anchors = AnchorService(store, db.uow, provider_namespace="test")
             chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
-            service = IndexService(store, views, index, anchors)
+            service = IndexService(store, db.uow, anchors)
             version = await service.build(scope, (view.id,), chunker, embedder)
             assert version.state.value == "ready"
             assert version.chunk_count >= 15
@@ -71,7 +70,7 @@ def test_live_index_retrieves_known_facts(tmp_path):
             resolved = await anchors.resolve(scope, all_anchors)
             assert resolved and all(item.status.value == "exact" for item in resolved)
             retriever = DenseRetriever(
-                DenseConfig(k=5), scope=scope, index_version=version, index=index, embedder=embedder
+                DenseConfig(k=5), scope=scope, index_version=version, index=per_call_indexes(db.uow), embedder=embedder
             )
             found = []
             for query, fact, other in ((QUERY_EN, FACT_EN, FACT_AR), (QUERY_AR, FACT_AR, FACT_EN)):

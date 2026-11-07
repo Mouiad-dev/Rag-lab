@@ -14,7 +14,7 @@ from rag_foundry_domain import LOCAL_DEV_SCOPE, IntakeError
 from rag_foundry_domain.errors import SettingsError
 from rag_foundry_domain.runtime_settings import RuntimeSettings, load_runtime_settings_file
 from rag_foundry_domain.settings_store import RuntimeSettingsService
-from rag_foundry_domain.uow_adapters import per_call_extractions, per_call_indexes, per_call_settings
+from rag_foundry_domain.uow_adapters import per_call_settings
 from rag_foundry_indexing import IndexService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.adapters.ollama import ollama_embedding_profile
@@ -53,11 +53,10 @@ async def _index(settings: Settings, args):
         if settings.runtime_config_path is not None:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
         runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=per_call_settings(factory))
-        views, index = per_call_extractions(factory), per_call_indexes(factory)
         anchors = AnchorService(store, factory, provider_namespace=settings.provider_namespace)
         if args.command == "build":
             idx = await runtime.indexing(LOCAL_DEV_SCOPE)
-            service = IndexService(store, views, index, anchors, batch_size=idx.embed_batch_size)
+            service = IndexService(store, factory, anchors, batch_size=idx.embed_batch_size)
             chunker = RecursiveChunker(
                 RecursiveConfig(
                     chunk_size=args.chunk_size if args.chunk_size is not None else idx.c05_chunk_size,
@@ -84,7 +83,7 @@ async def _index(settings: Settings, args):
                 f"embedding_dim={version.embedding_dim}",
                 f"embedding_key={version.embedding_key}",
             ]
-        service = IndexService(store, views, index, anchors)
+        service = IndexService(store, factory, anchors)
         rows = await service.inspect_chunks(
             LOCAL_DEV_SCOPE, args.index_version_id, offset=args.offset, limit=args.limit
         )

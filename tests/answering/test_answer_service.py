@@ -32,7 +32,8 @@ def built(tmp_path):
         index = InMemoryIndexRepository(views)
         anchors = AnchorService(store, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
         embedder = LexicalTestEmbedder()
-        service = IndexService(store, views, index, anchors)
+        index_uow = InMemoryUnitOfWorkFactory(extractions=views, indexes=index)
+        service = IndexService(store, index_uow, anchors)
         chunker = RecursiveChunker(RecursiveConfig(chunk_size=TEST_CHUNK_SIZE, chunk_overlap=TEST_OVERLAP))
         built_version = await service.build(scope, (view.id,), chunker, embedder)
         return scope, index, anchors, embedder, built_version

@@ -52,9 +52,8 @@ def built(tmp_path):
         index = InMemoryIndexRepository(views)
         anchors = AnchorService(store, InMemoryUnitOfWorkFactory(extractions=views), provider_namespace="test")
         chunker = RecursiveChunker(RecursiveConfig(chunk_size=300, chunk_overlap=40))
-        version = await IndexService(store, views, index, anchors).build(
-            scope, (view.id,), chunker, LexicalTestEmbedder()
-        )
+        index_uow = InMemoryUnitOfWorkFactory(extractions=views, indexes=index)
+        version = await IndexService(store, index_uow, anchors).build(scope, (view.id,), chunker, LexicalTestEmbedder())
 
         class Env:
             pass

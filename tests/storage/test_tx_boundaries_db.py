@@ -49,7 +49,10 @@ async def _build(tmp_path):
     chunker = RecursiveChunker(RecursiveConfig(chunk_size=32, chunk_overlap=0))
 
     def index_service(index, batch_size):
-        return IndexService(store, views, index, anchors, batch_size=batch_size)
+        factory = db.uow
+        if index is not indexes:
+            factory = _TrackingUowFactory(factory, index)
+        return IndexService(store, factory, anchors, batch_size=batch_size)
 
     return db, scope, docs, views, indexes, store, view, anchors, chunker, payload, intake, index_service
 
@@ -87,6 +90,36 @@ class _TrackingIndex:
 
     def __getattr__(self, name):
         return getattr(self.repository, name)
+
+
+class _TrackingUowFactory:
+    def __init__(self, factory, index):
+        self.factory, self.index = factory, index
+
+    def __call__(self, *, read_only=False):
+        uow = self.factory(read_only=read_only)
+
+        class Proxy:
+            async def __aenter__(proxy):
+                entered = await uow.__aenter__()
+                proxy._entered = entered
+                self.index.repository = uow.indexes
+                proxy.indexes = self.index
+                return proxy
+
+            def __getattr__(proxy, name):
+                return getattr(uow, name)
+
+            async def __aexit__(proxy, *args):
+                return await uow.__aexit__(*args)
+
+            async def commit(proxy):
+                return await uow.commit()
+
+            async def rollback(proxy):
+                return await uow.rollback()
+
+        return Proxy()
 
 
 def test_index_build_failure_keeps_committed_batches_and_marks_failed(tmp_path):

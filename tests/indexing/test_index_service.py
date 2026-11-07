@@ -41,7 +41,8 @@ class Env:
     chunker: RecursiveChunker
 
     def service(self, index=None, **kwargs) -> IndexService:
-        return IndexService(self.store, self.views, index or self.index, self.anchors, **kwargs)
+        factory = InMemoryUnitOfWorkFactory(extractions=self.views, indexes=index or self.index)
+        return IndexService(self.store, factory, self.anchors, **kwargs)
 
 
 class RecordingIndex:
@@ -268,3 +269,118 @@ def test_registry_validates_retriever_configs():
     register_builtin_plugins(registry)
     assert registry.validate_config("R01", {}) == NoRetrievalConfig()
     assert registry.validate_config("R02", {"k": 5}) == DenseConfig(k=5)
+
+
+def test_index_build_has_no_uow_during_embed_or_payload_reads(tmp_path, monkeypatch):
+    async def run():
+        env = await _env(tmp_path)
+        factory = InMemoryUnitOfWorkFactory(extractions=env.views, indexes=env.index)
+        service = IndexService(env.store, factory, env.anchors, batch_size=2)
+        from rag_foundry_indexing import service as service_module
+
+        original = service_module.read_payload
+
+        async def checked_read_payload(*args, **kwargs):
+            assert factory.open_now == 0
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(service_module, "read_payload", checked_read_payload)
+
+        class CheckedEmbedder:
+            profile = LexicalTestEmbedder().profile
+
+            async def embed(self, texts, *, input_type="document"):
+                assert factory.open_now == 0
+                return await LexicalTestEmbedder().embed(texts, input_type=input_type)
+
+        await service.build(env.scope, (env.view.id,), env.chunker, CheckedEmbedder())
+
+    asyncio.run(run())
+
+
+def test_second_batch_embed_failure_commits_only_create_and_first_batch(tmp_path):
+    async def run():
+        env = await _env(tmp_path)
+        embedder = LexicalTestEmbedder()
+
+        class FailSecond:
+            profile = embedder.profile
+
+            def __init__(self):
+                self.calls = 0
+
+            async def embed(self, texts, *, input_type="document"):
+                self.calls += 1
+                assert factory.open_now == 0
+                if self.calls == 2:
+                    raise RuntimeError("batch failed")
+                return await embedder.embed(texts, input_type=input_type)
+
+        recorded = RecordingIndex(env.index)
+        factory = InMemoryUnitOfWorkFactory(extractions=env.views, indexes=recorded)
+        service = IndexService(
+            env.store,
+            factory,
+            env.anchors,
+            batch_size=2,
+        )
+        with pytest.raises(RuntimeError, match="batch failed"):
+            await service.build(env.scope, (env.view.id,), env.chunker, FailSecond())
+        assert factory.committed == 3
+        assert factory.rolled_back == 0
+        assert factory.opened == 4
+        assert recorded.version is not None
+        assert (await env.index.get_index_version(env.scope, recorded.version.id)).state is IndexState.FAILED
+        assert [row.ordinal for row in await env.index.list_chunks(env.scope, recorded.version.id)] == [0, 1]
+
+    asyncio.run(run())
+
+
+def test_second_batch_add_chunks_failure_exits_before_mark_failed(tmp_path):
+    async def run():
+        env = await _env(tmp_path)
+
+        class FailSecondAdd:
+            def __init__(self):
+                self.calls = 0
+                self.version = None
+                self.failed_after_rollback = False
+
+            def __getattr__(self, name):
+                method = getattr(env.index, name)
+                if name == "create_index_version":
+
+                    async def create(*args, **kwargs):
+                        self.version = await method(*args, **kwargs)
+                        return self.version
+
+                    return create
+                if name == "add_chunks":
+
+                    async def add(*args, **kwargs):
+                        self.calls += 1
+                        if self.calls == 2:
+                            raise RuntimeError("write failed")
+                        return await method(*args, **kwargs)
+
+                    return add
+                if name == "mark_failed":
+
+                    async def mark(*args, **kwargs):
+                        self.failed_after_rollback = factory.rolled_back == 1 and factory.open_now == 1
+                        return await method(*args, **kwargs)
+
+                    return mark
+                return method
+
+        indexes = FailSecondAdd()
+        factory = InMemoryUnitOfWorkFactory(extractions=env.views, indexes=indexes)
+        service = IndexService(env.store, factory, env.anchors, batch_size=2)
+        with pytest.raises(RuntimeError, match="write failed"):
+            await service.build(env.scope, (env.view.id,), env.chunker, LexicalTestEmbedder())
+        assert indexes.failed_after_rollback
+        assert factory.rolled_back == 1
+        assert (await env.index.get_index_version(env.scope, indexes.version.id)).state is IndexState.FAILED
+        assert [row.ordinal for row in await env.index.list_chunks(env.scope, indexes.version.id)] == [0, 1]
+
+    asyncio.run(run())

@@ -15,8 +15,8 @@ from rag_foundry_domain.indexing import (
     corpus_sha256_for,
     embedding_key_for,
 )
-from rag_foundry_domain.ports import ExtractionRepository, IndexRepository
 from rag_foundry_domain.runtime_settings import IndexingSettings
+from rag_foundry_domain.uow import UnitOfWorkFactory
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extraction import read_payload
 from rag_foundry_techniques import ChunkInput, TextBlock
@@ -30,14 +30,13 @@ class IndexService:
     def __init__(
         self,
         store: ObjectStore,
-        views: ExtractionRepository,
-        index: IndexRepository,
+        uow: UnitOfWorkFactory,
         anchors: AnchorService,
         *,
         batch_size: int = IndexingSettings().embed_batch_size,
         max_views: int = 100,  # fixed: ADR-0014 D3
     ) -> None:
-        self._store, self._views, self._index, self._anchors = store, views, index, anchors
+        self._store, self._uow, self._anchors = store, uow, anchors
         self._batch_size, self._max_views = batch_size, max_views
 
     async def build(self, scope: Scope, view_ids: tuple[str, ...], chunker, embedder) -> IndexVersion:
@@ -49,9 +48,12 @@ class IndexService:
         dim = profile.capabilities.embedding_dim
         if dim is None:
             raise IndexingError("missing_embedding_dim")
+        async with self._uow(read_only=True) as uow:
+            views = []
+            for view_id in sorted(view_ids):
+                views.append(await uow.extractions.get_view(scope, view_id))
         loaded = []
-        for view_id in sorted(view_ids):
-            view = await self._views.get_view(scope, view_id)
+        for view in views:
             payload = await read_payload(self._store, scope, view)
             loaded.append((view, payload))
 
@@ -86,7 +88,9 @@ class IndexService:
             corpus_sha256=corpus_sha256_for((v.id, v.payload_sha256) for v, _ in loaded),
             unanchored_chunk_count=unanchored,
         )
-        version = await self._index.create_index_version(scope, new)
+        async with self._uow() as uow:
+            version = await uow.indexes.create_index_version(scope, new)
+            await uow.commit()
         try:
             ordinal = 0
             for start in range(0, len(prepared), self._batch_size):
@@ -110,12 +114,22 @@ class IndexService:
                         )
                     )
                     ordinal += 1
-                await self._index.add_chunks(scope, version.id, tuple(records))
-            await self._index.mark_ready(scope, version.id)
+                async with self._uow() as uow:
+                    await uow.indexes.add_chunks(scope, version.id, tuple(records))
+                    await uow.commit()
+            async with self._uow() as uow:
+                await uow.indexes.mark_ready(scope, version.id)
+                await uow.commit()
         except BaseException:
-            await self._index.mark_failed(scope, version.id)
+            # ADR-0015 D6: mark_failed must run after the failing UoW exits;
+            # the nested-write guard in tests/domain/test_uow.py rejects a
+            # nested UoW instead of waiting on its own FOR UPDATE lock.
+            async with self._uow() as uow:
+                await uow.indexes.mark_failed(scope, version.id)
+                await uow.commit()
             raise
-        return await self._index.get_index_version(scope, version.id)
+        async with self._uow(read_only=True) as uow:
+            return await uow.indexes.get_index_version(scope, version.id)
 
     async def inspect_chunks(
         self, scope: Scope, index_version_id: str, *, offset: int = 0, limit: int = 100
@@ -123,7 +137,8 @@ class IndexService:
         """Inspect bounded chunks; payloads are re-read once per chunk until per-call caching is added."""
         if offset < 0 or limit < 1 or limit > 100:
             raise IndexingError("invalid_page")
-        rows = await self._index.list_chunks(scope, index_version_id, offset=offset, limit=limit)
+        async with self._uow(read_only=True) as uow:
+            rows = await uow.indexes.list_chunks(scope, index_version_id, offset=offset, limit=limit)
         inspections = []
         for row in rows:
             anchors = await self._anchors.anchors_for_span(scope, row.extraction_view_id, row.start, row.end)
