@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -101,7 +102,11 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
             return (SimpleNamespace(level="global", key="answer.max_output_tokens", value=0),)
 
     class Maker:
-        kw = {"bind": SimpleNamespace(dispose=lambda: _done())}
+        sessionmaker = object()
+
+    @asynccontextmanager
+    async def open_db(_url):
+        yield Maker()
 
     async def _done():
         return None
@@ -122,7 +127,7 @@ def test_build_uses_run_settings_when_answer_override_is_invalid(monkeypatch):
                 embedding_key="k",
             )
 
-    monkeypatch.setattr(index_cli, "create_sessionmaker", lambda _url: Maker())
+    monkeypatch.setattr(index_cli, "open_database", open_db)
     monkeypatch.setattr(index_cli, "SqlSettingsOverrideRepository", lambda _maker: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
     monkeypatch.setattr(index_cli, "SqlExtractionRepository", lambda *_: object())
@@ -156,7 +161,11 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
             return (SimpleNamespace(level="global", key="indexing.c05_chunk_size", value=1),)
 
     class Maker:
-        kw = {"bind": SimpleNamespace(dispose=lambda: _done())}
+        sessionmaker = object()
+
+    @asynccontextmanager
+    async def open_db(_url):
+        yield Maker()
 
     async def _done():
         return None
@@ -168,7 +177,7 @@ def test_inspect_ignores_invalid_indexing_override(monkeypatch):
         async def inspect_chunks(self, *_args, **_kwargs):
             return []
 
-    monkeypatch.setattr(index_cli, "create_sessionmaker", lambda _url: Maker())
+    monkeypatch.setattr(index_cli, "open_database", open_db)
     monkeypatch.setattr(index_cli, "SqlSettingsOverrideRepository", lambda _maker: Repository())
     monkeypatch.setattr(index_cli, "LocalObjectStore", lambda *_: object())
     monkeypatch.setattr(index_cli, "SqlExtractionRepository", lambda *_: object())

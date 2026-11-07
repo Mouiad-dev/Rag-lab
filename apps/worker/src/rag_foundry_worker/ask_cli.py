@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -20,7 +18,7 @@ from rag_foundry_domain.settings_store import RuntimeSettingsService
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.errors import ProviderError
 from rag_foundry_storage.local_store import LocalObjectStore
-from rag_foundry_storage.sql.engine import create_sessionmaker
+from rag_foundry_storage.sql.database import open_database, run_db_main
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
@@ -34,8 +32,8 @@ def format_response(resp: RunResponse) -> str:
 
 
 async def _ask(settings, request: RunRequest) -> RunResponse:
-    maker = create_sessionmaker(settings.database_url)
-    try:
+    async with open_database(settings.database_url) as db:
+        maker = db.sessionmaker
         base, file_keys = (RuntimeSettings(), frozenset())
         if settings.runtime_config_path is not None:
             base, file_keys = load_runtime_settings_file(settings.runtime_config_path)
@@ -51,14 +49,10 @@ async def _ask(settings, request: RunRequest) -> RunResponse:
             prompts=SqlPromptTemplateStore(maker),
         )
         return await runner.run(LOCAL_DEV_SCOPE, request)
-    finally:
-        await maker.kw["bind"].dispose()
 
 
 def _run(settings, request):
-    factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
-    with asyncio.Runner(loop_factory=factory) as runner:
-        return runner.run(_ask(settings, request))
+    return run_db_main(_ask(settings, request))
 
 
 def main(argv: Sequence[str] | None = None) -> int:

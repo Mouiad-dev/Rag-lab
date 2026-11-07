@@ -17,7 +17,7 @@ from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_ingestion.intake import IntakeService
 from rag_foundry_storage.local_store import LocalObjectStore
-from rag_foundry_storage.sql.engine import create_sessionmaker
+from rag_foundry_storage.sql.database import create_database
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.migrate import run_migrations
 from rag_foundry_storage.sql.repository import SqlDocumentRepository
@@ -47,7 +47,8 @@ def sql_repositories():
     assert _URL
     url = SecretStr(_URL)
     run_migrations(url, "upgrade", "head")
-    maker = create_sessionmaker(url)
+    db = create_database(url)
+    maker = db.sessionmaker
 
     async def setup():
         async with maker() as session, session.begin():
@@ -70,7 +71,7 @@ def sql_repositories():
     finally:
 
         async def close():
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
         with asyncio.Runner(loop_factory=factory) as runner:
             runner.run(close())

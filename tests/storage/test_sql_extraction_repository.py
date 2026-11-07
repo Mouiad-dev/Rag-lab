@@ -26,7 +26,7 @@ if _URL:
         make_new_version,
         make_scope,
     )
-    from rag_foundry_storage.sql.engine import create_sessionmaker
+    from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
     from rag_foundry_storage.sql.migrate import run_migrations
     from rag_foundry_storage.sql.repository import SqlDocumentRepository
@@ -60,7 +60,7 @@ class _Factory:
     """ExtractionRepoFactory: truncate everything, seed scopes, return the (documents, extractions) pair."""
 
     def __init__(self) -> None:
-        self.engines = []
+        self.databases = []
 
     async def __call__(self, scopes):
         maker = self.maker()
@@ -78,13 +78,14 @@ class _Factory:
         return docs, SqlExtractionRepository(maker)
 
     def maker(self):
-        maker = create_sessionmaker(_url())
-        self.engines.append(maker.kw["bind"])
+        db = create_database(_url())
+        maker = db.sessionmaker
+        self.databases.append(db)
         return maker
 
     async def close(self) -> None:
-        for engine in self.engines:
-            await engine.dispose()
+        for db in self.databases:
+            await db.dispose()
 
 
 @pytest.mark.parametrize(

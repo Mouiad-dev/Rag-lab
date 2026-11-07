@@ -16,7 +16,7 @@ from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_storage.local_store import LocalObjectStore
-from rag_foundry_storage.sql.engine import create_sessionmaker
+from rag_foundry_storage.sql.database import create_database
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
@@ -35,7 +35,8 @@ def _run(coro):
 async def _build(tmp_path):
     assert _URL
     await asyncio.to_thread(run_migrations, SecretStr(_URL), "upgrade", "head")
-    maker = create_sessionmaker(SecretStr(_URL))
+    db = create_database(SecretStr(_URL))
+    maker = db.sessionmaker
     scope = make_scope()
     docs = SqlDocumentRepository(maker)
     await docs.ensure_local_scope(scope)
@@ -52,7 +53,7 @@ async def _build(tmp_path):
     def index_service(index, batch_size):
         return IndexService(store, views, index, anchors, batch_size=batch_size)
 
-    return maker, scope, docs, views, indexes, store, view, anchors, chunker, payload, intake, index_service
+    return db, scope, docs, views, indexes, store, view, anchors, chunker, payload, intake, index_service
 
 
 async def _bytes(data):
@@ -92,7 +93,7 @@ class _TrackingIndex:
 
 def test_index_build_failure_keeps_committed_batches_and_marks_failed(tmp_path):
     async def run():
-        maker, scope, _, _, indexes, _, view, _, chunker, _, _, index_service = await _build(tmp_path)
+        db, scope, _, _, indexes, _, view, _, chunker, _, _, index_service = await _build(tmp_path)
         try:
             tracking = _TrackingIndex(indexes)
             service = index_service(tracking, 2)
@@ -106,14 +107,14 @@ def test_index_build_failure_keeps_committed_batches_and_marks_failed(tmp_path):
             assert [c.ordinal for c in chunks] == [0, 1]
             assert embedder.calls == 2
         finally:
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
     _run(run())
 
 
 def test_add_chunks_atomic_failure_and_repository_reuse(tmp_path):
     async def run():
-        maker, scope, _, _, indexes, _, view, _, _, _, _, _ = await _build(tmp_path)
+        db, scope, _, _, indexes, _, view, _, _, _, _, _ = await _build(tmp_path)
         try:
             version = await indexes.create_index_version(scope, make_new_index_version((view.id,)))
             first = (make_chunk(view.id, 0, (1, 0, 0, 0), "first"),)
@@ -132,14 +133,14 @@ def test_add_chunks_atomic_failure_and_repository_reuse(tmp_path):
             ready = await indexes.mark_ready(scope, version.id)
             assert ready.chunk_count == 3
         finally:
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
     _run(run())
 
 
 def test_intake_deduplicates_sequential_and_concurrent_identical_uploads(tmp_path):
     async def run():
-        maker, scope, _, _, _, _, _, _, _, _, intake, _ = await _build(tmp_path)
+        db, scope, _, _, _, _, _, _, _, _, intake, _ = await _build(tmp_path)
         try:
             data = b"concurrent identical upload contents"
 
@@ -156,14 +157,14 @@ def test_intake_deduplicates_sequential_and_concurrent_identical_uploads(tmp_pat
             assert len({o.document.id for o in outcomes}) == 1
             assert sum(not o.deduplicated for o in outcomes) == 1
         finally:
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
     _run(run())
 
 
 def test_intake_rejects_unknown_project_before_reading_upload(tmp_path):
     async def run():
-        maker, scope, _, _, _, _, _, _, _, _, intake, _ = await _build(tmp_path)
+        db, scope, _, _, _, _, _, _, _, _, intake, _ = await _build(tmp_path)
         try:
             from rag_foundry_domain import Scope, new_id
             from rag_foundry_domain.errors import NotFoundError
@@ -184,6 +185,6 @@ def test_intake_rejects_unknown_project_before_reading_upload(tmp_path):
                 )
             assert not started
         finally:
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
     _run(run())

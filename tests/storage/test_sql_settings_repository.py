@@ -42,7 +42,7 @@ if _URL:
     from rag_foundry_domain.errors import SettingsError
     from rag_foundry_domain.settings_store import NewSettingOverride
     from rag_foundry_domain.settings_testing import SETTINGS_REPOSITORY_CHECKS
-    from rag_foundry_storage.sql.engine import create_sessionmaker
+    from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.migrate import run_migrations
     from rag_foundry_storage.sql.repository import SqlDocumentRepository
     from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
@@ -56,7 +56,8 @@ if _URL:
         return Scope(tenant_id=str(uuid.UUID(int=seed, version=4)), project_id=str(uuid.UUID(int=seed + 1, version=4)))
 
     async def _factory(scopes):
-        maker = create_sessionmaker(_secret_url())
+        db = create_database(_secret_url())
+        maker = db.sessionmaker
         async with maker() as session, session.begin():
             await session.execute(text("TRUNCATE runtime_setting_overrides, projects, tenants CASCADE"))
         docs = SqlDocumentRepository(maker)
@@ -106,7 +107,8 @@ if _URL:
     async def test_database_rejects_cross_tenant_project():
         one, two = _scope(401), _scope(501)
         await _factory((one, two))
-        maker = create_sessionmaker(_secret_url())
+        db = create_database(_secret_url())
+        maker = db.sessionmaker
         with pytest.raises(DBAPIError):
             async with maker() as session, session.begin():
                 await session.execute(
@@ -119,7 +121,8 @@ if _URL:
     async def _raw_rejected(key, value):
         scope = _scope(601)
         await _factory((scope,))
-        maker = create_sessionmaker(_secret_url())
+        db = create_database(_secret_url())
+        maker = db.sessionmaker
         with pytest.raises(DBAPIError):
             async with maker() as session, session.begin():
                 await session.execute(
@@ -133,7 +136,8 @@ if _URL:
     @run
     async def test_database_rejects_update_and_delete():
         await _factory(())
-        maker = create_sessionmaker(_secret_url())
+        db = create_database(_secret_url())
+        maker = db.sessionmaker
         repo = SqlSettingsOverrideRepository(maker)
         row = await repo.append(NewSettingOverride("global", None, "answer.temperature", 0.5, "test", "test"))
         for statement in (
@@ -146,7 +150,8 @@ if _URL:
 
     @run
     async def test_closed_port_maps_to_store_unavailable():
-        maker = create_sessionmaker(SecretStr("postgresql+asyncpg://u:p@127.0.0.1:1/db"))
+        db = create_database(SecretStr("postgresql+asyncpg://u:p@127.0.0.1:1/db"))
+        maker = db.sessionmaker
         with pytest.raises(SettingsError) as exc:
             await SqlSettingsOverrideRepository(maker).current(None)
         assert exc.value.code == "store_unavailable"

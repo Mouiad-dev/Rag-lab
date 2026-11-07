@@ -16,7 +16,7 @@ if _URL:
     from rag_foundry_domain.errors import NotFoundError
     from rag_foundry_domain.index_testing import INDEX_REPOSITORY_CHECKS
     from rag_foundry_domain.testing import CheckSkippedError, make_new_extraction, make_new_version, make_scope
-    from rag_foundry_storage.sql.engine import create_sessionmaker
+    from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
     from rag_foundry_storage.sql.index_repository import SqlIndexRepository
     from rag_foundry_storage.sql.migrate import run_migrations
@@ -47,11 +47,16 @@ def migrated():
 
 class _Factory:
     def __init__(self):
-        self.engines = []
+        self.databases = []
+
+    def database(self):
+        db = create_database(_url())
+        self.databases.append(db)
+        return db
 
     async def __call__(self, scopes):
-        maker = create_sessionmaker(_url())
-        self.engines.append(maker.kw["bind"])
+        db = self.database()
+        maker = db.sessionmaker
         async with maker() as session, session.begin():
             await session.execute(
                 text(
@@ -64,8 +69,8 @@ class _Factory:
         return docs, SqlExtractionRepository(maker), SqlIndexRepository(maker)
 
     async def close(self):
-        for engine in self.engines:
-            await engine.dispose()
+        for db in self.databases:
+            await db.dispose()
 
 
 @pytest.mark.parametrize(
@@ -97,16 +102,16 @@ async def test_database_guards_and_migration_roundtrip():
         from rag_foundry_domain.index_testing import make_chunk, make_new_index_version
 
         version = await repo.create_index_version(scope, make_new_index_version((view.id,)))
-        async with create_sessionmaker(_url())() as session:
+        async with factory.database().sessionmaker() as session:
             version_count = await session.scalar(text("SELECT count(*) FROM index_versions"))
         with pytest.raises(NotFoundError):
             await repo.create_index_version(scope, make_new_index_version((foreign_view.id,)))
-        async with create_sessionmaker(_url())() as session:
+        async with factory.database().sessionmaker() as session:
             assert await session.scalar(text("SELECT count(*) FROM index_versions")) == version_count
 
         async def rejected(sql, params, message):
             with pytest.raises(DBAPIError, match=message):
-                async with create_sessionmaker(_url())() as session, session.begin():
+                async with factory.database().sessionmaker() as session, session.begin():
                     await session.execute(text(sql), params)
 
         base = {
@@ -125,7 +130,7 @@ async def test_database_guards_and_migration_roundtrip():
             "invalid index version update",
         )
         second = await repo.create_index_version(scope, make_new_index_version((view.id,)))
-        async with create_sessionmaker(_url())() as session, session.begin():
+        async with factory.database().sessionmaker() as session, session.begin():
             await session.execute(text("UPDATE index_versions SET state='failed' WHERE id=:i"), {"i": second.id})
         await rejected(
             "INSERT INTO chunks (id,tenant_id,project_id,index_version_id,extraction_view_id,ordinal,start_cp,end_cp,split_level,block_ids,text,text_sha256,embedding) VALUES (gen_random_uuid(),:t,:p,:i,:v,0,0,1,0,ARRAY['b00000'],'x',:h,CAST('[1,0,0,0]' AS vector))",
@@ -150,7 +155,7 @@ async def test_database_guards_and_migration_roundtrip():
         )
         # Alembic runs its own event loop, so it must not run on this test's loop.
         await asyncio.to_thread(run_migrations, _url(), "downgrade", "0002_extraction_views")
-        async with factory.engines[0].connect() as connection:
+        async with factory.databases[0].engine.connect() as connection:
             assert await connection.scalar(text("SELECT to_regclass('chunks') IS NULL"))
             assert await connection.scalar(text("SELECT to_regclass('index_versions') IS NULL"))
         await asyncio.to_thread(run_migrations, _url(), "upgrade", "head")

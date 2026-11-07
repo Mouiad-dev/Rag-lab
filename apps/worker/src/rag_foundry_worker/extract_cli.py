@@ -7,7 +7,6 @@ text, paths, URLs or secrets. Refuses in prod because there is no auth context y
 from __future__ import annotations
 
 import argparse
-import asyncio
 import sys
 from collections.abc import Sequence
 
@@ -17,7 +16,7 @@ from rag_foundry_domain.extraction import ExtractionOutcome
 from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_storage.local_store import LocalObjectStore
-from rag_foundry_storage.sql.engine import create_sessionmaker
+from rag_foundry_storage.sql.database import open_database, run_db_main
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.repository import SqlDocumentRepository
 
@@ -47,26 +46,21 @@ def _summary_lines(outcome: ExtractionOutcome) -> list[str]:
 
 async def _extract(settings: Settings, document_id: str, version_id: str) -> ExtractionOutcome:
     assert settings.database_url is not None  # checked by the caller
-    sessionmaker = create_sessionmaker(settings.database_url)
-    service = ExtractionService(
-        LocalObjectStore(settings.object_store_root),
-        SqlDocumentRepository(sessionmaker),
-        SqlExtractionRepository(sessionmaker),
-        extractors=EXTRACTORS,
-        limits=ExtractionLimits(),
-    )
-    try:
+    async with open_database(settings.database_url) as db:
+        sessionmaker = db.sessionmaker
+        service = ExtractionService(
+            LocalObjectStore(settings.object_store_root),
+            SqlDocumentRepository(sessionmaker),
+            SqlExtractionRepository(sessionmaker),
+            extractors=EXTRACTORS,
+            limits=ExtractionLimits(),
+        )
         return await service.extract(LOCAL_DEV_SCOPE, document_id, version_id)
-    finally:
-        # Close pooled connections while the loop still runs (SQLAlchemy asyncio requirement).
-        await sessionmaker.kw["bind"].dispose()
 
 
 def _extract_one(settings: Settings, document_id: str, version_id: str) -> ExtractionOutcome:
     # psycopg async cannot use the Windows Proactor loop (same workaround as the storage tests).
-    factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
-    with asyncio.Runner(loop_factory=factory) as runner:
-        return runner.run(_extract(settings, document_id, version_id))
+    return run_db_main(_extract(settings, document_id, version_id))
 
 
 def main(argv: Sequence[str] | None = None) -> int:

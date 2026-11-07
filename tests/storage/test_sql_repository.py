@@ -21,7 +21,7 @@ pytestmark = [
 
 if _URL:  # imports need the `sql` extra; keep collection safe when it is absent and no URL is given
     from rag_foundry_domain.testing import REPOSITORY_CHECKS, CheckSkippedError, make_new_version, make_scope
-    from rag_foundry_storage.sql.engine import create_sessionmaker
+    from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.migrate import run_migrations
     from rag_foundry_storage.sql.repository import SqlDocumentRepository
     from sqlalchemy import text
@@ -54,13 +54,14 @@ class _Factory:
     """RepoFactory: truncate everything, then create the requested scopes. Disposes engines on close."""
 
     def __init__(self) -> None:
-        self.engines = []
+        self.databases = []
 
     async def __call__(self, scopes, *, clock=None):
         if clock is not None:
             raise CheckSkippedError("the SQL repository uses the database clock")
-        maker = create_sessionmaker(_url())
-        self.engines.append(maker.kw["bind"])
+        db = create_database(_url())
+        maker = db.sessionmaker
+        self.databases.append(db)
         async with maker() as session, session.begin():
             await session.execute(
                 text(
@@ -75,8 +76,8 @@ class _Factory:
         return repo
 
     async def close(self) -> None:
-        for engine in self.engines:
-            await engine.dispose()
+        for db in self.databases:
+            await db.dispose()
 
 
 @pytest.mark.parametrize("check", REPOSITORY_CHECKS if _URL else [None], ids=lambda c: getattr(c, "__name__", "none"))
@@ -130,8 +131,9 @@ async def test_update_of_a_version_is_rejected_by_the_database():
         scope = make_scope()
         repo = await factory([scope])
         out = await repo.create_document_or_get(scope, make_new_version("x"), display_name="d")
-        maker = create_sessionmaker(_url())
-        factory.engines.append(maker.kw["bind"])
+        db = create_database(_url())
+        maker = db.sessionmaker
+        factory.databases.append(db)
         with pytest.raises(DBAPIError):
             async with maker() as session, session.begin():
                 await session.execute(
@@ -149,8 +151,9 @@ async def test_document_scope_cannot_change_and_cross_scope_version_is_rejected(
         a, b = make_scope(), make_scope()
         repo = await factory([a, b])
         out = await repo.create_document_or_get(a, make_new_version("x"), display_name="d")
-        maker = create_sessionmaker(_url())
-        factory.engines.append(maker.kw["bind"])
+        db = create_database(_url())
+        maker = db.sessionmaker
+        factory.databases.append(db)
         with pytest.raises(DBAPIError):
             async with maker() as session, session.begin():
                 await session.execute(
@@ -178,8 +181,9 @@ async def test_check_constraints_reject_bad_rows():
         scope = make_scope()
         repo = await factory([scope])
         out = await repo.create_document_or_get(scope, make_new_version("x"), display_name="d")
-        maker = create_sessionmaker(_url())
-        factory.engines.append(maker.kw["bind"])
+        db = create_database(_url())
+        maker = db.sessionmaker
+        factory.databases.append(db)
         insert_sql = text(
             "INSERT INTO document_versions (id, tenant_id, project_id, document_id, version_number, sha256,"
             " size_bytes, media_type, text_encoding, original_filename, object_key) VALUES"

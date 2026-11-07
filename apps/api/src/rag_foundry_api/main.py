@@ -35,19 +35,21 @@ def create_app(
     """`intake_service` and `repository` are injected together (tests); otherwise built from settings."""
     resolved = settings if settings is not None else load_settings()
     sql_repo = None
+    database = None
     base, file_keys = (RuntimeSettings(), frozenset())
     if resolved.runtime_config_path is not None:
         base, file_keys = load_runtime_settings_file(resolved.runtime_config_path)
     if intake_service is None and resolved.database_url is not None:
         from rag_foundry_storage.local_store import LocalObjectStore
-        from rag_foundry_storage.sql.engine import create_sessionmaker
+        from rag_foundry_storage.sql.database import create_database
         from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
         from rag_foundry_storage.sql.index_repository import SqlIndexRepository
         from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
         from rag_foundry_storage.sql.repository import SqlDocumentRepository
         from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
 
-        sessionmaker = create_sessionmaker(resolved.database_url)
+        database = create_database(resolved.database_url)
+        sessionmaker = database.sessionmaker
         runtime = RuntimeSettingsService(base, file_keys=file_keys, repo=SqlSettingsOverrideRepository(sessionmaker))
         sql_repo = SqlDocumentRepository(sessionmaker)
         views = SqlExtractionRepository(sessionmaker)
@@ -68,9 +70,13 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        if sql_repo is not None and resolved.environment in ("dev", "test"):
-            await sql_repo.ensure_local_scope(LOCAL_DEV_SCOPE)
-        yield
+        try:
+            if sql_repo is not None and resolved.environment in ("dev", "test"):
+                await sql_repo.ensure_local_scope(LOCAL_DEV_SCOPE)
+            yield
+        finally:
+            if database is not None:
+                await database.dispose()
 
     app = FastAPI(title="RAG Foundry API", version=__version__, lifespan=lifespan)
     app.state.settings = resolved

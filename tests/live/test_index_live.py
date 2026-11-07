@@ -17,7 +17,7 @@ from rag_foundry_ingestion.extract import EXTRACTORS, ExtractionLimits
 from rag_foundry_ingestion.extraction import ExtractionService
 from rag_foundry_providers.adapters.ollama import OllamaEmbeddingModel, ollama_embedding_profile
 from rag_foundry_storage.local_store import LocalObjectStore
-from rag_foundry_storage.sql.engine import create_sessionmaker
+from rag_foundry_storage.sql.database import create_database
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.migrate import run_migrations
@@ -38,7 +38,8 @@ def test_live_index_retrieves_known_facts(tmp_path):
         settings = load_settings()
         url = SecretStr(os.environ["RAGF_TEST_DATABASE_URL"])
         await asyncio.to_thread(run_migrations, url, "upgrade", "head")
-        maker = create_sessionmaker(url)
+        db = create_database(url)
+        maker = db.sessionmaker
         try:
             async with maker() as session, session.begin():
                 await session.execute(
@@ -100,7 +101,7 @@ def test_live_index_retrieves_known_facts(tmp_path):
                 else "[live] losing case population: no hits"
             )
         finally:
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
     factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
     with asyncio.Runner(loop_factory=factory) as runner:

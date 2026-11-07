@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
-import sys
 from collections.abc import Sequence
 
 from pydantic import ValidationError
@@ -25,7 +23,7 @@ from rag_foundry_providers.factories import default_adapter_registry
 from rag_foundry_providers.ledger import RecordingEmbeddingModel, UsageLedger
 from rag_foundry_providers.resilience import ResilientEmbeddingModel
 from rag_foundry_storage.local_store import LocalObjectStore
-from rag_foundry_storage.sql.engine import create_sessionmaker
+from rag_foundry_storage.sql.database import open_database, run_db_main
 from rag_foundry_storage.sql.extraction_repository import SqlExtractionRepository
 from rag_foundry_storage.sql.index_repository import SqlIndexRepository
 from rag_foundry_storage.sql.settings_repository import SqlSettingsOverrideRepository
@@ -50,8 +48,8 @@ def inspection_line(row, show_text: bool = False) -> str:
 
 
 async def _index(settings: Settings, args):
-    maker = create_sessionmaker(settings.database_url)
-    try:
+    async with open_database(settings.database_url) as db:
+        maker = db.sessionmaker
         store = LocalObjectStore(settings.object_store_root)
         base, file_keys = (RuntimeSettings(), frozenset())
         if settings.runtime_config_path is not None:
@@ -93,14 +91,10 @@ async def _index(settings: Settings, args):
             LOCAL_DEV_SCOPE, args.index_version_id, offset=args.offset, limit=args.limit
         )
         return [inspection_line(row, args.show_text) for row in rows]
-    finally:
-        await maker.kw["bind"].dispose()
 
 
 def _run(settings, args):
-    factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
-    with asyncio.Runner(loop_factory=factory) as runner:
-        return runner.run(_index(settings, args))
+    return run_db_main(_index(settings, args))
 
 
 def main(argv: Sequence[str] | None = None) -> int:

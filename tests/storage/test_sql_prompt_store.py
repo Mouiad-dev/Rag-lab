@@ -19,7 +19,7 @@ _URL = os.environ.get("RAGF_TEST_DATABASE_URL")
 pytestmark = [pytest.mark.db, pytest.mark.skipif(not _URL, reason="RAGF_TEST_DATABASE_URL is not set")]
 
 if _URL:
-    from rag_foundry_storage.sql.engine import create_sessionmaker
+    from rag_foundry_storage.sql.database import create_database
     from rag_foundry_storage.sql.migrate import run_migrations
     from rag_foundry_storage.sql.prompt_store import SqlPromptTemplateStore
 
@@ -47,16 +47,18 @@ def migrated():
 @pytest.mark.parametrize("check", PROMPT_STORE_CHECKS, ids=lambda check: check.__name__)
 @run
 async def test_sql_prompt_store_shared_checks(check):
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         await check(SqlPromptTemplateStore(maker))
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_prompt_migration_seeds_and_active_templates():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         async with maker() as session:
             templates = (
@@ -97,12 +99,13 @@ async def test_prompt_migration_seeds_and_active_templates():
         assert await SqlPromptTemplateStore(maker).active_id("grounded") == "grounded-answer-v2"
         assert await SqlPromptTemplateStore(maker).active_id("ungrounded") == "ungrounded-v1"
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_prompt_template_update_is_rejected():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         async with maker() as session:
             with pytest.raises(DBAPIError):
@@ -111,24 +114,26 @@ async def test_prompt_template_update_is_rejected():
                         text("UPDATE prompt_templates SET family = family WHERE id = 'grounded-answer-v2'")
                     )
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_prompt_template_delete_is_rejected():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         async with maker() as session:
             with pytest.raises(DBAPIError):
                 async with session.begin():
                     await session.execute(text("DELETE FROM prompt_templates WHERE id = 'grounded-answer-v2'"))
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_prompt_activation_update_is_rejected():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         async with maker() as session:
             with pytest.raises(DBAPIError):
@@ -137,24 +142,26 @@ async def test_prompt_activation_update_is_rejected():
                         text("UPDATE prompt_activations SET decision_ref = decision_ref WHERE seq = 1")
                     )
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_prompt_activation_delete_is_rejected():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         async with maker() as session:
             with pytest.raises(DBAPIError):
                 async with session.begin():
                     await session.execute(text("DELETE FROM prompt_activations WHERE seq = 1"))
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_prompt_tables_reject_truncate():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         for table in ("prompt_activations", "prompt_templates"):
             async with maker() as session:
@@ -162,12 +169,13 @@ async def test_prompt_tables_reject_truncate():
                     async with session.begin():
                         await session.execute(text(f"TRUNCATE {table} CASCADE"))
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_database_rejects_incorrect_prompt_hash():
-    maker = create_sessionmaker(_url())
+    db = create_database(_url())
+    maker = db.sessionmaker
     try:
         async with maker() as session:
             with pytest.raises(DBAPIError):
@@ -181,20 +189,21 @@ async def test_database_rejects_incorrect_prompt_hash():
                         {"hash": "0" * 64},
                     )
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 @run
 async def test_unavailable_prompt_database_is_sanitized():
     broken_url = make_url(_url().get_secret_value()).set(port=1)
-    maker = create_sessionmaker(SecretStr(str(broken_url)))
+    db = create_database(SecretStr(str(broken_url)))
+    maker = db.sessionmaker
     try:
         with pytest.raises(PromptError) as caught:
             await SqlPromptTemplateStore(maker).active_id("grounded")
         assert caught.value.code == "store_unavailable"
         assert caught.value.__cause__ is None
     finally:
-        await maker.kw["bind"].dispose()
+        await db.dispose()
 
 
 def test_prompt_migration_downgrade_and_upgrade_restores_seeds():
@@ -202,7 +211,8 @@ def test_prompt_migration_downgrade_and_upgrade_restores_seeds():
     run_migrations(_url(), "upgrade", "head")
 
     async def check():
-        maker = create_sessionmaker(_url())
+        db = create_database(_url())
+        maker = db.sessionmaker
         try:
             async with maker() as session:
                 ids = (
@@ -215,6 +225,6 @@ def test_prompt_migration_downgrade_and_upgrade_restores_seeds():
             assert set(ids) == {"grounded-answer-v1", "grounded-answer-v2", "ungrounded-v1"}
             assert active_g == "grounded-answer-v2" and active_u == "ungrounded-v1"
         finally:
-            await maker.kw["bind"].dispose()
+            await db.dispose()
 
     run(check)()
