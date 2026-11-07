@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C01-C08, C12 and C21 are implemented; R01 and R02 are in progress; the remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Statuses reflect current implementation evidence: C01-C08, C10, C12-C14 and C21 are implemented; R01 and R02 are in progress; the remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -17,11 +17,11 @@ The acceptance column describes evidence that must exist before validation. Each
 | C07 | chunking / P4.2 | Paragraph packing | Pack paragraphs within a budget with explicit overflow behavior. | Show when keeping paragraphs improves or hurts retrieval. | implemented |
 | C08 | chunking / P4.3 | Markdown sections | Use heading hierarchy and keep section paths. | Test nested headings and fenced code blocks. | implemented |
 | C09 | chunking / P4.3 | HTML structure | Extract meaningful DOM sections and retain locators. | Remove navigation noise without losing content or source identity. | planned |
-| C10 | chunking / P4.3 | JSON structure | Split structured objects/arrays while preserving JSON paths. | Reassociate a retrieved value with its field/object context. | planned |
+| C10 | chunking / P4.3 | JSON structure | Split structured objects/arrays while preserving JSON paths. | Reassociate a retrieved value with its field/object context. | implemented |
 | C11 | chunking / P4.3 | Page and layout blocks | Use page regions, reading order, columns and captions. | Compare a two-column PDF with a plain-text baseline. | planned |
 | C12 | chunking / P4.3 | Table-aware segments | Preserve schema/headers and explicit row groups for large tables. | Retrieve a cell with units, row/column labels and source span. | implemented |
-| C13 | chunking / P4.3 | Code separators | Split source with language-specific separators. | Inspect a class, method and docstring across boundaries. | planned |
-| C14 | chunking / P4.3 | AST-aware code | Use a real parser for declarations and nested structures. | Prove syntax-node boundaries and handle unsupported syntax explicitly. | planned |
+| C13 | chunking / P4.3 | Code separators | Split source with language-specific separators. | Inspect a class, method and docstring across boundaries. | implemented |
+| C14 | chunking / P4.3 | AST-aware code | Use a real parser for declarations and nested structures. | Prove syntax-node boundaries and handle unsupported syntax explicitly. | implemented |
 | C15 | chunking / P4.4 | Embedding-semantic boundaries | Detect semantic shifts and pack subject to budgets. | Compare threshold settings on topic changes and a cohesive passage. | planned |
 | C16 | chunking / P4.4 | LLM-selected boundaries | Ask for grounded source offsets using structured output. | Reject invented or invalid offsets; record cost and repeat variability. | planned |
 | C17 | chunking / P4.4 | Propositions | Generate atomic supported facts linked to original spans. | Check negation/conditions and detect unsupported generated claims. | planned |

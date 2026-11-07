@@ -10,6 +10,14 @@ from rag_foundry_techniques import ChunkSpan
 from rag_foundry_chunking.boundaries import pack, safe_cut_ranges, trim, word_ranges
 
 
+class StructureParseError(ValueError):
+    """A structured input could not be parsed or handled as requested."""
+
+    def __init__(self, code: str, message: str | None = None) -> None:
+        self.code = code
+        super().__init__(message or code)
+
+
 def line_ranges(text: str, start: int = 0, end: int | None = None) -> list[tuple[int, int, int]]:
     """Return physical line (start, content end, next start) offsets."""
     end = len(text) if end is None else end
