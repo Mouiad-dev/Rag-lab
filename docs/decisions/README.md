@@ -16,5 +16,6 @@
 | [ADR-0012](ADR-0012-minimal-index.md) | Minimal chunk and vector index | accepted |
 | [ADR-0013](ADR-0013-thin-slice-grounded-answers.md) | Thin slice: grounded answers, citations and abstention | accepted |
 | [ADR-0014](ADR-0014-adapter-factories-runtime-settings-prompt-store.md) | Adapter factories, runtime settings and prompt store | accepted |
+| [ADR-0015](ADR-0015-layering-unit-of-work.md) | Layering, engine lifecycle and Unit of Work | accepted |
 
 New ADRs use [the template](../templates/ADR.md).
