@@ -1,4 +1,11 @@
 from rag_foundry_chunking._units import LabRegexTokenizer, Tokenizer
+from rag_foundry_chunking.adaptive import (
+    AdaptiveChunker,
+    AdaptiveConfig,
+    PolicyComparison,
+    RegionDecision,
+    compare_with_fixed,
+)
 from rag_foundry_chunking.fixed import (
     FixedCharChunker,
     FixedCharConfig,
@@ -27,6 +34,7 @@ from rag_foundry_chunking.sliding import SlidingWindowChunker, SlidingWindowConf
 
 
 def register_builtin_plugins(registry) -> None:
+    registry.register(AdaptiveChunker)
     registry.register(RecursiveChunker)
     registry.register(FixedCharChunker)
     registry.register(FixedWordChunker)
@@ -40,6 +48,11 @@ def register_builtin_plugins(registry) -> None:
 
 
 __all__ = [
+    "AdaptiveChunker",
+    "AdaptiveConfig",
+    "RegionDecision",
+    "PolicyComparison",
+    "compare_with_fixed",
     "RecursiveChunker",
     "RecursiveConfig",
     "register_builtin_plugins",
