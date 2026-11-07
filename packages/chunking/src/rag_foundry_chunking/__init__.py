@@ -7,7 +7,10 @@ from rag_foundry_chunking.fixed import (
     FixedWordChunker,
     FixedWordConfig,
 )
+from rag_foundry_chunking.multilingual import MultilingualChunker, MultilingualConfig, normalize_with_map
+from rag_foundry_chunking.paragraph import ParagraphChunker, ParagraphConfig
 from rag_foundry_chunking.recursive import RecursiveChunker, RecursiveConfig
+from rag_foundry_chunking.sentence import SentenceChunker, SentenceConfig
 from rag_foundry_chunking.sliding import SlidingWindowChunker, SlidingWindowConfig, WindowStats, window_stats
 
 
@@ -17,6 +20,9 @@ def register_builtin_plugins(registry) -> None:
     registry.register(FixedWordChunker)
     registry.register(FixedTokenChunker)
     registry.register(SlidingWindowChunker)
+    registry.register(SentenceChunker)
+    registry.register(ParagraphChunker)
+    registry.register(MultilingualChunker)
 
 
 __all__ = [
@@ -35,4 +41,11 @@ __all__ = [
     "SlidingWindowConfig",
     "WindowStats",
     "window_stats",
+    "SentenceChunker",
+    "SentenceConfig",
+    "ParagraphChunker",
+    "ParagraphConfig",
+    "MultilingualChunker",
+    "MultilingualConfig",
+    "normalize_with_map",
 ]
