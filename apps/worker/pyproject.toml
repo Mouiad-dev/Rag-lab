@@ -22,6 +22,7 @@ rag-foundry-worker = "rag_foundry_worker.main:main"
 rag-foundry-extract = "rag_foundry_worker.extract_cli:main"
 rag-foundry-index = "rag_foundry_worker.index_cli:main"
 rag-foundry-ask = "rag_foundry_worker.ask_cli:main"
+rag-foundry-bundle = "rag_foundry_worker.bundle_cli:main"
 
 [tool.uv.sources]
 rag-foundry-core = { workspace = true }

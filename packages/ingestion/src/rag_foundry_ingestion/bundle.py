@@ -9,6 +9,9 @@ SHA-256 values detect accidental mismatch only; a bundle is untrusted input and 
 
 import hashlib
 import json
+import os
+import shutil
+import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -27,6 +30,7 @@ from rag_foundry_contracts.resolve import AnchorResolution, ResolutionReason, Re
 from rag_foundry_contracts.source import SourceAnchor, SourceRef
 from rag_foundry_domain.errors import AnchorError
 from rag_foundry_domain.extraction import SourceBlock
+from rag_foundry_domain.indexing import IndexState
 from rag_foundry_domain.ports import ObjectStore, Scope
 
 from rag_foundry_ingestion.anchors import anchor_id_for, resolve_anchor
@@ -238,6 +242,66 @@ class BundleExportService:
         return files
 
 
+class BundleAnchorCollector:
+    """Collect block, chunk, and parent anchors for explicitly selected views."""
+
+    def __init__(self, store, uow, anchors, *, limits: BundleLimits = DEFAULT_LIMITS, max_chunks: int = 10_000):
+        self._store, self._uow, self._anchors = store, uow, anchors
+        self._limits, self._max_chunks = limits, max_chunks
+
+    async def anchors_for_views(self, scope: Scope, view_ids: Sequence[str], index_version_id: str | None = None):
+        async with self._uow(read_only=True) as uow:
+            views = [await uow.extractions.get_view(scope, view_id) for view_id in view_ids]
+            chunks = ()
+            if index_version_id is not None:
+                version = await uow.indexes.get_index_version(scope, index_version_id)
+                if version.state is not IndexState.READY:
+                    raise BundleError("index_not_ready")
+                if not set(version.extraction_view_ids) <= set(view_ids):
+                    raise BundleError("index_views_not_exported")
+                collected = []
+                offset = 0
+                while True:
+                    page = await uow.indexes.list_chunks(scope, index_version_id, offset=offset, limit=500)
+                    collected.extend(page)
+                    if len(collected) > self._max_chunks:
+                        raise BundleError("too_large")
+                    if len(page) < 500:
+                        break
+                    offset += len(page)
+                chunks = tuple(collected)
+        found = {}
+
+        def add(anchor):
+            previous = found.get(anchor.anchor_id)
+            canonical = _json(anchor.model_dump(mode="json"))
+            if previous is not None and _json(previous.model_dump(mode="json")) != canonical:
+                raise BundleError("anchor_collision")
+            found[anchor.anchor_id] = anchor
+
+        for view in views:
+            payload = await read_payload(self._store, scope, view)
+            for block in payload.blocks:
+                # anchor() takes offsets inside the block, not in the canonical text
+                add(await self._anchors.anchor(scope, view.id, block.block_id, 0, block.end - block.start))
+        for chunk in chunks:
+            for anchor in await self._anchors.anchors_for_span(scope, chunk.extraction_view_id, chunk.start, chunk.end):
+                add(anchor)
+            if chunk.parent_start_cp is not None and chunk.parent_end_cp is not None:
+                for anchor in await self._anchors.anchors_for_span(
+                    scope, chunk.extraction_view_id, chunk.parent_start_cp, chunk.parent_end_cp
+                ):
+                    add(anchor)
+        if len(found) > self._limits.max_anchors:
+            raise BundleError("too_large")
+        return tuple(
+            sorted(
+                found.values(),
+                key=lambda a: (a.source.extraction_view_id, a.text_range.start, a.text_range.end, a.anchor_id),
+            )
+        )
+
+
 def _unique_keys(pairs):
     keys = [key for key, _ in pairs]
     if len(set(keys)) != len(keys):
@@ -406,17 +470,34 @@ class LocalBundleCatalog:
 
 
 def write_bundle_dir(files: Mapping[str, bytes], root: Path) -> None:
-    """Writes a bundle into `root`, which must be absent or an empty directory."""
+    """Atomically stages, self-checks, then installs a bundle at an absent target.
+
+    The exists check and replace are not atomic together (check-then-act race). On POSIX,
+    os.replace onto a directory that appeared meanwhile can fail or behave differently.
+    The CLI is single-user dev only.
+    """
     for name in files:
         _check_name(name)
-    if root.is_symlink() or root.is_junction() or (root.exists() and (not root.is_dir() or any(root.iterdir()))):
-        raise BundleError("bad_path")
-    for name, body in files.items():
-        target = root / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.parent.is_symlink() or target.parent.is_junction() or target.is_symlink():
+    if root.exists() or root.is_symlink() or root.is_junction():
+        raise BundleError("target_exists")
+    try:
+        if root.parent.is_symlink() or root.parent.is_junction():
             raise BundleError("bad_path")
-        target.write_bytes(body)
+        tmp = Path(tempfile.mkdtemp(dir=root.parent, prefix=f".{root.name}.tmp-"))
+    except BundleError:
+        raise
+    except (FileNotFoundError, NotADirectoryError, OSError):
+        raise BundleError("bad_path") from None
+    try:
+        for name, body in files.items():
+            target = tmp / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(body)
+        import_bundle(read_bundle_dir(tmp))
+        os.replace(tmp, root)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
 
 
 def read_bundle_dir(root: Path, limits: BundleLimits = DEFAULT_LIMITS) -> dict[str, bytes]:

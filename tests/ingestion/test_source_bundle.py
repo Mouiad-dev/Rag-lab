@@ -236,8 +236,9 @@ async def test_bundle_directory_rules(tmp_path):
     _owner, files, _anchors = await _bundle(tmp_path)
     root = tmp_path / "bundle"
     write_bundle_dir(files, root)
-    with pytest.raises(BundleError):
-        write_bundle_dir(files, root)  # not empty
+    with pytest.raises(BundleError) as caught:
+        write_bundle_dir(files, root)
+    assert caught.value.code == "target_exists"
     with pytest.raises(BundleError):
         write_bundle_dir({"../escape.txt": b""}, tmp_path / "other")
     (root / "extra").mkdir()
@@ -258,6 +259,46 @@ async def test_bundle_directory_rules(tmp_path):
         pytest.skip("this OS refuses symlinks")
     with pytest.raises(BundleError):
         read_bundle_dir(root)
+
+
+def test_bundle_write_is_atomic_and_existing_target_is_untouched(tmp_path, monkeypatch):
+    import rag_foundry_ingestion.bundle as bundle_module
+
+    out = tmp_path / "out"
+    out.mkdir()
+    marker = out / "keep"
+    marker.write_bytes(b"keep")
+    with pytest.raises(BundleError, match="target_exists"):
+        write_bundle_dir({}, out)
+    assert marker.read_bytes() == b"keep"
+    marker.unlink()
+    out.rmdir()
+
+    def fail(_files):
+        raise RuntimeError("self-check")
+
+    monkeypatch.setattr(bundle_module, "import_bundle", fail)
+    with pytest.raises(RuntimeError, match="self-check"):
+        write_bundle_dir({}, out)
+    assert not out.exists()
+    assert list(tmp_path.glob(".out.tmp-*")) == []
+
+
+def test_bundle_write_rejects_bad_parent_paths(tmp_path):
+    missing = tmp_path / "missing" / "out"
+    with pytest.raises(BundleError) as caught:
+        write_bundle_dir({}, missing)
+    assert caught.value.code == "bad_path"
+    target = tmp_path / "target"
+    target.mkdir()
+    parent_link = tmp_path / "parent_link"
+    try:
+        os.symlink(target, parent_link, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("this OS refuses symlinks")
+    with pytest.raises(BundleError) as caught:
+        write_bundle_dir({}, parent_link / "out")
+    assert caught.value.code == "bad_path"
 
 
 @sync
