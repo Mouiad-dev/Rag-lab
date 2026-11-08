@@ -1,0 +1,95 @@
+[
+  {
+    "label": "C01 400 chars",
+    "technique_id": "C01",
+    "config": {
+      "chunk_size": 400
+    }
+  },
+  {
+    "label": "C02 67 words (~400 chars)",
+    "technique_id": "C02",
+    "config": {
+      "words_per_chunk": 67
+    }
+  },
+  {
+    "label": "C03 128 tokens (~400 chars)",
+    "technique_id": "C03",
+    "config": {
+      "tokens_per_chunk": 128
+    }
+  },
+  {
+    "label": "C04 400 chars",
+    "technique_id": "C04",
+    "config": {
+      "unit": "chars",
+      "window_size": 400,
+      "overlap": 100
+    }
+  },
+  {
+    "label": "C05 400 chars",
+    "technique_id": "C05",
+    "config": {
+      "chunk_size": 400
+    }
+  },
+  {
+    "label": "C06 400 chars",
+    "technique_id": "C06",
+    "config": {
+      "chunk_size": 400
+    }
+  },
+  {
+    "label": "C07 400 chars",
+    "technique_id": "C07",
+    "config": {
+      "chunk_size": 400
+    }
+  },
+  {
+    "label": "C08 400 chars",
+    "technique_id": "C08",
+    "config": {
+      "chunk_size": 400
+    }
+  },
+  {
+    "label": "C21 400 chars",
+    "technique_id": "C21",
+    "config": {
+      "chunk_size": 400
+    }
+  },
+  {
+    "label": "C18 parent 1600 child 400",
+    "technique_id": "C18",
+    "config": {
+      "parent_size": 1600,
+      "child_size": 400
+    }
+  },
+  {
+    "label": "C15 model",
+    "technique_id": "C15",
+    "config": {}
+  },
+  {
+    "label": "C16 model",
+    "technique_id": "C16",
+    "config": {}
+  },
+  {
+    "label": "C17 model",
+    "technique_id": "C17",
+    "config": {}
+  },
+  {
+    "label": "C19 adaptive",
+    "technique_id": "C19",
+    "config": {}
+  }
+]

@@ -37,7 +37,7 @@ uv run python -c "from rag_foundry_chunking import FixedTokenChunker, FixedToken
 Use the tokenizer expected by the downstream model before relying on token limits.
 
 ## Baseline comparison
-Not measured yet; comes with the P4.5 comparison report.
+See [span comparison](../../evidence/P4.5/span_comparison.md): span_recall@3 / context_chars@3 — ar 1.0 / 1481.0, en 0.8 / 1903.4, mixed 0.625 / 1689.5.
 
 ## Status
 Draft.

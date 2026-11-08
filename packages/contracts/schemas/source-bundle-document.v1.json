@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Provider-qualified pointer to an immutable document version and extraction view.",
+      "properties": {
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_version_id": {
+          "minLength": 1,
+          "title": "Document Version Id",
+          "type": "string"
+        },
+        "extraction_view_id": {
+          "minLength": 1,
+          "title": "Extraction View Id",
+          "type": "string"
+        },
+        "provider_namespace": {
+          "minLength": 1,
+          "title": "Provider Namespace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_namespace",
+        "document_id",
+        "document_version_id",
+        "extraction_view_id"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "block_count": {
+      "minimum": 0,
+      "title": "Block Count",
+      "type": "integer"
+    },
+    "canonical_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Canonical Sha256",
+      "type": "string"
+    },
+    "char_count": {
+      "minimum": 0,
+      "title": "Char Count",
+      "type": "integer"
+    },
+    "extractor": {
+      "minLength": 1,
+      "title": "Extractor",
+      "type": "string"
+    },
+    "extractor_version": {
+      "minLength": 1,
+      "title": "Extractor Version",
+      "type": "string"
+    },
+    "page_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page Count"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceRef"
+    },
+    "text_path": {
+      "title": "Text Path",
+      "type": "string"
+    },
+    "unicode_version": {
+      "minLength": 1,
+      "title": "Unicode Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "extractor",
+    "extractor_version",
+    "profile_id",
+    "unicode_version",
+    "canonical_sha256",
+    "char_count",
+    "block_count",
+    "text_path"
+  ],
+  "title": "BundleDocument",
+  "type": "object"
+}

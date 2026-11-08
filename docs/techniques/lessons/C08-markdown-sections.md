@@ -55,7 +55,7 @@ Very short sections also give very short chunks (`'# Guide\n## Setup'` above), w
 A CommonMark subset: ATX headings and fences only (same rules as the Markdown extractor). Lists, block quotes, tables and setext headings are body text. Section paths and context are not yet stored in the index or used for embedding; `chunk()` gives offsets only.
 
 ## Baseline comparison
-Not measured yet; comes with the P4.5 comparison report.
+See [span comparison](../../evidence/P4.5/span_comparison.md): span_recall@3 / context_chars@3 — ar 0.0 / 856.0, en 1.0 / 821.0, mixed 0.625 / 741.75.
 
 ## Status
 Draft.

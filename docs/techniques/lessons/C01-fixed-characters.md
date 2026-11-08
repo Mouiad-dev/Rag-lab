@@ -26,7 +26,7 @@ The example cuts `sentence` from adjacent words, and cuts the word `context` int
 The configured budget counts code points grouped into combining clusters, not model tokens.
 
 ## Baseline comparison
-Not measured yet; comes with the P4.5 comparison report.
+See [span comparison](../../evidence/P4.5/span_comparison.md): span_recall@3 / context_chars@3 — ar 0.75 / 1199.0, en 0.8 / 1070.8, mixed 0.75 / 1092.0.
 
 ## Status
 Draft.

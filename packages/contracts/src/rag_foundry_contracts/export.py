@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from rag_foundry_contracts.bundle import BundleBlock, BundleDocument, BundleManifest
 from rag_foundry_contracts.resolve import AnchorResolveRequest, AnchorResolveResponse
 from rag_foundry_contracts.runs import RunRequest, RunResponse
 from rag_foundry_contracts.source import SourceAnchor
@@ -16,6 +17,9 @@ def schemas() -> dict[str, dict]:
         "anchor-resolve-response.v1.json": AnchorResolveResponse.model_json_schema(),
         "run-request.v1.json": RunRequest.model_json_schema(),
         "run-response.v1.json": RunResponse.model_json_schema(),
+        "source-bundle-manifest.v1.json": BundleManifest.model_json_schema(),
+        "source-bundle-document.v1.json": BundleDocument.model_json_schema(),
+        "source-bundle-block.v1.json": BundleBlock.model_json_schema(),
     }
 
 

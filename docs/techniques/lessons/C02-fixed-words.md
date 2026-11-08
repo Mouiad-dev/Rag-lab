@@ -33,7 +33,7 @@ Text without spaces, such as `averylongunbrokenstring`, is one huge word. Punctu
 Whitespace splitting is language-agnostic and is not a linguistic tokenizer.
 
 ## Baseline comparison
-Not measured yet; comes with the P4.5 comparison report.
+See [span comparison](../../evidence/P4.5/span_comparison.md): span_recall@3 / context_chars@3 — ar 1.0 / 1266.0, en 1.0 / 1040.0, mixed 0.5 / 1092.0.
 
 ## Status
 Draft.

@@ -365,15 +365,15 @@
       "phase": 4,
       "roadmap_step": "P4.5",
       "legacy_milestone": "M2",
-      "status": "planned",
+      "status": "implemented",
       "catalog_status": "accepted",
       "mechanism": "Create linked granularities with stable parent references.",
       "acceptance": "Find a specific fact in a child and inspect enclosing context.",
       "requirements_note": "Implement on a small local fixture first; model calls require configured budget.",
       "primary_source": null,
       "date_added": "2026-10-14",
-      "implementation_path": null,
-      "evidence_path": null,
+      "implementation_path": "packages/chunking/src/rag_foundry_chunking/hierarchy.py",
+      "evidence_path": "docs/evidence/P4.5/span_comparison.md",
       "production_eligible": false
     },
     {

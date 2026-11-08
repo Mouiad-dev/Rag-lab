@@ -27,7 +27,7 @@ Overlap duplicates stored text and creates more chunks to embed. Here 41 unique 
 Overlap does not guarantee retrieval quality and increases embedding and storage work. Token counts use the lab tokenizer.
 
 ## Baseline comparison
-Not measured yet; comes with the P4.5 comparison report.
+See [span comparison](../../evidence/P4.5/span_comparison.md): span_recall@3 / context_chars@3 — ar 0.0 / 1200.0, en 0.7 / 1072.2, mixed 0.625 / 1146.5.
 
 ## Status
 Draft.

@@ -3,14 +3,22 @@
 import hashlib
 import json
 import re
+from collections.abc import Sequence
+from typing import Protocol
 
 from rag_foundry_contracts.resolve import AnchorResolution, ResolutionReason, ResolutionStatus
 from rag_foundry_contracts.source import Precision, SourceAnchor, SourceRef, TextRange
 from rag_foundry_domain.errors import AnchorError
+from rag_foundry_domain.extraction import SourceBlock
 
 from rag_foundry_ingestion.payload import ExtractionPayload
 
 _NAMESPACE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+
+
+class _ResolvablePayload(Protocol):
+    canonical_text: str
+    blocks: Sequence[SourceBlock]
 
 
 def anchor_id_for(ref: SourceRef, block_id: str, start: int, end: int) -> str:
@@ -105,7 +113,7 @@ def anchors_for_span(
     return tuple(anchors)
 
 
-def resolve_anchor(payload: ExtractionPayload, view_ref: SourceRef, anchor: SourceAnchor) -> AnchorResolution:
+def resolve_anchor(payload: _ResolvablePayload, view_ref: SourceRef, anchor: SourceAnchor) -> AnchorResolution:
     def failure(status: ResolutionStatus, reason: ResolutionReason) -> AnchorResolution:
         return AnchorResolution(anchor_id=anchor.anchor_id, status=status, reason=reason)
 

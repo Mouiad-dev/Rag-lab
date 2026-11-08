@@ -15,6 +15,14 @@ from rag_foundry_chunking.fixed import (
     FixedWordChunker,
     FixedWordConfig,
 )
+from rag_foundry_chunking.hierarchy import (
+    ChildSpan,
+    Hierarchy,
+    ParentChildChunker,
+    ParentChildConfig,
+    ParentSpan,
+    parent_id_for,
+)
 from rag_foundry_chunking.html_structure import HtmlStructureChunker, HtmlStructureConfig
 from rag_foundry_chunking.json_structure import JsonStructureChunker, JsonStructureConfig, json_path_at
 from rag_foundry_chunking.llm_boundaries import LlmBoundaryChunker, LlmBoundaryConfig, boundary_agreement
@@ -53,6 +61,7 @@ from rag_foundry_chunking.tables import TableCell, TableChunker, TableConfig, ta
 
 
 def register_builtin_plugins(registry) -> None:
+    registry.register(ParentChildChunker)
     registry.register(AdaptiveChunker)
     registry.register(RecursiveChunker)
     registry.register(FixedCharChunker)
@@ -74,6 +83,12 @@ def register_builtin_plugins(registry) -> None:
 
 
 __all__ = [
+    "ParentChildChunker",
+    "ParentChildConfig",
+    "ParentSpan",
+    "ChildSpan",
+    "Hierarchy",
+    "parent_id_for",
     "AdaptiveChunker",
     "AdaptiveConfig",
     "RegionDecision",
