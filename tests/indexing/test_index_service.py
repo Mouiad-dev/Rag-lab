@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from _fixture import FACT_AR, FACT_EN, MARKDOWN, QUERY_AR, QUERY_EN, TEST_CHUNK_SIZE, TEST_OVERLAP
 from _lexical_embedder import LexicalTestEmbedder
-from rag_foundry_chunking import RecursiveChunker, RecursiveConfig
+from rag_foundry_chunking import ParentChildChunker, ParentChildConfig, RecursiveChunker, RecursiveConfig
 from rag_foundry_domain.errors import IndexingError, NotFoundError
 from rag_foundry_domain.index_testing import InMemoryIndexRepository
 from rag_foundry_domain.indexing import IndexState, corpus_sha256_for, embedding_key_for
@@ -90,6 +90,9 @@ def test_build_stores_exact_spans_and_pins_versions(tmp_path):
         assert built.chunk_count == len(chunks) >= 3 * 5
         assert all(row.text == payload.canonical_text[row.start : row.end] for row in chunks)
         assert built.unanchored_chunk_count == 0
+        assert all(row.parent_start_cp is None and row.parent_end_cp is None for row in chunks)
+        inspected = await env.service().inspect_chunks(env.scope, built.id)
+        assert all(row.parent_anchors == () for row in inspected)
         assert built.chunker_id == "C05"
         assert built.chunker_version
         assert built.chunker_config_sha256 == hashlib.sha256(built.chunker_config_json.encode("utf-8")).hexdigest()
@@ -149,6 +152,56 @@ def test_inspected_chunk_anchors_resolve_exact(tmp_path):
         assert inspected and all(item.anchors for item in inspected)
         resolutions = await env.anchors.resolve(env.scope, tuple(a for row in inspected for a in row.anchors))
         assert resolutions and all(item.status.value == "exact" for item in resolutions)
+
+    asyncio.run(run())
+
+
+def test_c18_build_stores_parent_spans_and_parent_anchors(tmp_path):
+    async def run():
+        env = await _env(tmp_path)
+        chunker = ParentChildChunker(ParentChildConfig(parent_size=500, child_size=100))
+        built = await env.service().build(env.scope, (env.view.id,), chunker, LexicalTestEmbedder())
+        rows = await env.index.list_chunks(env.scope, built.id)
+        assert rows and all(row.parent_start_cp is not None and row.parent_end_cp is not None for row in rows)
+        inspected = await env.service().inspect_chunks(env.scope, built.id)
+        assert all(row.parent_anchors for row in inspected)
+        resolutions = await env.anchors.resolve(
+            env.scope, tuple(anchor for row in inspected for anchor in row.parent_anchors)
+        )
+        assert resolutions and all(item.status.value == "exact" for item in resolutions)
+        payload = await env.extraction.load_payload(env.scope, env.view)
+        block_start = {b.block_id: b.start for b in payload.blocks}
+        for item in inspected:  # ChunkInspection is a ChunkRecord plus anchors
+            row = item
+            starts = [block_start[a.block_id] + a.text_range.start for a in item.parent_anchors]
+            ends = [block_start[a.block_id] + a.text_range.end for a in item.parent_anchors]
+            # The parent anchors cover the stored parent span exactly, not the child span.
+            assert (min(starts), max(ends)) == (row.parent_start_cp, row.parent_end_cp)
+        assert any(
+            (row.parent_start_cp, row.parent_end_cp) != (row.start, row.end)
+            and row.parent_start_cp <= row.start
+            and row.end <= row.parent_end_cp
+            for row in rows
+        )
+
+    asyncio.run(run())
+
+
+def test_parent_span_past_the_text_fails_before_any_index_version(tmp_path):
+    class OverreachingChunker(ParentChildChunker):
+        def chunk_with_parents(self, doc):
+            spans = super().chunk_with_parents(doc)
+            last = spans[-1]
+            return (*spans[:-1], last.model_copy(update={"parent_end": len(doc.text) + 1}))
+
+    async def run():
+        env = await _env(tmp_path)
+        recording = RecordingIndex(env.index)
+        chunker = OverreachingChunker(ParentChildConfig(parent_size=500, child_size=100))
+        with pytest.raises(IndexingError) as caught:
+            await env.service(index=recording).build(env.scope, (env.view.id,), chunker, LexicalTestEmbedder())
+        assert caught.value.code == "parent_span_out_of_bounds"
+        assert recording.version is None
 
     asyncio.run(run())
 

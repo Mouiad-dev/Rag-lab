@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal, Protocol
+from typing import ClassVar, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -71,6 +71,19 @@ class ChunkSpan(BaseModel):
         return value
 
 
+class ParentedSpan(ChunkSpan):
+    parent_start: int | None = None
+    parent_end: int | None = None
+
+    @model_validator(mode="after")
+    def _parent_contains_child(self):
+        if (self.parent_start is None) != (self.parent_end is None):
+            raise ValueError("parent_start and parent_end must both be set or unset")
+        if self.parent_start is not None and not 0 <= self.parent_start <= self.start < self.end <= self.parent_end:
+            raise ValueError("parent span must contain chunk span")
+        return self
+
+
 class Chunker(Protocol):
     manifest: ClassVar[PluginManifest]
     config: BaseModel
@@ -78,6 +91,11 @@ class Chunker(Protocol):
     def __init__(self, config: BaseModel) -> None: ...
 
     def chunk(self, doc: ChunkInput) -> tuple[ChunkSpan, ...]: ...
+
+
+@runtime_checkable
+class ParentLinkedChunker(Protocol):
+    def chunk_with_parents(self, doc: ChunkInput) -> tuple[ParentedSpan, ...]: ...
 
 
 class ScoreComponent(BaseModel):
@@ -119,6 +137,16 @@ class RetrievedChunk(BaseModel):
     score: float
     rank: int = Field(ge=1)
     score_components: tuple[ScoreComponent, ...] = ()
+    parent_start: int | None = None
+    parent_end: int | None = None
+
+    @model_validator(mode="after")
+    def _parent_pair(self):
+        if (self.parent_start is None) != (self.parent_end is None):
+            raise ValueError("parent_start and parent_end must both be set or unset")
+        if self.parent_start is not None and not 0 <= self.parent_start <= self.start < self.end <= self.parent_end:
+            raise ValueError("parent span must contain chunk span")
+        return self
 
 
 class RetrievalResult(BaseModel):

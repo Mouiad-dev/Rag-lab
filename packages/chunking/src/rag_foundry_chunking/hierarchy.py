@@ -7,7 +7,7 @@ import json
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from rag_foundry_techniques import ChunkInput, ChunkSpan, Fidelity, PluginKind, PluginManifest
+from rag_foundry_techniques import ChunkInput, ChunkSpan, Fidelity, ParentedSpan, PluginKind, PluginManifest
 
 from rag_foundry_chunking.boundaries import pack, safe_cut_ranges, sentence_ranges, trim, word_ranges
 from rag_foundry_chunking.paragraph import paragraph_ranges
@@ -180,3 +180,16 @@ class ParentChildChunker:
 
     def chunk(self, doc: ChunkInput) -> tuple[ChunkSpan, ...]:
         return tuple(child.to_span() for child in self.chunk_hierarchy(doc).children)
+
+    def chunk_with_parents(self, doc: ChunkInput) -> tuple[ParentedSpan, ...]:
+        hierarchy = self.chunk_hierarchy(doc)
+        return tuple(
+            ParentedSpan(
+                start=child.start,
+                end=child.end,
+                split_level=child.split_level,
+                parent_start=(parent := hierarchy.parent_of(child)).start,
+                parent_end=parent.end,
+            )
+            for child in hierarchy.children
+        )

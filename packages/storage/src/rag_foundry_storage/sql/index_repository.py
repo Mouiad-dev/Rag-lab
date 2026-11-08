@@ -71,6 +71,8 @@ def _chunk(row: Any) -> ChunkRecord:
         block_ids=tuple(row["block_ids"]),
         text=row["text"],
         text_sha256=row["text_sha256"],
+        parent_start_cp=row["parent_start_cp"],
+        parent_end_cp=row["parent_end_cp"],
     )
 
 
@@ -158,8 +160,8 @@ class SqlIndexRepository:
                 try:
                     await session.execute(
                         text("""INSERT INTO chunks
-                        (id,tenant_id,project_id,index_version_id,extraction_view_id,ordinal,start_cp,end_cp,split_level,block_ids,text,text_sha256,embedding)
-                        VALUES (:id,:t,:p,:i,:v,:ordinal,:start,:end,:split_level,:block_ids,:text,:text_sha256,CAST(:embedding AS vector))"""),
+                        (id,tenant_id,project_id,index_version_id,extraction_view_id,ordinal,start_cp,end_cp,split_level,block_ids,text,text_sha256,embedding,parent_start_cp,parent_end_cp)
+                        VALUES (:id,:t,:p,:i,:v,:ordinal,:start,:end,:split_level,:block_ids,:text,:text_sha256,CAST(:embedding AS vector),:parent_start_cp,:parent_end_cp)"""),
                         {
                             "id": new_id(),
                             "t": scope.tenant_id,
@@ -174,6 +176,8 @@ class SqlIndexRepository:
                             "text": chunk.text,
                             "text_sha256": chunk.text_sha256,
                             "embedding": "[" + ",".join(repr(x) for x in vector) + "]",
+                            "parent_start_cp": chunk.parent_start_cp,
+                            "parent_end_cp": chunk.parent_end_cp,
                         },
                     )
                 except IntegrityError as exc:

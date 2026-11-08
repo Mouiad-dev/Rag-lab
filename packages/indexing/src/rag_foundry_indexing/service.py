@@ -19,11 +19,12 @@ from rag_foundry_domain.runtime_settings import IndexingSettings
 from rag_foundry_domain.uow import UnitOfWorkFactory
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_ingestion.extraction import read_payload
-from rag_foundry_techniques import ChunkInput, TextBlock
+from rag_foundry_techniques import ChunkInput, ParentLinkedChunker, TextBlock
 
 
 class ChunkInspection(ChunkRecord):
     anchors: tuple[SourceAnchor, ...]
+    parent_anchors: tuple[SourceAnchor, ...] = ()
 
 
 class IndexService:
@@ -61,7 +62,8 @@ class IndexService:
             chunker.config.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )
         key = embedding_key_for(profile.provider, profile.model, dim)
-        prepared: list[tuple[Any, Any, tuple[str, ...], str]] = []
+        linked = isinstance(chunker, ParentLinkedChunker)
+        prepared: list[tuple[Any, Any, tuple[str, ...], str, int | None, int | None]] = []
         unanchored = 0
         for view, payload in loaded:
             blocks = tuple(
@@ -76,13 +78,21 @@ class IndexService:
                 )
                 for b in payload.blocks
             )
-            spans = chunker.chunk(ChunkInput(text=payload.canonical_text, blocks=blocks))
-            for span in spans:
+            doc = ChunkInput(text=payload.canonical_text, blocks=blocks)
+            spans = chunker.chunk_with_parents(doc) if linked else chunker.chunk(doc)
+            for item in spans:
+                span = item
+                parent_start = item.parent_start if linked else None
+                parent_end = item.parent_end if linked else None
+                if parent_end is not None and parent_end > len(payload.canonical_text):
+                    raise IndexingError("parent_span_out_of_bounds")
                 overlapped = tuple(b.block_id for b in payload.blocks if b.start < span.end and b.end > span.start)
                 if not overlapped:
                     unanchored += 1
                     continue
-                prepared.append((view, span, overlapped, payload.canonical_text[span.start : span.end]))
+                prepared.append(
+                    (view, span, overlapped, payload.canonical_text[span.start : span.end], parent_start, parent_end)
+                )
 
         new = NewIndexVersion(
             chunker_id=chunker.manifest.technique_id,
@@ -110,7 +120,9 @@ class IndexService:
                 if len(result.vectors) != len(batch):
                     raise IndexingError("embedding_count_mismatch")
                 records = []
-                for (view, span, block_ids, text), vector in zip(batch, result.vectors, strict=True):
+                for (view, span, block_ids, text, parent_start, parent_end), vector in zip(
+                    batch, result.vectors, strict=True
+                ):
                     records.append(
                         NewChunk(
                             extraction_view_id=view.id,
@@ -122,6 +134,8 @@ class IndexService:
                             text=text,
                             text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
                             embedding=vector,
+                            parent_start_cp=parent_start,
+                            parent_end_cp=parent_end,
                         )
                     )
                     ordinal += 1
@@ -153,5 +167,10 @@ class IndexService:
         inspections = []
         for row in rows:
             anchors = await self._anchors.anchors_for_span(scope, row.extraction_view_id, row.start, row.end)
-            inspections.append(ChunkInspection(**row.model_dump(), anchors=anchors))
+            parent_anchors = ()
+            if row.parent_start_cp is not None:
+                parent_anchors = await self._anchors.anchors_for_span(
+                    scope, row.extraction_view_id, row.parent_start_cp, row.parent_end_cp
+                )
+            inspections.append(ChunkInspection(**row.model_dump(), anchors=anchors, parent_anchors=parent_anchors))
         return tuple(inspections)

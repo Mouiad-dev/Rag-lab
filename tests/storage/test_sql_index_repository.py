@@ -122,6 +122,11 @@ async def test_database_guards_and_migration_roundtrip():
             "h": "a" * 64,
         }
         common = "INSERT INTO chunks (id,tenant_id,project_id,index_version_id,extraction_view_id,ordinal,start_cp,end_cp,split_level,block_ids,text,text_sha256,embedding) VALUES (:id,:t,:p,:i,:v,0,0,1,0,ARRAY['b00000'],'x',:h,CAST(:e AS vector))"
+        await rejected(
+            "INSERT INTO chunks (id,tenant_id,project_id,index_version_id,extraction_view_id,ordinal,start_cp,end_cp,split_level,block_ids,text,text_sha256,embedding,parent_start_cp,parent_end_cp) VALUES (gen_random_uuid(),:t,:p,:i,:v,0,0,1,0,ARRAY['b00000'],'x',:h,CAST('[1,0,0,0]' AS vector),1,2)",
+            {key: base[key] for key in ("t", "p", "i", "v", "h")},
+            "ck_chunks_parent_span",
+        )
         await rejected(common, {**base, "e": "[1,0,0]"}, "embedding dimension mismatch")
         await rejected(
             "UPDATE index_versions SET state='failed', corpus_sha256=:h WHERE id=:i",

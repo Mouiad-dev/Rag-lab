@@ -44,7 +44,15 @@ def make_new_index_version(view_ids: tuple[str, ...], *, dim: int = 4) -> NewInd
     )
 
 
-def make_chunk(view_id: str, ordinal: int, vector: Sequence[float], text: str = "t") -> NewChunk:
+def make_chunk(
+    view_id: str,
+    ordinal: int,
+    vector: Sequence[float],
+    text: str = "t",
+    *,
+    parent_start_cp: int | None = None,
+    parent_end_cp: int | None = None,
+) -> NewChunk:
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return NewChunk(
         extraction_view_id=view_id,
@@ -56,6 +64,8 @@ def make_chunk(view_id: str, ordinal: int, vector: Sequence[float], text: str = 
         text=text,
         text_sha256=digest,
         embedding=tuple(vector),
+        parent_start_cp=parent_start_cp,
+        parent_end_cp=parent_end_cp,
     )
 
 
@@ -174,6 +184,24 @@ class InMemoryIndexRepository:
             candidates.append((1.0 - cosine, c.ordinal, c))
         candidates.sort(key=lambda x: (x[0], x[1]))
         return [ScoredChunk(chunk=c, distance=d, rank=i + 1) for i, (d, _, c) in enumerate(candidates[:k])]
+
+
+async def check_parent_spans(factory: IndexRepoFactory) -> None:
+    scope = make_scope()
+    docs, views_repo, repo = await factory([scope])
+    out = await docs.create_document_or_get(scope, make_new_version("parent-spans"), display_name="fixture")
+    view = (await views_repo.create_view_or_get(scope, make_new_extraction(out.version, tag="parent-spans"))).view
+    version = await repo.create_index_version(scope, make_new_index_version((view.id,)))
+    plain = make_chunk(view.id, 0, (1, 0, 0, 0), "plain")
+    linked = make_chunk(view.id, 1, (1, 0, 0, 0), "child", parent_start_cp=0, parent_end_cp=7)
+    await repo.add_chunks(scope, version.id, (plain, linked))
+    rows = await repo.list_chunks(scope, version.id)
+    if [(row.parent_start_cp, row.parent_end_cp) for row in rows] != [(None, None), (0, 7)]:
+        raise AssertionError("parent offsets did not round-trip through list_chunks")
+    await repo.mark_ready(scope, version.id)
+    hits = await repo.search(scope, version.id, (1, 0, 0, 0), 2)
+    if [(hit.chunk.parent_start_cp, hit.chunk.parent_end_cp) for hit in hits] != [(None, None), (0, 7)]:
+        raise AssertionError("parent offsets did not round-trip through search")
 
 
 async def _expect_error(awaitable, code: str) -> None:
@@ -300,6 +328,7 @@ async def check_index_repository(factory: IndexRepoFactory) -> None:
             pass
         else:
             raise AssertionError("records must be frozen")
+    await check_parent_spans(factory)
 
 
 INDEX_REPOSITORY_CHECKS = (check_index_repository,)

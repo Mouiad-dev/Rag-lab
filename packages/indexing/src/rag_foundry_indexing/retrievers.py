@@ -62,6 +62,8 @@ class DenseRetriever:
                 score=1.0 - item.distance,
                 rank=item.rank,
                 score_components=(ScoreComponent(name="cosine_similarity", value=1.0 - item.distance),),
+                parent_start=getattr(item.chunk, "parent_start_cp", None),
+                parent_end=getattr(item.chunk, "parent_end_cp", None),
             )
             for item in results
         )

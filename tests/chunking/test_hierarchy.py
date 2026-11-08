@@ -77,6 +77,19 @@ def test_linkage_coverage_sections_and_stability():
     assert {parent.path for parent in hierarchy.parents} == {("English",), ("Arabic",)}
 
 
+def test_chunk_with_parents_matches_chunk_and_hierarchy():
+    doc = _fixture()
+    chunker = ParentChildChunker(ParentChildConfig(parent_size=500, child_size=100))
+    linked = chunker.chunk_with_parents(doc)
+    hierarchy = chunker.chunk_hierarchy(doc)
+    assert tuple(
+        ChunkSpan(start=item.start, end=item.end, split_level=item.split_level) for item in linked
+    ) == chunker.chunk(doc)
+    for item, child in zip(linked, hierarchy.children, strict=True):
+        parent = hierarchy.parent_of(child)
+        assert (item.parent_start, item.parent_end) == (parent.start, parent.end)
+
+
 def test_no_section_respect_and_fact_context():
     doc = _fixture()
     chunker = ParentChildChunker(ParentChildConfig(parent_size=500, child_size=100))

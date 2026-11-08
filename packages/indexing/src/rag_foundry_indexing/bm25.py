@@ -125,6 +125,8 @@ class BM25Retriever:
                 score=score,
                 rank=rank,
                 score_components=components,
+                parent_start=getattr(chunk, "parent_start_cp", None),
+                parent_end=getattr(chunk, "parent_end_cp", None),
             )
             for rank, (score, _, chunk, components) in enumerate(scored[: self.config.k], start=1)
         )

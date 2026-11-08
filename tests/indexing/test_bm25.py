@@ -65,6 +65,15 @@ def test_bm25_formula_and_components():
     assert result.scoring == "bm25-okapi-lucene-idf"
 
 
+def test_bm25_preserves_parent_offsets():
+    instance, _ = retriever(["alpha beta"])
+    instance._stats = None
+    instance._index.chunks[0].parent_start_cp = 0
+    instance._index.chunks[0].parent_end_cp = len("alpha beta")
+    hit = run(instance.retrieve("alpha")).hits[0]
+    assert (hit.parent_start, hit.parent_end) == (0, len("alpha beta"))
+
+
 @pytest.mark.parametrize("hidden", [False, True])
 def test_identifier_is_a_whole_token(hidden):
     bidi = "\u200f" if hidden else ""

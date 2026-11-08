@@ -27,6 +27,25 @@ def test_chunk_block_ids_sort_by_numeric_ordinal() -> None:
         NewChunk(**base, block_ids=("b100000", "b99999"))
 
 
+def test_new_chunk_parent_span_pair_validation():
+    base = dict(
+        extraction_view_id="7f3c2b1e-5d4a-4c8b-9e6f-1a2b3c4d5e6f",
+        ordinal=0,
+        start=2,
+        end=3,
+        split_level=0,
+        block_ids=("b00000",),
+        text="x",
+        text_sha256=hashlib.sha256(b"x").hexdigest(),
+        embedding=(1.0,),
+    )
+    with pytest.raises(ValidationError):
+        NewChunk(**base, parent_start_cp=0)
+    with pytest.raises(ValidationError):
+        NewChunk(**base, parent_start_cp=3, parent_end_cp=5)
+    assert NewChunk(**base, parent_start_cp=2, parent_end_cp=3)
+
+
 @pytest.mark.parametrize("values", [(3.5e38, 0, 0, 0), (math.inf, 0), (math.nan, 0), (0, 0, 0), (1e-30,) * 4])
 def test_invalid_vectors(values) -> None:
     with pytest.raises(IndexingError) as exc:

@@ -123,6 +123,7 @@ class IndexingError(IntakeError):
         "embedding_count_mismatch",
         "no_query_terms",
         "lexical_corpus_too_large",
+        "parent_span_out_of_bounds",
     )
 
     def __init__(self, code: str) -> None:

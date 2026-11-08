@@ -77,11 +77,14 @@ class NewChunk(BaseModel):
     text: str
     text_sha256: Sha256Hex
     embedding: tuple[float, ...]
+    parent_start_cp: int | None = Field(default=None, ge=0)
+    parent_end_cp: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _validate_content(self) -> "NewChunk":
         if self.end <= self.start or len(self.text) != self.end - self.start:
             raise ValueError("chunk range and text length disagree")
+        _validate_parent_span(self.parent_start_cp, self.parent_end_cp, self.start, self.end)
         if any(not __import__("re").fullmatch(r"b[0-9]{5,8}", b) for b in self.block_ids):
             raise ValueError("invalid block id")
         ordinals = [int(b[1:]) for b in self.block_ids]
@@ -107,6 +110,20 @@ class ChunkRecord(BaseModel):
     index_version_id: Uuid4
     tenant_id: Uuid4
     project_id: Uuid4
+    parent_start_cp: int | None = Field(default=None, ge=0)
+    parent_end_cp: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _parent_span(self) -> "ChunkRecord":
+        _validate_parent_span(self.parent_start_cp, self.parent_end_cp, self.start, self.end)
+        return self
+
+
+def _validate_parent_span(parent_start: int | None, parent_end: int | None, start: int, end: int) -> None:
+    if (parent_start is None) != (parent_end is None):
+        raise ValueError("parent span offsets must both be set or unset")
+    if parent_start is not None and not 0 <= parent_start <= start < end <= parent_end:
+        raise ValueError("parent span must contain chunk span")
 
 
 class ScoredChunk(BaseModel):
