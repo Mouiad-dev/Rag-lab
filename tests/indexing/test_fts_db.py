@@ -86,6 +86,14 @@ def test_fts_simple_scope_and_r03_comparison(tmp_path):
                 assert (await session.execute(text("SELECT to_regclass('chunks')"))).scalar_one() == "chunks"
                 assert (await session.execute(text("SELECT count(*) FROM chunks"))).scalar_one() == before
             bm25 = BM25Retriever(BM25Config(k=5), scope=scope, index_version=version, index=indexes)
+            # Losing case for 'simple': a diacritized query does not match the plain word in AND mode, and
+            # OR mode splits it into single letters (diacritics are not word characters), which match nothing.
+            # R03 folds diacritics first, so it finds the chunk.
+            diacritized = "المَخْزَن"
+            assert not (await retriever.retrieve(diacritized)).hits
+            assert not any("AB-12" in hit.text for hit in (await or_retriever.retrieve(diacritized)).hits)
+            assert any("AB-1234" in hit.text for hit in (await bm25.retrieve(diacritized)).hits)
+            print("diacritized query: R04 and/or no hits; R03 hits")
             for query, operator in (("AB-1234", "and"), (QUERY_EN, "or")):
                 r03 = await bm25.retrieve(query)
                 r04 = await FtsRetriever(
