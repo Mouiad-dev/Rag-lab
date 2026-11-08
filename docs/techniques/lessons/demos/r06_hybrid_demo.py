@@ -14,8 +14,8 @@ from tests.indexing._lexical_embedder import LexicalTestEmbedder  # noqa: E402
 
 TEXTS = (
     "the tidal observatory records sea levels",
-    "رقم القطعة AB-1234",
-    "رقم القطعة AB-1243",
+    "\u0631\u0642\u0645 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1234",
+    "\u0631\u0642\u0645 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1243",
     "chess club meets on tuesday",
 )
 

@@ -89,7 +89,7 @@ def test_fts_simple_scope_and_r03_comparison(tmp_path):
             # Losing case for 'simple': a diacritized query does not match the plain word in AND mode, and
             # OR mode splits it into single letters (diacritics are not word characters), which match nothing.
             # R03 folds diacritics first, so it finds the chunk.
-            diacritized = "المَخْزَن"
+            diacritized = "\u0627\u0644\u0645\u064e\u062e\u0652\u0632\u064e\u0646"
             assert not (await retriever.retrieve(diacritized)).hits
             assert not any("AB-12" in hit.text for hit in (await or_retriever.retrieve(diacritized)).hits)
             assert any("AB-1234" in hit.text for hit in (await bm25.retrieve(diacritized)).hits)
