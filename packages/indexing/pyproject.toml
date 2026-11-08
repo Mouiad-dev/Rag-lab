@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "rag-foundry-domain",
     "rag-foundry-contracts",
+    "rag-foundry-chunking",
     "rag-foundry-ingestion",
     "rag-foundry-providers",
     "rag-foundry-techniques",

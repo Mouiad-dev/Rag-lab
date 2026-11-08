@@ -13,6 +13,7 @@ from rag_foundry_techniques.kinds import (
     RetrievalResult,
     RetrievedChunk,
     Retriever,
+    ScoreComponent,
     TextBlock,
 )
 from rag_foundry_techniques.protocol import (
@@ -32,6 +33,7 @@ __all__ = [
     "ChunkSpan",
     "Chunker",
     "RetrievedChunk",
+    "ScoreComponent",
     "RetrievalResult",
     "Retriever",
     "DuplicatePluginError",

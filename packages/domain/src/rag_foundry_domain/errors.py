@@ -121,6 +121,8 @@ class IndexingError(IntakeError):
         "query_too_long",
         "too_many_views",
         "embedding_count_mismatch",
+        "no_query_terms",
+        "lexical_corpus_too_large",
     )
 
     def __init__(self, code: str) -> None:

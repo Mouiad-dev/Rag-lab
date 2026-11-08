@@ -8,7 +8,7 @@ from rag_foundry_domain.errors import IndexingError
 from rag_foundry_domain.indexing import IndexVersion, embedding_key_for
 from rag_foundry_domain.ports import IndexRepository
 from rag_foundry_providers.ports import EmbeddingModel
-from rag_foundry_techniques import Fidelity, PluginKind, PluginManifest, RetrievalResult, RetrievedChunk
+from rag_foundry_techniques import Fidelity, PluginKind, PluginManifest, RetrievalResult, RetrievedChunk, ScoreComponent
 
 
 class DenseConfig(BaseModel):
@@ -61,10 +61,17 @@ class DenseRetriever:
                 distance=item.distance,
                 score=1.0 - item.distance,
                 rank=item.rank,
+                score_components=(ScoreComponent(name="cosine_similarity", value=1.0 - item.distance),),
             )
             for item in results
         )
-        return RetrievalResult(technique_id="R02", grounding="corpus", index_version_id=self._version.id, hits=hits)
+        return RetrievalResult(
+            technique_id="R02",
+            grounding="corpus",
+            index_version_id=self._version.id,
+            hits=hits,
+            scoring="cosine",
+        )
 
 
 class NoRetrievalConfig(BaseModel):
@@ -90,3 +97,6 @@ class NoRetrieval:
 def register_builtin_plugins(registry) -> None:
     registry.register(DenseRetriever)
     registry.register(NoRetrieval)
+    from rag_foundry_indexing.bm25 import BM25Retriever
+
+    registry.register(BM25Retriever)

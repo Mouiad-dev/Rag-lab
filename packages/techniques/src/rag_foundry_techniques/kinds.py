@@ -80,6 +80,32 @@ class Chunker(Protocol):
     def chunk(self, doc: ChunkInput) -> tuple[ChunkSpan, ...]: ...
 
 
+class ScoreComponent(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    value: float
+    term: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, value: str) -> str:
+        import re
+
+        if re.fullmatch(r"[a-z0-9_]{1,40}", value) is None:
+            raise ValueError("invalid score component name")
+        return value
+
+    @field_validator("value")
+    @classmethod
+    def _finite_value(cls, value: float) -> float:
+        import math
+
+        if not math.isfinite(value):
+            raise ValueError("score component value must be finite")
+        return value
+
+
 class RetrievedChunk(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -89,9 +115,10 @@ class RetrievedChunk(BaseModel):
     end: int = Field(gt=0)
     block_ids: tuple[str, ...]
     text: str
-    distance: float
+    distance: float | None = None
     score: float
     rank: int = Field(ge=1)
+    score_components: tuple[ScoreComponent, ...] = ()
 
 
 class RetrievalResult(BaseModel):
@@ -101,6 +128,7 @@ class RetrievalResult(BaseModel):
     grounding: Literal["corpus", "none"]
     index_version_id: str | None
     hits: tuple[RetrievedChunk, ...]
+    scoring: str | None = None
 
     @field_validator("index_version_id")
     @classmethod
