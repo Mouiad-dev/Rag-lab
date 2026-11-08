@@ -64,7 +64,18 @@ class IndexService:
         prepared: list[tuple[Any, Any, tuple[str, ...], str]] = []
         unanchored = 0
         for view, payload in loaded:
-            blocks = tuple(TextBlock(block_id=b.block_id, start=b.start, end=b.end) for b in payload.blocks)
+            blocks = tuple(
+                TextBlock(
+                    block_id=b.block_id,
+                    start=b.start,
+                    end=b.end,
+                    kind=b.kind.value,
+                    section_path=b.section_path,
+                    heading_level=b.heading_level,
+                    page_index=b.page_index,
+                )
+                for b in payload.blocks
+            )
             spans = chunker.chunk(ChunkInput(text=payload.canonical_text, blocks=blocks))
             for span in spans:
                 overlapped = tuple(b.block_id for b in payload.blocks if b.start < span.end and b.end > span.start)

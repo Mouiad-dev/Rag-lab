@@ -6,6 +6,7 @@ from rag_foundry_chunking.adaptive import (
     RegionDecision,
     compare_with_fixed,
 )
+from rag_foundry_chunking.code import AstCodeChunker, AstCodeConfig, CodeSeparatorChunker, CodeSeparatorConfig
 from rag_foundry_chunking.fixed import (
     FixedCharChunker,
     FixedCharConfig,
@@ -14,7 +15,10 @@ from rag_foundry_chunking.fixed import (
     FixedWordChunker,
     FixedWordConfig,
 )
+from rag_foundry_chunking.html_structure import HtmlStructureChunker, HtmlStructureConfig
+from rag_foundry_chunking.json_structure import JsonStructureChunker, JsonStructureConfig, json_path_at
 from rag_foundry_chunking.llm_boundaries import LlmBoundaryChunker, LlmBoundaryConfig, boundary_agreement
+from rag_foundry_chunking.markdown import MarkdownSectionChunker, MarkdownSectionConfig
 from rag_foundry_chunking.model_based import (
     InMemorySegmentationCache,
     ModelChunkContext,
@@ -37,6 +41,15 @@ from rag_foundry_chunking.recursive import RecursiveChunker, RecursiveConfig
 from rag_foundry_chunking.semantic import SemanticChunker, SemanticConfig
 from rag_foundry_chunking.sentence import SentenceChunker, SentenceConfig
 from rag_foundry_chunking.sliding import SlidingWindowChunker, SlidingWindowConfig, WindowStats, window_stats
+from rag_foundry_chunking.structure import (
+    ContextSpan,
+    SkippedRange,
+    StructuredChunk,
+    StructureParseError,
+    StructureResult,
+    render,
+)
+from rag_foundry_chunking.tables import TableCell, TableChunker, TableConfig, table_cells
 
 
 def register_builtin_plugins(registry) -> None:
@@ -52,6 +65,12 @@ def register_builtin_plugins(registry) -> None:
     registry.register(SemanticChunker)
     registry.register(LlmBoundaryChunker)
     registry.register(PropositionChunker)
+    registry.register(MarkdownSectionChunker)
+    registry.register(TableChunker)
+    registry.register(JsonStructureChunker)
+    registry.register(HtmlStructureChunker)
+    registry.register(CodeSeparatorChunker)
+    registry.register(AstCodeChunker)
 
 
 __all__ = [
@@ -99,4 +118,25 @@ __all__ = [
     "PropositionConfig",
     "PropositionRecord",
     "PropositionResult",
+    "MarkdownSectionChunker",
+    "MarkdownSectionConfig",
+    "TableChunker",
+    "TableConfig",
+    "StructuredChunk",
+    "ContextSpan",
+    "SkippedRange",
+    "StructureResult",
+    "render",
+    "TableCell",
+    "table_cells",
+    "JsonStructureChunker",
+    "HtmlStructureChunker",
+    "HtmlStructureConfig",
+    "JsonStructureConfig",
+    "StructureParseError",
+    "json_path_at",
+    "CodeSeparatorChunker",
+    "CodeSeparatorConfig",
+    "AstCodeChunker",
+    "AstCodeConfig",
 ]

@@ -102,6 +102,31 @@ def test_build_stores_exact_spans_and_pins_versions(tmp_path):
     asyncio.run(run())
 
 
+def test_build_passes_extraction_block_structure_to_chunker(tmp_path):
+    class RecordingChunker:
+        manifest = RecursiveChunker.manifest
+
+        def __init__(self, inner):
+            self.inner = inner
+            self.config = inner.config
+            self.seen = None
+
+        def chunk(self, doc):
+            self.seen = doc
+            return self.inner.chunk(doc)
+
+    async def run():
+        env = await _env(tmp_path)
+        wrapper = RecordingChunker(env.chunker)
+        await env.service().build(env.scope, (env.view.id,), wrapper, LexicalTestEmbedder())
+        payload = await env.extraction.load_payload(env.scope, env.view)
+        assert [(b.kind, b.section_path, b.heading_level) for b in wrapper.seen.blocks] == [
+            (b.kind.value, b.section_path, b.heading_level) for b in payload.blocks
+        ]
+
+    asyncio.run(run())
+
+
 def test_documents_are_embedded_in_bounded_batches(tmp_path):
     async def run():
         env, embedder, built = await _built(tmp_path)
