@@ -17,6 +17,13 @@ rag-foundry-indexing = { workspace = true }
 rag-foundry-answering = { workspace = true }
 rag-foundry-api = { workspace = true }
 rag-foundry-worker = { workspace = true }
+# CPU-only PyTorch for the optional [sparse] extra (https://docs.astral.sh/uv/guides/integration/pytorch/)
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [dependency-groups]
 dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-contracts", "rag-foundry-domain", "rag-foundry-storage[sql]", "rag-foundry-ingestion[html,pdf]", "rag-foundry-techniques", "rag-foundry-chunking", "rag-foundry-providers[ollama]", "rag-foundry-indexing", "rag-foundry-answering", "rag-foundry-api", "rag-foundry-worker"]

@@ -14,6 +14,8 @@ dependencies = [
 ollama = ["httpx==0.28.1"]
 anthropic = ["httpx==0.28.1"]
 openai_compatible = ["httpx==0.28.1"]
+# R05 learned sparse (owner OK 2026-11-08). CPU torch comes from the pytorch-cpu index (root pyproject).
+sparse = ["sentence-transformers==6.2.0", "torch==2.15.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rag_foundry_providers"]
