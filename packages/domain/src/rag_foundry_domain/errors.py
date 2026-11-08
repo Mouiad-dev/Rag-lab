@@ -132,6 +132,8 @@ class IndexingError(IntakeError):
         "fusion_duplicate_candidate",
         "fusion_candidate_conflict",
         "fusion_weights_mismatch",
+        "selection_invalid_input",
+        "selection_version_mismatch",
     )
 
     def __init__(self, code: str) -> None:

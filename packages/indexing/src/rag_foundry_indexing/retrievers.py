@@ -111,3 +111,9 @@ def register_builtin_plugins(registry) -> None:
 
     registry.register(RrfFusion)
     registry.register(WeightedFusion)
+    from rag_foundry_indexing.selection import EvidenceDedup
+
+    registry.register(EvidenceDedup)
+    from rag_foundry_indexing.metadata_filter import MetadataFilteredRetriever
+
+    registry.register(MetadataFilteredRetriever)
