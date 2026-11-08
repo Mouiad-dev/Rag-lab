@@ -125,6 +125,13 @@ class IndexingError(IntakeError):
         "lexical_corpus_too_large",
         "parent_span_out_of_bounds",
         "fts_unavailable",
+        "fusion_too_few_branches",
+        "fusion_duplicate_branch",
+        "fusion_version_mismatch",
+        "fusion_invalid_ranks",
+        "fusion_duplicate_candidate",
+        "fusion_candidate_conflict",
+        "fusion_weights_mismatch",
     )
 
     def __init__(self, code: str) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import ClassVar, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -104,6 +105,8 @@ class ScoreComponent(BaseModel):
     name: str
     value: float
     term: str | None = None
+    source: str | None = None
+    source_rank: int | None = Field(default=None, ge=1)
 
     @field_validator("name")
     @classmethod
@@ -112,6 +115,15 @@ class ScoreComponent(BaseModel):
 
         if re.fullmatch(r"[a-z0-9_]{1,40}", value) is None:
             raise ValueError("invalid score component name")
+        return value
+
+    @field_validator("source")
+    @classmethod
+    def _valid_source(cls, value: str | None) -> str | None:
+        import re
+
+        if value is not None and re.fullmatch(r"[A-Z][0-9]{2}", value) is None:
+            raise ValueError("invalid score component source")
         return value
 
     @field_validator("value")
@@ -175,3 +187,7 @@ class RetrievalResult(BaseModel):
 
 class Retriever(Protocol):
     async def retrieve(self, query: str) -> RetrievalResult: ...
+
+
+class Fusion(Protocol):
+    def fuse(self, results: Sequence[RetrievalResult]) -> RetrievalResult: ...

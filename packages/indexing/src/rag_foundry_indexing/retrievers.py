@@ -104,3 +104,10 @@ def register_builtin_plugins(registry) -> None:
 
     registry.register(BM25Retriever)
     registry.register(FtsRetriever)
+    from rag_foundry_indexing.hybrid import HybridRetriever
+
+    registry.register(HybridRetriever)
+    from rag_foundry_indexing.fusion import RrfFusion, WeightedFusion
+
+    registry.register(RrfFusion)
+    registry.register(WeightedFusion)
