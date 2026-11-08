@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, IndexRepository
+from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, FullTextIndex, IndexRepository
 from rag_foundry_domain.prompts import PromptTemplateStore
 from rag_foundry_domain.settings_store import SettingsOverrideRepository
 from rag_foundry_domain.uow import WRITE_METHODS, UnitOfWorkFactory
@@ -35,7 +35,8 @@ class PerCall:
 
         if name.startswith("_"):
             raise AttributeError(name)
-        if not hasattr(_PORTS[self._family], name):
+        port = _PORTS[self._family]
+        if not hasattr(port, name) and not (self._family == "indexes" and hasattr(FullTextIndex, name)):
             raise AttributeError(name)
         return invoke
 

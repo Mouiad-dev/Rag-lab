@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 """Scoped SQL implementation of IndexRepository."""
 
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -9,6 +10,7 @@ from rag_foundry_domain import NotFoundError, Scope, new_id
 from rag_foundry_domain.errors import IndexingError
 from rag_foundry_domain.indexing import (
     ChunkRecord,
+    FtsScoredChunk,
     IndexVersion,
     NewChunk,
     NewIndexVersion,
@@ -298,4 +300,57 @@ class SqlIndexRepository:
             ).mappings()
             return [
                 ScoredChunk(chunk=_chunk(row), distance=float(row["distance"]), rank=n) for n, row in enumerate(rows, 1)
+            ]
+
+    async def fts_search(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        query: str,
+        k: int,
+        *,
+        operator: str,
+    ) -> list[FtsScoredChunk]:
+        iid = _uuid(index_version_id)
+        if not 1 <= k <= 100:
+            raise IndexingError("invalid_k")
+        if operator == "and":
+            sql_query = query
+        elif operator == "or":
+            terms = [term for term in re.findall(r"[^\W_]+", query, flags=re.UNICODE) if term.lower() != "or"]
+            if not terms:
+                raise IndexingError("no_query_terms")
+            sql_query = " or ".join(terms)
+        else:
+            raise ValueError("operator must be 'and' or 'or'")
+        async with read(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            # ts_rank_cd normalization 0: no length normalization; scores are not comparable across queries.
+            rows = (
+                await session.execute(
+                    text("""SELECT c.*, ts_rank_cd(c.fts_simple, q, 0) AS ts_rank
+                FROM chunks c JOIN index_versions v ON v.id=c.index_version_id AND v.tenant_id=c.tenant_id AND v.project_id=c.project_id,
+                     websearch_to_tsquery('simple', :q) q
+                WHERE c.fts_simple @@ q AND c.tenant_id=:t AND c.project_id=:p
+                  AND c.index_version_id=:i AND v.state='ready'
+                ORDER BY ts_rank DESC, c.ordinal LIMIT :k"""),
+                    {"q": sql_query, "t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": k},
+                )
+            ).mappings()
+            return [
+                FtsScoredChunk(chunk=_chunk(row), ts_rank=float(row["ts_rank"]), rank=rank)
+                for rank, row in enumerate(rows, 1)
             ]

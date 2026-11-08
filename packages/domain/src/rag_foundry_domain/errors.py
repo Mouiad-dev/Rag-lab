@@ -124,6 +124,7 @@ class IndexingError(IntakeError):
         "no_query_terms",
         "lexical_corpus_too_large",
         "parent_span_out_of_bounds",
+        "fts_unavailable",
     )
 
     def __init__(self, code: str) -> None:

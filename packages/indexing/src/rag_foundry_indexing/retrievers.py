@@ -100,5 +100,7 @@ def register_builtin_plugins(registry) -> None:
     registry.register(DenseRetriever)
     registry.register(NoRetrieval)
     from rag_foundry_indexing.bm25 import BM25Retriever
+    from rag_foundry_indexing.fts import FtsRetriever
 
     registry.register(BM25Retriever)
+    registry.register(FtsRetriever)

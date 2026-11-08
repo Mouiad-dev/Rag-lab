@@ -1,13 +1,20 @@
 """Ports for object storage and document persistence. Implementations live elsewhere."""
 
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Annotated, Protocol, runtime_checkable
+from typing import Annotated, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from rag_foundry_domain.documents import Document, DocumentVersion, IntakeOutcome, NewVersion, Scope, Sha256Hex
 from rag_foundry_domain.extraction import ExtractionKey, ExtractionOutcome, ExtractionView, NewExtraction
-from rag_foundry_domain.indexing import ChunkRecord, IndexVersion, NewChunk, NewIndexVersion, ScoredChunk
+from rag_foundry_domain.indexing import (
+    ChunkRecord,
+    FtsScoredChunk,
+    IndexVersion,
+    NewChunk,
+    NewIndexVersion,
+    ScoredChunk,
+)
 
 
 class StagedObject(BaseModel):
@@ -100,3 +107,16 @@ class IndexRepository(Protocol):
     async def search(
         self, scope: Scope, index_version_id: str, query: tuple[float, ...], k: int
     ) -> list[ScoredChunk]: ...
+
+
+@runtime_checkable
+class FullTextIndex(Protocol):
+    async def fts_search(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        query: str,
+        k: int,
+        *,
+        operator: Literal["and", "or"],
+    ) -> list[FtsScoredChunk]: ...

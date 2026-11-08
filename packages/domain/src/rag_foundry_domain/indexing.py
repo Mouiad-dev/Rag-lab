@@ -137,6 +137,13 @@ class ScoredChunk(BaseModel):
         return 1.0 - self.distance
 
 
+class FtsScoredChunk(BaseModel):
+    model_config = _FROZEN
+    chunk: ChunkRecord
+    ts_rank: float
+    rank: Annotated[int, Field(ge=1)]
+
+
 def check_vector(values: Iterable[float]) -> tuple[float, ...]:
     try:
         source = tuple(float(x) for x in values)

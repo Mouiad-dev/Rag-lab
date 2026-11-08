@@ -185,6 +185,9 @@ class InMemoryIndexRepository:
         candidates.sort(key=lambda x: (x[0], x[1]))
         return [ScoredChunk(chunk=c, distance=d, rank=i + 1) for i, (d, _, c) in enumerate(candidates[:k])]
 
+    async def fts_search(self, scope, index_version_id, query, k, *, operator):
+        raise IndexingError("fts_unavailable")
+
 
 async def check_parent_spans(factory: IndexRepoFactory) -> None:
     scope = make_scope()
