@@ -39,13 +39,15 @@ parent 0 159 'The relevant identifier is blue x x x x '
 parent 162 318 'lantern in the storage room. y y y y y y'
 ```
 
-The span report shows the same trade-off at a larger scale. On the 2586 code point fixture, `parent_size` 1600 gives only two parents, so parent expansion at k=3 returns the whole document (`context_chars@3` = 2583.0 in every cohort). Its `span_recall@3` of 1.0 for ar comes from that, not from better ranking: the plain C18 children give `span_recall@3` 0.0 for ar with 1130.0 context characters.
+The span report shows the same trade-off at a larger scale. On the 2586 code point fixture, `parent_size` 1600 gives only two parents, so parent expansion at k=3 returns the whole document (`context_chars@3` = 2583.0 in every cohort). Its `span_recall@3` of 1.0 for ar comes from that, not from better ranking: the plain C18 children give `span_recall@3` 0.0 for ar with 1130.0 context characters. With parent/child sizes 600/200, children have `span_recall@3` / `context_chars@3` of ar 0.0 / 395.0, en 0.5 / 435.2, and mixed 0.625 / 363.25; expansion changes these to ar 1.0 / 1530.0, en 1.0 / 1694.8, and mixed 0.75 / 1545.5. C07 paragraphs at 1600 have 1.0 / 2583.0 in all three cohorts, so the smaller C18 expansion uses less context at k=3 but does not match its recall in every cohort.
 
 ## Limitations
-Parents are not yet stored in the index. Query-time parent return is R22/R25 (P6.2). `parent_id` is a chunk-level reference, not a source anchor. The span report uses a lexical ranker and one small fixture; a smaller `parent_size` is needed before expansion numbers say anything about ranking.
+Parents are not yet stored in the index. Query-time parent return is R22/R25 (P6.2). `parent_id` is a chunk-level reference, not a source anchor. The span report uses a lexical ranker and one small fixture. At `parent_size` 600, expansion at k=3 still returns 1530.0-1694.8 context characters across cohorts, more than half of the 2586 code point fixture, so this comparison does not establish a ranking winner.
 
 ## Baseline comparison
 [Span comparison](../../evidence/P4.5/span_comparison.md), rows "C18 parent 1600 child 400" and "+ parent expansion": span_recall@3 / context_chars@3 — children: ar 0.0 / 1130.0, en 1.0 / 1071.6, mixed 0.625 / 1136.0; parent expansion: ar 1.0 / 2583.0, en 1.0 / 2583.0, mixed 1.0 / 2583.0. Offline span metric only.
+
+Additional baseline rows in the same format: "C07 paragraphs at 1600": ar 1.0 / 2583.0, en 1.0 / 2583.0, mixed 1.0 / 2583.0. "C18 parent 600 child 200": ar 0.0 / 395.0, en 0.5 / 435.2, mixed 0.625 / 363.25; its "+ parent expansion" row: ar 1.0 / 1530.0, en 1.0 / 1694.8, mixed 0.75 / 1545.5. Offline span metric only.
 
 ## Status
 Draft.

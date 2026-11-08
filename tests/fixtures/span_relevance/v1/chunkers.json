@@ -51,6 +51,13 @@
     }
   },
   {
+    "label": "C07 paragraphs at 1600",
+    "technique_id": "C07",
+    "config": {
+      "chunk_size": 1600
+    }
+  },
+  {
     "label": "C08 400 chars",
     "technique_id": "C08",
     "config": {
@@ -70,6 +77,14 @@
     "config": {
       "parent_size": 1600,
       "child_size": 400
+    }
+  },
+  {
+    "label": "C18 parent 600 child 200",
+    "technique_id": "C18",
+    "config": {
+      "parent_size": 600,
+      "child_size": 200
     }
   },
   {

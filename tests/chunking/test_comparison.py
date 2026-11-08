@@ -85,13 +85,15 @@ def test_missing_quote_bad_occurrence_and_unknown_doc_raise(tmp_path):
 def test_chunker_statuses_and_parent_expansion():
     root = Path("tests/fixtures/span_relevance/v1")
     docs, cases, chunkers = load_span_fixture(root)
-    selected = tuple(c for c in chunkers if c["technique_id"] in {"C15", "C18"})
+    selected = tuple(c for c in chunkers if c["technique_id"] in {"C07", "C15", "C18"})
     registry = TechniqueRegistry(load_catalogue(Path("config/techniques.json")))
     register_builtin_plugins(registry)
     report = compare_chunkers(docs, cases[:1], selected, registry)
     assert any(r.label == "C15 model" and r.status == "requires_models" for r in report.rows)
     assert any("C18 parent" in r.label and r.status == "ok" for r in report.rows)
     assert any("parent expansion" in r.label and r.status == "ok" for r in report.rows)
+    assert any(r.label == "C07 paragraphs at 1600" and r.status == "ok" for r in report.rows)
+    assert any(r.label == "C18 parent 600 child 200" and r.status == "ok" for r in report.rows)
 
 
 def test_evidence_reproducible_without_writing_docs(tmp_path):
