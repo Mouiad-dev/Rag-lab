@@ -13,6 +13,15 @@ from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
 from rag_foundry_indexing.inspection import InspectionStage, RetrievalInspection, inspect_retrieval
 from rag_foundry_indexing.lexical_text import lexical_tokens
+from rag_foundry_indexing.llm_rerank import (
+    REJECT_REASONS,
+    RERANK_SYSTEM_V1,
+    RERANK_SYSTEM_V1_SHA256,
+    LlmListwiseReranker,
+    LlmRerankConfig,
+    OrderProbe,
+    order_probe,
+)
 from rag_foundry_indexing.metadata_filter import (
     MetadataFilter,
     MetadataFilterConfig,
@@ -49,6 +58,13 @@ from rag_foundry_indexing.step_back import StepBackConfig, StepBackRetrieval
 
 __all__ = [
     "BM25Config",
+    "LlmListwiseReranker",
+    "LlmRerankConfig",
+    "OrderProbe",
+    "REJECT_REASONS",
+    "RERANK_SYSTEM_V1",
+    "RERANK_SYSTEM_V1_SHA256",
+    "order_probe",
     "RankChange",
     "RerankTrace",
     "RerankedRetrieval",
