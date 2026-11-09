@@ -148,6 +148,11 @@ class IndexingError(IntakeError):
         "rerank_wrong_model_kind",
         "inspection_empty",
         "inspection_version_mismatch",
+        "expansion_invalid_input",
+        "expansion_too_many_candidates",
+        "expansion_version_mismatch",
+        "expansion_view_not_in_index",
+        "expansion_source_mismatch",
     )
 
     def __init__(self, code: str) -> None:

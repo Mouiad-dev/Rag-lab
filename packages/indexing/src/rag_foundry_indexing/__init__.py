@@ -1,4 +1,19 @@
 from rag_foundry_indexing.bm25 import BM25Config, BM25Retriever
+from rag_foundry_indexing.context_expansion import (
+    ExpandedContext,
+    ExpandedRetrieval,
+    ExpandingRetriever,
+    ExpansionSeed,
+    ExpansionTrace,
+    PayloadSourceReader,
+    SourceBlockRef,
+    SourceTextReader,
+    ViewSource,
+    assemble,
+    context_id_for,
+    load_sources,
+    merge_overlapping,
+)
 from rag_foundry_indexing.decompose import DecomposeConfig, QuestionDecomposition
 from rag_foundry_indexing.fts import FtsConfig, FtsRetriever
 from rag_foundry_indexing.fusion import (
@@ -52,11 +67,27 @@ from rag_foundry_indexing.retrievers import (
 from rag_foundry_indexing.rewrite import QuestionRewriter, RewriteConfig, retrieve_with_rewrite
 from rag_foundry_indexing.selection import DedupConfig, DedupResult, DroppedCandidate, EvidenceDedup, check_single_input
 from rag_foundry_indexing.self_query import SelfQuery, SelfQueryConfig, SelfQueryResult, retrieve_with_self_query
+from rag_foundry_indexing.sentence_window import SentenceWindowConfig, SentenceWindowExpander
 from rag_foundry_indexing.service import ChunkInspection, IndexService
 from rag_foundry_indexing.sparse import LearnedSparseRetriever, SparseConfig, SparseIndexService
 from rag_foundry_indexing.step_back import StepBackConfig, StepBackRetrieval
 
 __all__ = [
+    "SourceBlockRef",
+    "ViewSource",
+    "SourceTextReader",
+    "PayloadSourceReader",
+    "ExpansionSeed",
+    "ExpandedContext",
+    "ExpansionTrace",
+    "ExpandedRetrieval",
+    "ExpandingRetriever",
+    "assemble",
+    "context_id_for",
+    "load_sources",
+    "merge_overlapping",
+    "SentenceWindowConfig",
+    "SentenceWindowExpander",
     "BM25Config",
     "LlmListwiseReranker",
     "LlmRerankConfig",
