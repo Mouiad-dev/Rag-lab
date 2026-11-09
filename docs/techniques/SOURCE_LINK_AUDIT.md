@@ -11,6 +11,7 @@ Date: 2026-10-26. Every `primary_source` in `config/techniques.json` was checked
 | R09 | MMR selection | doi.org/10.1145/290941.291025 | The use of MMR, diversity-based reranking for reordering documents and producing summaries (Carbonell and Goldstein, SIGIR 1998) | correct; checked 2026-11-09 via Crossref metadata; doi.org redirects to dl.acm.org (HTTP 302), ACM page returns 403 to scripts |
 | R16 | Step-back retrieval | arXiv 2310.06117 | Take a Step Back: Evoking Reasoning via Abstraction in LLMs (Zheng et al., 2023) | correct |
 | R17 | HyDE | arXiv 2212.10496 | Precise Zero-Shot Dense Retrieval without Relevance Labels (Gao et al., 2022) | correct |
+| R18 | RAG fusion | arXiv 2402.03367 | RAG-Fusion: a New Take on Retrieval-Augmented Generation (Rackauckas, 2024) | correct |
 | R24 | Contextual enrichment | anthropic.com | Contextual Retrieval (Anthropic) | **fixed**: old `/news/` URL redirected; now `/research/contextual-retrieval` |
 | R31 | Faithful Self-RAG | arXiv 2310.11511 | Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection (Asai et al., 2023) | correct |
 | R37 | RAPTOR | arXiv 2401.18059 | RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval (Sarthi et al., 2024) | correct |
