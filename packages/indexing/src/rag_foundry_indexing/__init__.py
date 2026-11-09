@@ -12,6 +12,7 @@ from rag_foundry_indexing.metadata_filter import (
     resolve_views,
 )
 from rag_foundry_indexing.mmr import MmrConfig, MmrSelector
+from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
 from rag_foundry_indexing.retrievers import (
     DenseConfig,
     DenseRetriever,
@@ -19,6 +20,7 @@ from rag_foundry_indexing.retrievers import (
     NoRetrievalConfig,
     register_builtin_plugins,
 )
+from rag_foundry_indexing.rewrite import QuestionRewriter, RewriteConfig, retrieve_with_rewrite
 from rag_foundry_indexing.selection import DedupConfig, DedupResult, DroppedCandidate, EvidenceDedup, check_single_input
 from rag_foundry_indexing.self_query import SelfQuery, SelfQueryConfig, SelfQueryResult, retrieve_with_self_query
 from rag_foundry_indexing.service import ChunkInspection, IndexService
@@ -64,4 +66,10 @@ __all__ = [
     "SelfQueryConfig",
     "SelfQueryResult",
     "retrieve_with_self_query",
+    "GeneratedQuery",
+    "QueryTransformTrace",
+    "TransformedRetrieval",
+    "QuestionRewriter",
+    "RewriteConfig",
+    "retrieve_with_rewrite",
 ]

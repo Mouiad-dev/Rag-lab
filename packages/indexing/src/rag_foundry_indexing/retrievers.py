@@ -126,3 +126,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.self_query import SelfQuery
 
     registry.register(SelfQuery)
+    from rag_foundry_indexing.rewrite import QuestionRewriter
+
+    registry.register(QuestionRewriter)

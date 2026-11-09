@@ -162,6 +162,9 @@ class QueryTransformError(IntakeError):
         "unknown_filter_field",
         "invalid_filter_value",
         "filter_scope_widening",
+        "constraint_loss",
+        "invalid_dependency",
+        "too_many_queries",
     )
 
     def __init__(self, code: str) -> None:
