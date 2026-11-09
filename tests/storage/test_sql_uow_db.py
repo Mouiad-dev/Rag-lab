@@ -14,6 +14,7 @@ if _URL:
     from rag_foundry_domain.errors import IndexingError, NotFoundError, PromptError, SettingsError, StoreError
     from rag_foundry_domain.index_testing import make_chunk, make_new_index_version
     from rag_foundry_domain.prompts import PromptTemplate, prompt_sha256
+    from rag_foundry_domain.representations import RepresentationSet
     from rag_foundry_domain.settings_store import NewSettingOverride
     from rag_foundry_domain.testing import make_new_extraction, make_new_version, make_scope
     from rag_foundry_domain.uow import WRITE_METHODS
@@ -162,6 +163,12 @@ async def test_read_only_uow_rejects_every_repository_write():
                     ),
                     "add_sparse": uow.indexes.add_sparse(
                         scope, "00000000-0000-4000-8000-000000000001", "readonly-encoder", ()
+                    ),
+                    "add_representations": uow.indexes.add_representations(
+                        scope,
+                        "00000000-0000-4000-8000-000000000001",
+                        RepresentationSet(representation_key="0" * 64, technique_id="R23", generator_json="{}"),
+                        (),
                     ),
                     "mark_ready": uow.indexes.mark_ready(scope, "00000000-0000-4000-8000-000000000001"),
                     "mark_failed": uow.indexes.mark_failed(scope, "00000000-0000-4000-8000-000000000001"),

@@ -21,7 +21,7 @@ from rag_foundry_domain.indexing import (
     corpus_sha256_for,
     embedding_key_for,
 )
-from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, IndexRepository, RepresentationStore
+from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, IndexRepository
 from rag_foundry_domain.representations import (
     NewRepresentation,
     RepresentationRecord,
@@ -488,7 +488,8 @@ def make_representation(
 async def check_representations(factory: IndexRepoFactory) -> None:
     scope, other_tenant = make_scope(), make_scope()
     docs, view_repo, repo = await factory([scope, other_tenant])
-    if not isinstance(repo, RepresentationStore):
+    # hasattr, not isinstance: per-call adapters resolve methods dynamically, which runtime protocols cannot see.
+    if not all(hasattr(repo, n) for n in ("add_representations", "get_representation_set", "representation_search")):
         raise AssertionError("repository must implement RepresentationStore")
     views = []
     for i, sc in enumerate((scope, other_tenant)):

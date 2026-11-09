@@ -18,6 +18,12 @@ from rag_foundry_domain.indexing import (
     ScoredChunk,
     check_vector,
 )
+from rag_foundry_domain.representations import (
+    NewRepresentation,
+    RepresentationRecord,
+    RepresentationSet,
+    ScoredRepresentation,
+)
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -187,6 +193,207 @@ class SqlIndexRepository:
                     )
                 )
             return result
+
+    async def add_representations(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        rep_set: RepresentationSet,
+        rows: tuple[NewRepresentation, ...],
+    ) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT state,embedding_dim FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"
+                        ),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            if len(rows) > 500:
+                raise IndexingError("too_many_rows")
+            if not rows:
+                return
+            wanted = {r.chunk_id for r in rows}
+            found = await session.scalar(
+                text(
+                    "SELECT count(*) FROM chunks WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": sorted(wanted)},
+            )
+            if found != len(wanted):
+                raise NotFoundError()
+            if any(len(r.embedding) != version["embedding_dim"] for r in rows):
+                raise IndexingError("dimension_mismatch")
+            stored = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT technique_id,generator_json FROM representation_sets WHERE index_version_id=:i AND representation_key=:k"
+                        ),
+                        {"i": iid, "k": rep_set.representation_key},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if stored is not None and (
+                stored["technique_id"] != rep_set.technique_id or stored["generator_json"] != rep_set.generator_json
+            ):
+                raise IndexingError("representation_set_conflict")
+            slots = [(r.chunk_id, r.kind, r.ordinal) for r in rows]
+            if len(set(slots)) != len(slots):
+                raise IndexingError("duplicate_representation")
+            if stored is None:
+                await session.execute(
+                    text("""INSERT INTO representation_sets (tenant_id,project_id,index_version_id,representation_key,technique_id,generator_json)
+                    VALUES (:t,:p,:i,:k,:tech,:g)"""),
+                    {
+                        "t": scope.tenant_id,
+                        "p": scope.project_id,
+                        "i": iid,
+                        "k": rep_set.representation_key,
+                        "tech": rep_set.technique_id,
+                        "g": rep_set.generator_json,
+                    },
+                )
+            for r in rows:
+                try:
+                    async with session.begin_nested():
+                        await session.execute(
+                            text("""INSERT INTO chunk_representations
+                            (tenant_id,project_id,index_version_id,chunk_id,representation_key,kind,ordinal,text,text_sha256,embedded_input_sha256,embedding)
+                            VALUES (:t,:p,:i,:c,:k,:kind,:o,:text,:th,:eh,CAST(:e AS vector))"""),
+                            {
+                                "t": scope.tenant_id,
+                                "p": scope.project_id,
+                                "i": iid,
+                                "c": r.chunk_id,
+                                "k": rep_set.representation_key,
+                                "kind": r.kind,
+                                "o": r.ordinal,
+                                "text": r.text,
+                                "th": r.text_sha256,
+                                "eh": r.embedded_input_sha256,
+                                "e": "[" + ",".join(repr(x) for x in r.embedding) + "]",
+                            },
+                        )
+                except IntegrityError as exc:
+                    if "pk_chunk_representations" in str(exc):
+                        raise IndexingError("duplicate_representation") from None
+                    raise
+
+    async def get_representation_set(self, scope: Scope, index_version_id: str, key: str) -> RepresentationSet:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            row = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT representation_key,technique_id,generator_json FROM representation_sets "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND representation_key=:k"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": key},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                raise NotFoundError()
+            return RepresentationSet(
+                representation_key=row["representation_key"],
+                technique_id=row["technique_id"],
+                generator_json=row["generator_json"],
+            )
+
+    async def representation_search(
+        self, scope: Scope, index_version_id: str, key: str, query: tuple[float, ...], k: int
+    ) -> list[ScoredRepresentation]:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT state,embedding_dim FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"
+                        ),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            if not 1 <= k <= 100:
+                raise IndexingError("invalid_k")
+            vector = check_vector(query)
+            if len(vector) != version["embedding_dim"]:
+                raise IndexingError("dimension_mismatch")
+            if (
+                await session.scalar(
+                    text(
+                        "SELECT 1 FROM representation_sets WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND representation_key=:k"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": key},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            literal = "[" + ",".join(repr(x) for x in vector) + "]"
+            rows = (
+                await session.execute(
+                    text("""SELECT c.*, r.kind AS rep_kind, r.ordinal AS rep_ordinal, r.text AS rep_text,
+                       r.text_sha256 AS rep_text_sha256, r.embedded_input_sha256 AS rep_embedded_input_sha256,
+                       r.representation_key AS rep_key, r.embedding <=> CAST(:q AS vector) AS distance
+                FROM chunk_representations r
+                JOIN chunks c ON c.id=r.chunk_id AND c.tenant_id=r.tenant_id AND c.project_id=r.project_id AND c.index_version_id=r.index_version_id
+                JOIN index_versions v ON v.id=r.index_version_id AND v.tenant_id=r.tenant_id AND v.project_id=r.project_id
+                WHERE r.tenant_id=:t AND r.project_id=:p AND r.index_version_id=:i AND r.representation_key=:k AND v.state='ready'
+                ORDER BY distance, c.ordinal, r.kind COLLATE "C", r.ordinal LIMIT :n"""),
+                    {"q": literal, "t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": key, "n": k},
+                )
+            ).mappings()
+            return [
+                ScoredRepresentation(
+                    chunk=_chunk(row),
+                    representation=RepresentationRecord(
+                        chunk_id=str(row["id"]),
+                        kind=row["rep_kind"],
+                        ordinal=row["rep_ordinal"],
+                        text=row["rep_text"],
+                        text_sha256=row["rep_text_sha256"],
+                        embedded_input_sha256=row["rep_embedded_input_sha256"],
+                        index_version_id=str(row["index_version_id"]),
+                        tenant_id=str(row["tenant_id"]),
+                        project_id=str(row["project_id"]),
+                        representation_key=row["rep_key"],
+                    ),
+                    distance=float(row["distance"]),
+                    rank=n,
+                )
+                for n, row in enumerate(rows, 1)
+            ]
 
     async def _locked(self, session: AsyncSession, scope: Scope, iid: str):
         row = (

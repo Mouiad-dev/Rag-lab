@@ -8,6 +8,7 @@ from rag_foundry_domain.ports import (
     ExtractionRepository,
     FullTextIndex,
     IndexRepository,
+    RepresentationStore,
 )
 from rag_foundry_domain.prompts import PromptTemplateStore
 from rag_foundry_domain.settings_store import SettingsOverrideRepository
@@ -43,7 +44,8 @@ class PerCall:
             raise AttributeError(name)
         port = _PORTS[self._family]
         if not hasattr(port, name) and not (
-            self._family == "indexes" and (hasattr(FullTextIndex, name) or hasattr(ChunkVectorReader, name))
+            self._family == "indexes"
+            and (hasattr(FullTextIndex, name) or hasattr(ChunkVectorReader, name) or hasattr(RepresentationStore, name))
         ):
             raise AttributeError(name)
         return invoke

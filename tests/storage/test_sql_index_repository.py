@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.db, pytest.mark.skipif(not _URL, reason="RAGF_TEST_DAT
 
 if _URL:
     from rag_foundry_domain.errors import NotFoundError
-    from rag_foundry_domain.index_testing import INDEX_REPOSITORY_CHECKS
+    from rag_foundry_domain.index_testing import INDEX_REPOSITORY_CHECKS, REPRESENTATION_STORE_CHECKS
     from rag_foundry_domain.testing import CheckSkippedError, make_new_extraction, make_new_version, make_scope
     from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions, per_call_indexes
     from rag_foundry_storage.sql.database import create_database
@@ -59,7 +59,7 @@ class _Factory:
         async with maker() as session, session.begin():
             await session.execute(
                 text(
-                    "TRUNCATE runtime_setting_overrides, chunk_sparse_vectors, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
+                    "TRUNCATE runtime_setting_overrides, chunk_representations, representation_sets, chunk_sparse_vectors, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
                 )
             )
         docs = per_call_documents(db.uow)
@@ -73,7 +73,9 @@ class _Factory:
 
 
 @pytest.mark.parametrize(
-    "check", INDEX_REPOSITORY_CHECKS if _URL else [None], ids=lambda c: getattr(c, "__name__", "none")
+    "check",
+    (INDEX_REPOSITORY_CHECKS + REPRESENTATION_STORE_CHECKS) if _URL else [None],
+    ids=lambda c: getattr(c, "__name__", "none"),
 )
 @run
 async def test_index_repository_check(check):
@@ -163,5 +165,60 @@ async def test_database_guards_and_migration_roundtrip():
             assert await connection.scalar(text("SELECT to_regclass('chunks') IS NULL"))
             assert await connection.scalar(text("SELECT to_regclass('index_versions') IS NULL"))
         await asyncio.to_thread(run_migrations, _url(), "upgrade", "head")
+    finally:
+        await factory.close()
+
+
+@run
+async def test_representation_database_guards():
+    from rag_foundry_domain.index_testing import make_chunk, make_new_index_version, make_representation
+    from rag_foundry_domain.representations import RepresentationSet
+
+    factory = _Factory()
+    try:
+        scope, other = make_scope(), make_scope()
+        docs, views, repo = await factory([scope, other])
+        out = await docs.create_document_or_get(scope, make_new_version("repr-guard"), display_name="d")
+        view = (await views.create_view_or_get(scope, make_new_extraction(out.version, tag="repr-guard"))).view
+        version = await repo.create_index_version(scope, make_new_index_version((view.id,)))
+        await repo.add_chunks(scope, version.id, (make_chunk(view.id, 0, (1, 0, 0, 0), "alpha"),))
+        chunk = (await repo.list_chunks(scope, version.id))[0]
+        key, h = "c" * 64, "d" * 64
+        row = make_representation(chunk.id, "summary", 0, "summary", (1, 0, 0, 0))
+
+        async def rejected(sql, params, message):
+            with pytest.raises(DBAPIError, match=message):
+                async with factory.database().sessionmaker() as session, session.begin():
+                    await session.execute(text(sql), params)
+
+        set_sql = "INSERT INTO representation_sets (tenant_id,project_id,index_version_id,representation_key,technique_id,generator_json) VALUES (:t,:p,:i,:k,'R23','{}')"
+        rep_sql = "INSERT INTO chunk_representations (tenant_id,project_id,index_version_id,chunk_id,representation_key,kind,ordinal,text,text_sha256,embedded_input_sha256,embedding) VALUES (:t,:p,:i,:c,:k,'summary',0,'s',:h,:h,CAST(:e AS vector))"
+        params = {"t": scope.tenant_id, "p": scope.project_id, "i": version.id, "k": key, "c": chunk.id, "h": h}
+        await rejected(set_sql, params, "index version is not ready")
+        await repo.mark_ready(scope, version.id)
+        await rejected(set_sql, {**params, "t": other.tenant_id, "p": other.project_id}, "index version is not ready")
+        await rejected(set_sql, {**params, "k": "xyz"}, "ck_representation_sets_key")
+        await repo.add_representations(
+            scope,
+            version.id,
+            RepresentationSet(representation_key=key, technique_id="R23", generator_json="{}"),
+            (row,),
+        )
+        await rejected(rep_sql, {**params, "e": "[1,0,0]"}, "embedding dimension mismatch")
+        await rejected(
+            rep_sql,
+            {**params, "t": other.tenant_id, "p": other.project_id, "e": "[1,0,0,0]"},
+            "index version is not ready",
+        )
+        await rejected(
+            "UPDATE chunk_representations SET text='z' WHERE index_version_id=:i",
+            {"i": version.id},
+            "index rows are immutable",
+        )
+        await rejected(
+            "UPDATE representation_sets SET technique_id='R24' WHERE index_version_id=:i",
+            {"i": version.id},
+            "index rows are immutable",
+        )
     finally:
         await factory.close()
