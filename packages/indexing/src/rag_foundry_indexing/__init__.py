@@ -1,6 +1,13 @@
 from rag_foundry_indexing.bm25 import BM25Config, BM25Retriever
 from rag_foundry_indexing.fts import FtsConfig, FtsRetriever
-from rag_foundry_indexing.fusion import RrfConfig, RrfFusion, WeightedConfig, WeightedFusion, check_inputs
+from rag_foundry_indexing.fusion import (
+    RrfConfig,
+    RrfFusion,
+    WeightedConfig,
+    WeightedFusion,
+    check_inputs,
+    rrf_contribution,
+)
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.lexical_text import lexical_tokens
 from rag_foundry_indexing.metadata_filter import (
@@ -12,7 +19,9 @@ from rag_foundry_indexing.metadata_filter import (
     resolve_views,
 )
 from rag_foundry_indexing.mmr import MmrConfig, MmrSelector
+from rag_foundry_indexing.multi_query import MultiQueryConfig, MultiQueryExpansion, merge_best_rank
 from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
+from rag_foundry_indexing.rag_fusion import RagFusion, RagFusionConfig
 from rag_foundry_indexing.retrievers import (
     DenseConfig,
     DenseRetriever,
@@ -34,6 +43,12 @@ __all__ = [
     "WeightedConfig",
     "WeightedFusion",
     "check_inputs",
+    "rrf_contribution",
+    "MultiQueryConfig",
+    "MultiQueryExpansion",
+    "merge_best_rank",
+    "RagFusion",
+    "RagFusionConfig",
     "DedupConfig",
     "DedupResult",
     "DroppedCandidate",

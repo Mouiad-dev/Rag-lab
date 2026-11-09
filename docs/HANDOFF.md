@@ -9,7 +9,7 @@ Read this first, then `CLAUDE.md`, `docs/PROGRESS.md` (Current state, the P5.x r
 - Phase 4 is done. Phase 5:
   - P5.1 done: R03 BM25, R04 PostgreSQL FTS. R05 code reviewed and committed 2026-11-09; catalogue/lesson/evidence still open.
   - P5.2 done: R06 hybrid, R07 RRF, R08 weighted fusion, paired report `docs/evidence/P5.2/paired_vs_dense.md`.
-  - P5.3 done: R10 dedup and R11 metadata filters done; R09 MMR done 2026-11-09; R12 self-query done 2026-11-09 (live run passed); P5.3-05 docs done 2026-11-09. **P5.3 done.** R05 catalogue/lesson/evidence done 2026-11-09 (P5.1-05). P5.4 planned (P5.4-01..05); P5.4-01 R13 done.
+  - P5.3 done: R10 dedup and R11 metadata filters done; R09 MMR done 2026-11-09; R12 self-query done 2026-11-09 (live run passed); P5.3-05 docs done 2026-11-09. **P5.3 done.** R05 catalogue/lesson/evidence done 2026-11-09 (P5.1-05). P5.4 planned (P5.4-01..05); P5.4-01 R13 and P5.4-02 R14/R18 done; next P5.4-03.
   - P5.4, P5.5 not planned yet.
 
 ## R05 learned sparse (committed 2026-11-09; this section is history)

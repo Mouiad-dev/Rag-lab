@@ -19,11 +19,11 @@ from rag_foundry_techniques import (
 )
 
 
-def check_inputs(results: Sequence[RetrievalResult]) -> None:
-    if len(results) < 2:
+def check_inputs(results: Sequence[RetrievalResult], *, distinct_branches: bool = True, min_branches: int = 2) -> None:
+    if len(results) < min_branches:
         raise IndexingError("fusion_too_few_branches")
     ids = [result.technique_id for result in results]
-    if len(set(ids)) != len(ids):
+    if distinct_branches and len(set(ids)) != len(ids):
         raise IndexingError("fusion_duplicate_branch")
     versions = [result.index_version_id for result in results]
     if (
@@ -82,18 +82,22 @@ class RrfFusion:
         records = _records(results)
         for result in results:
             for hit in result.hits:
-                records[hit.chunk_id]["score"] += 1 / (self.config.rrf_k + hit.rank)
+                records[hit.chunk_id]["score"] += rrf_contribution(hit.rank, self.config.rrf_k)
                 records[hit.chunk_id]["rank"] = min(records[hit.chunk_id]["rank"], hit.rank)
                 records[hit.chunk_id]["components"].extend(_tag(hit, result.technique_id))
                 records[hit.chunk_id]["components"].append(
                     ScoreComponent(
                         name="rrf_contribution",
-                        value=1 / (self.config.rrf_k + hit.rank),
+                        value=rrf_contribution(hit.rank, self.config.rrf_k),
                         source=result.technique_id,
                         source_rank=hit.rank,
                     )
                 )
         return _result(records, results, "R07", f"rrf-k{self.config.rrf_k}", self.config.k)
+
+
+def rrf_contribution(rank: int, rrf_k: int) -> float:
+    return 1 / (rrf_k + rank)
 
 
 class WeightedFusion:
