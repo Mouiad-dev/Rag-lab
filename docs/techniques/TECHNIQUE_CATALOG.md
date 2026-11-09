@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R04 and R06-R08; remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R04, R06-R12; remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -34,13 +34,13 @@ The acceptance column describes evidence that must exist before validation. Each
 | R03 | retrieval / P5.1 | BM25 lexical search | Implement genuine BM25 with documented tokenization. | Test exact identifiers and Arabic normalization; do not relabel ts_rank. | implemented |
 | R04 | retrieval / P5.1 | PostgreSQL FTS | Use PostgreSQL lexical search as its own baseline. | Document language analyzer and contrast rank behavior with BM25. | implemented |
 | R05 | retrieval / P5.1 | Learned sparse retrieval | Use an actual supported learned sparse encoder. | Persist sparse outputs and compare lexical/semantic matches and memory. | planned |
-| R06 | retrieval / P5.2 | Hybrid retrieval | Combine dense and lexical/sparse candidate branches. | Keep branch evidence, budgets and scope; measure complementary recall. | planned |
-| R07 | fusion / P5.2 | Reciprocal rank fusion | Fuse ranked lists without pretending raw scores are comparable. | Verify ranking with a hand-calculated tiny example. | planned |
-| R08 | fusion / P5.2 | Weighted score fusion | Calibrate branch scores then combine using explicit weights. | Fit/calibrate on development data only; sweep weights on validation. | planned |
-| R09 | selection / P5.3 | MMR diversity | Trade off query relevance and candidate redundancy. | Show novelty gain and possible loss of a relevant near-duplicate. | planned |
-| R10 | selection / P5.3 | Evidence deduplication | Deduplicate by source/overlap or explicit semantic rule. | Preserve distinct conflicting sources while removing repeated passages. | planned |
-| R11 | retrieval / P5.3 | Metadata filtering | Apply authorized and user-requested structured filters. | Test date/category filters and zero cross-tenant candidate exposure. | planned |
-| R12 | query / P5.3 | Self-query filters | Translate question to a validated allowlisted filter schema. | Reject invented fields and attempts to broaden access scope. | planned |
+| R06 | retrieval / P5.2 | Hybrid retrieval | Combine dense and lexical/sparse candidate branches. | Keep branch evidence, budgets and scope; measure complementary recall. | implemented |
+| R07 | fusion / P5.2 | Reciprocal rank fusion | Fuse ranked lists without pretending raw scores are comparable. | Verify ranking with a hand-calculated tiny example. | implemented |
+| R08 | fusion / P5.2 | Weighted score fusion | Calibrate branch scores then combine using explicit weights. | Fit/calibrate on development data only; sweep weights on validation. | implemented |
+| R09 | selection / P5.3 | MMR diversity | Trade off query relevance and candidate redundancy. | Show novelty gain and possible loss of a relevant near-duplicate. | implemented |
+| R10 | selection / P5.3 | Evidence deduplication | Deduplicate by source/overlap or explicit semantic rule. | Preserve distinct conflicting sources while removing repeated passages. | implemented |
+| R11 | retrieval / P5.3 | Metadata filtering | Apply authorized and user-requested structured filters. | Test date/category filters and zero cross-tenant candidate exposure. | implemented |
+| R12 | query / P5.3 | Self-query filters | Translate question to a validated allowlisted filter schema. | Reject invented fields and attempts to broaden access scope. | implemented |
 | R13 | query / P5.4 | Question rewriting | Rewrite ambiguous/noisy questions for retrieval. | Keep original intent and detect constraint loss. | planned |
 | R14 | query / P5.4 | Multi-query expansion | Search several controlled formulations and combine evidence. | Measure incremental recall versus extra cost and duplicate queries. | planned |
 | R15 | query / P5.4 | Question decomposition | Break a composite question into answerable subquestions. | Track dependencies and ensure all original constraints are addressed. | planned |

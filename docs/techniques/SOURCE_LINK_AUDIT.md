@@ -8,6 +8,7 @@ Date: 2026-10-26. Every `primary_source` in `config/techniques.json` was checked
 | C20 | Late chunking | arXiv 2409.04701 | Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models (Günther et al., 2024) | correct |
 | R02 | Dense two-step RAG | arXiv 2005.11401 | Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (Lewis et al., 2020) | correct; DPR (2004.04906) is the companion dense-retriever paper |
 | R05 | Learned sparse retrieval | arXiv 2107.05720 | SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking (Formal et al., 2021) | correct; SPLADE v2 (2109.10086) is the more used version |
+| R09 | MMR selection | doi.org/10.1145/290941.291025 | The use of MMR, diversity-based reranking for reordering documents and producing summaries (Carbonell and Goldstein, SIGIR 1998) | correct; checked 2026-11-09 via Crossref metadata; doi.org redirects to dl.acm.org (HTTP 302), ACM page returns 403 to scripts |
 | R16 | Step-back retrieval | arXiv 2310.06117 | Take a Step Back: Evoking Reasoning via Abstraction in LLMs (Zheng et al., 2023) | correct |
 | R17 | HyDE | arXiv 2212.10496 | Precise Zero-Shot Dense Retrieval without Relevance Labels (Gao et al., 2022) | correct |
 | R24 | Contextual enrichment | anthropic.com | Contextual Retrieval (Anthropic) | **fixed**: old `/news/` URL redirected; now `/research/contextual-retrieval` |
@@ -22,4 +23,4 @@ Date: 2026-10-26. Every `primary_source` in `config/techniques.json` was checked
 | R48 | KAG | github.com/OpenSPG/KAG | KAG repo | correct; paper: arXiv 2409.13731 "KAG: Boosting LLMs in Professional Domains…" |
 | R49 | Prefix KV caching | docs.vllm.ai | "Automatic Prefix Caching - vLLM" | correct (HTTP 200) |
 
-Summary: 17 links checked, 16 correct, 1 redirect fixed. The other 55 entries have no single primary source yet (`null`); add one when the technique's lesson is written.
+Summary: 17 links checked, 16 correct, 1 redirect fixed. Added 2026-11-09: R09 (correct). The other 54 entries have no single primary source yet (`null`); add one when the technique's lesson is written.
