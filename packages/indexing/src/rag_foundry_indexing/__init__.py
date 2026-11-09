@@ -11,6 +11,7 @@ from rag_foundry_indexing.metadata_filter import (
     intersect,
     resolve_views,
 )
+from rag_foundry_indexing.mmr import MmrConfig, MmrSelector
 from rag_foundry_indexing.retrievers import (
     DenseConfig,
     DenseRetriever,
@@ -47,6 +48,8 @@ __all__ = [
     "MetadataFilter",
     "MetadataFilterConfig",
     "MetadataFilteredRetriever",
+    "MmrConfig",
+    "MmrSelector",
     "ViewMetadata",
     "intersect",
     "resolve_views",

@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 """Scoped SQL implementation of IndexRepository."""
 
+import json
 import re
 import uuid
 from datetime import UTC, datetime
@@ -343,6 +344,41 @@ class SqlIndexRepository:
             if row is None:
                 raise NotFoundError()
             return _version(row, await self._views(session, scope, iid))
+
+    async def chunk_embeddings(
+        self, scope: Scope, index_version_id: str, chunk_ids: tuple[str, ...]
+    ) -> dict[str, tuple[float, ...]]:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            if len(chunk_ids) > 100:
+                raise IndexingError("too_many_ids")
+            ids = []
+            for value in chunk_ids:
+                try:
+                    parsed = uuid.UUID(value)
+                except (ValueError, AttributeError, TypeError):
+                    continue
+                if parsed.version == 4 and str(parsed) == value:
+                    ids.append(parsed)
+            if not ids:
+                return {}
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT id, embedding::text AS e FROM chunks WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": ids},
+                )
+            ).mappings()
+            return {str(row["id"]): tuple(float(value) for value in json.loads(row["e"])) for row in rows}
 
     async def list_chunks(
         self, scope: Scope, index_version_id: str, *, offset: int = 0, limit: int = 100

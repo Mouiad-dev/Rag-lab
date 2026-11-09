@@ -138,6 +138,9 @@ class IndexingError(IntakeError):
         "sparse_encoding_count_mismatch",
         "duplicate_sparse_vector",
         "sparse_unavailable",
+        "selection_missing_vector",
+        "selection_vectors_unavailable",
+        "too_many_ids",
     )
 
     def __init__(self, code: str) -> None:

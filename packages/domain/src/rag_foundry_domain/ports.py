@@ -121,6 +121,15 @@ class IndexRepository(Protocol):
 
 
 @runtime_checkable
+class ChunkVectorReader(Protocol):
+    """Read stored chunk embeddings without exposing chunks outside the version scope."""
+
+    async def chunk_embeddings(
+        self, scope: Scope, index_version_id: str, chunk_ids: tuple[str, ...]
+    ) -> dict[str, tuple[float, ...]]: ...
+
+
+@runtime_checkable
 class FullTextIndex(Protocol):
     async def fts_search(
         self,

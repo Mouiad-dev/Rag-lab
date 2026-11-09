@@ -120,3 +120,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.metadata_filter import MetadataFilteredRetriever
 
     registry.register(MetadataFilteredRetriever)
+    from rag_foundry_indexing.mmr import MmrSelector
+
+    registry.register(MmrSelector)

@@ -157,6 +157,15 @@ class InMemoryIndexRepository:
     async def get_index_version(self, scope: Scope, index_version_id: str) -> IndexVersion:
         return self._get(scope, index_version_id)
 
+    async def chunk_embeddings(
+        self, scope: Scope, index_version_id: str, chunk_ids: tuple[str, ...]
+    ) -> dict[str, tuple[float, ...]]:
+        self._get(scope, index_version_id)
+        if len(chunk_ids) > 100:
+            raise IndexingError("too_many_ids")
+        allowed = {chunk.id for chunk in self._chunks[index_version_id]}
+        return {chunk_id: self._vectors[chunk_id] for chunk_id in chunk_ids if chunk_id in allowed}
+
     async def list_chunks(
         self, scope: Scope, index_version_id: str, *, offset: int = 0, limit: int = 100
     ) -> list[ChunkRecord]:
@@ -344,4 +353,28 @@ async def check_index_repository(factory: IndexRepoFactory) -> None:
     await check_parent_spans(factory)
 
 
-INDEX_REPOSITORY_CHECKS = (check_index_repository,)
+async def check_chunk_embeddings(factory: IndexRepoFactory) -> None:
+    scope, other = make_scope(), make_scope()
+    docs, view_repo, repo = await factory([scope, other])
+    views = []
+    for i, current in enumerate((scope, other)):
+        doc = await docs.create_document_or_get(current, make_new_version(f"vectors-{i}"), display_name="fixture")
+        views.append(
+            (await view_repo.create_view_or_get(current, make_new_extraction(doc.version, tag=f"vectors-{i}"))).view
+        )
+    version = await repo.create_index_version(scope, make_new_index_version((views[0].id,)))
+    await repo.add_chunks(scope, version.id, (make_chunk(views[0].id, 0, (0.1, 0.2, 0.3, 0.4)),))
+    own = (await repo.list_chunks(scope, version.id))[0]
+    foreign_version = await repo.create_index_version(other, make_new_index_version((views[1].id,)))
+    await repo.add_chunks(other, foreign_version.id, (make_chunk(views[1].id, 0, (0.4, 0.3, 0.2, 0.1)),))
+    foreign = (await repo.list_chunks(other, foreign_version.id))[0]
+    vectors = await repo.chunk_embeddings(scope, version.id, (own.id, foreign.id, "not-a-uuid"))
+    if set(vectors) != {own.id} or any(
+        abs(a - b) > 1e-6 for a, b in zip(vectors[own.id], (0.1, 0.2, 0.3, 0.4), strict=True)
+    ):
+        raise AssertionError("chunk embeddings must round-trip and exclude unrelated IDs")
+    await _expect_not_found(repo.chunk_embeddings(other, version.id, (own.id,)))
+    await _expect_error(repo.chunk_embeddings(scope, version.id, tuple(str(i) for i in range(101))), "too_many_ids")
+
+
+INDEX_REPOSITORY_CHECKS = (check_index_repository, check_chunk_embeddings)
