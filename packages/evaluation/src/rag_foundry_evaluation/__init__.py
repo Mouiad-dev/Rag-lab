@@ -19,6 +19,20 @@ from .leakage import (
     raise_on_errors,
 )
 from .metrics import CaseMetrics, EvalHit, GroupSummary, aggregate, case_metrics
+from .runner import (
+    BoundDocument,
+    ResolvedTechnique,
+    RunConfig,
+    RunOutput,
+    StageSinks,
+    TechniqueSpec,
+    build_run_config,
+    check_binding,
+    git_code_version,
+    index_fingerprint,
+    run_experiment,
+    run_id,
+)
 
 __all__ = [
     "EvalCase",
@@ -42,4 +56,16 @@ __all__ = [
     "normalize_question",
     "question_tokens",
     "raise_on_errors",
+    "BoundDocument",
+    "ResolvedTechnique",
+    "RunConfig",
+    "RunOutput",
+    "StageSinks",
+    "TechniqueSpec",
+    "build_run_config",
+    "check_binding",
+    "git_code_version",
+    "index_fingerprint",
+    "run_experiment",
+    "run_id",
 ]
