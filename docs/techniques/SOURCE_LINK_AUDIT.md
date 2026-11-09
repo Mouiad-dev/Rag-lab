@@ -12,6 +12,8 @@ Date: 2026-10-26. Every `primary_source` in `config/techniques.json` was checked
 | R16 | Step-back retrieval | arXiv 2310.06117 | Take a Step Back: Evoking Reasoning via Abstraction in LLMs (Zheng et al., 2023) | correct |
 | R17 | HyDE | arXiv 2212.10496 | Precise Zero-Shot Dense Retrieval without Relevance Labels (Gao et al., 2022) | correct |
 | R18 | RAG fusion | arXiv 2402.03367 | RAG-Fusion: a New Take on Retrieval-Augmented Generation (Rackauckas, 2024) | correct |
+| R19 | Cross-encoder reranking | arXiv 1901.04085 | Passage Re-ranking with BERT (Nogueira and Cho, 2019) | correct; checked 2026-11-09 via the arXiv API |
+| R20 | LLM reranking | arXiv 2304.09542 | Is ChatGPT Good at Search? Investigating Large Language Models as Re-Ranking Agents (Sun et al., 2023) | correct; checked 2026-11-09 via the arXiv API |
 | R24 | Contextual enrichment | anthropic.com | Contextual Retrieval (Anthropic) | **fixed**: old `/news/` URL redirected; now `/research/contextual-retrieval` |
 | R31 | Faithful Self-RAG | arXiv 2310.11511 | Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection (Asai et al., 2023) | correct |
 | R37 | RAPTOR | arXiv 2401.18059 | RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval (Sarthi et al., 2024) | correct |
@@ -24,4 +26,4 @@ Date: 2026-10-26. Every `primary_source` in `config/techniques.json` was checked
 | R48 | KAG | github.com/OpenSPG/KAG | KAG repo | correct; paper: arXiv 2409.13731 "KAG: Boosting LLMs in Professional Domains…" |
 | R49 | Prefix KV caching | docs.vllm.ai | "Automatic Prefix Caching - vLLM" | correct (HTTP 200) |
 
-Summary: 17 links checked, 16 correct, 1 redirect fixed. Added 2026-11-09: R09 (correct). The other 54 entries have no single primary source yet (`null`); add one when the technique's lesson is written.
+Summary: 19 links checked, 18 correct, 1 redirect fixed. Added 2026-11-09: R09, R19, R20 (all correct). The other 54 entries have no single primary source yet (`null`); add one when the technique's lesson is written.
