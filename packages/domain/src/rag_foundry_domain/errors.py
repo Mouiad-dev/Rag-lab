@@ -149,6 +149,27 @@ class IndexingError(IntakeError):
         super().__init__(code, code)
 
 
+class QueryTransformError(IntakeError):
+    """Content-free query transformation failures."""
+
+    CODES = (
+        "missing_model",
+        "wrong_model_kind",
+        "empty_query",
+        "query_too_long",
+        "too_many_choices",
+        "invalid_model_output",
+        "unknown_filter_field",
+        "invalid_filter_value",
+        "filter_scope_widening",
+    )
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown query transform error code")
+        super().__init__(code, code)
+
+
 class RunError(IntakeError):
     """Content-free run configuration and execution errors."""
 

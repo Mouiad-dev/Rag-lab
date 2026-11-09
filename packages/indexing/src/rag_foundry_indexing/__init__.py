@@ -20,6 +20,7 @@ from rag_foundry_indexing.retrievers import (
     register_builtin_plugins,
 )
 from rag_foundry_indexing.selection import DedupConfig, DedupResult, DroppedCandidate, EvidenceDedup, check_single_input
+from rag_foundry_indexing.self_query import SelfQuery, SelfQueryConfig, SelfQueryResult, retrieve_with_self_query
 from rag_foundry_indexing.service import ChunkInspection, IndexService
 from rag_foundry_indexing.sparse import LearnedSparseRetriever, SparseConfig, SparseIndexService
 
@@ -59,4 +60,8 @@ __all__ = [
     "LearnedSparseRetriever",
     "SparseConfig",
     "SparseIndexService",
+    "SelfQuery",
+    "SelfQueryConfig",
+    "SelfQueryResult",
+    "retrieve_with_self_query",
 ]

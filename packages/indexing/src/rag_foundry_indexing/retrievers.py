@@ -123,3 +123,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.mmr import MmrSelector
 
     registry.register(MmrSelector)
+    from rag_foundry_indexing.self_query import SelfQuery
+
+    registry.register(SelfQuery)
