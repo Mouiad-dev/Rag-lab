@@ -10,6 +10,7 @@ from rag_foundry_indexing.fusion import (
     rrf_contribution,
 )
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
+from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
 from rag_foundry_indexing.lexical_text import lexical_tokens
 from rag_foundry_indexing.metadata_filter import (
     MetadataFilter,
@@ -67,6 +68,8 @@ __all__ = [
     "FtsRetriever",
     "HybridConfig",
     "HybridRetriever",
+    "HydeConfig",
+    "HydeRetriever",
     "IndexService",
     "lexical_tokens",
     "MetadataFilter",

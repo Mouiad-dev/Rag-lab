@@ -139,3 +139,6 @@ def register_builtin_plugins(registry) -> None:
 
     registry.register(QuestionDecomposition)
     registry.register(StepBackRetrieval)
+    from rag_foundry_indexing.hyde import HydeRetriever
+
+    registry.register(HydeRetriever)
