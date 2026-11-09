@@ -7,12 +7,12 @@ from rag_foundry_indexing import RrfConfig, RrfFusion, WeightedConfig, WeightedF
 from rag_foundry_techniques import RetrievalResult, RetrievedChunk, ScoreComponent
 
 
-def hit(cid, rank, score=1.0, components=()):
+def hit(cid, rank, score=1.0, components=(), start=0, end=1):
     return RetrievedChunk(
         chunk_id=cid,
         extraction_view_id="view",
-        start=0,
-        end=1,
+        start=start,
+        end=end,
         block_ids=("b",),
         text=cid,
         score=score,
@@ -48,6 +48,52 @@ def test_rrf_tie_uses_chunk_id():
         [result("R03", [hit("x", 1), hit("y", 2)]), result("R02", [hit("y", 1), hit("x", 2)])]
     )
     assert [h.chunk_id for h in fused.hits] == ["x", "y"]
+
+
+def test_rrf_tie_order_stable_across_builds():
+    fused_ids = []
+    for high, low in (("zz", "aa"), ("aa", "zz")):
+        spans = {high: (10, 15), low: (0, 5)}
+        first, second = high, low
+        a = result(
+            "R03",
+            [
+                hit(first, 1, start=spans[first][0], end=spans[first][1]),
+                hit(second, 2, start=spans[second][0], end=spans[second][1]),
+            ],
+        )
+        b = result(
+            "R02",
+            [
+                hit(second, 1, start=spans[second][0], end=spans[second][1]),
+                hit(first, 2, start=spans[first][0], end=spans[first][1]),
+            ],
+        )
+        fused_ids.append([h.start for h in RrfFusion(RrfConfig()).fuse([a, b]).hits])
+    assert fused_ids == [[0, 10], [0, 10]]
+
+
+def test_weighted_tie_order_stable_across_builds():
+    fused_ids = []
+    for high, low in (("zz", "aa"), ("aa", "zz")):
+        spans = {high: (10, 15), low: (0, 5)}
+        first, second = high, low
+        a = result(
+            "R03",
+            [
+                hit(first, 1, 1.0, start=spans[first][0], end=spans[first][1]),
+                hit(second, 2, 1.0, start=spans[second][0], end=spans[second][1]),
+            ],
+        )
+        b = result(
+            "R02",
+            [
+                hit(second, 1, 1.0, start=spans[second][0], end=spans[second][1]),
+                hit(first, 2, 1.0, start=spans[first][0], end=spans[first][1]),
+            ],
+        )
+        fused_ids.append([h.start for h in WeightedFusion(WeightedConfig()).fuse([a, b]).hits])
+    assert fused_ids == [[0, 10], [0, 10]]
 
 
 def test_weighted_hand_calculation_and_degenerate_lists():

@@ -6,7 +6,7 @@ Like R14, but the per-query rankings are combined with reciprocal rank fusion, s
 
 ## Mechanism
 
-Same variant generation as R14 (one metered chat call, original first, deduplicated, constraint-lossy variants dropped by default). Each query is retrieved separately, and a chunk's score is the sum of `1 / (rrf_k + rank)` over the queries that returned it. It reuses R07's `rrf_contribution`. Each hit keeps one `q<i>_rrf` score component per query. Ties are broken by best rank and then chunk id.
+Same variant generation as R14 (one metered chat call, original first, deduplicated, constraint-lossy variants dropped by default). Each query is retrieved separately, and a chunk's score is the sum of `1 / (rrf_k + rank)` over the queries that returned it. It reuses R07's `rrf_contribution`. Each hit keeps one `q<i>_rrf` score component per query. Ties are broken by best rank, then extraction view and start/end offsets, then chunk id.
 
 ## Config and defaults
 
@@ -65,7 +65,7 @@ One live smoke run on 2026-11-09 (owner OK; local `gemma4:e4b` chat and `bge-m3`
 
 ## Limitations
 
-- Ties among equal RRF scores fall back to best rank and then chunk id. Chunk ids are random per index build, so the order of fully tied hits is not reproducible across builds; the demo's variants were chosen to avoid exact ties. A stable tie key is a follow-up.
+- Ties now follow source position, which is stable across index builds; chunk id is used only for identical spans.
 
 RRF sees ranks only; a chunk that is mediocre in every list can beat one that is excellent in a single list. Variant quality and the number of queries drive cost.
 

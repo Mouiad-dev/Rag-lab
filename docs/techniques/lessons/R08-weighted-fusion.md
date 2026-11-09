@@ -8,6 +8,8 @@ Weighted fusion puts branch scores on a per-list min-max scale before combining 
 
 Each list is independently normalized as `(score-min)/(max-min)`, then weighted contributions are summed. Missing candidates contribute zero. Configured weights are used as given; absent weights default to equal weights. If a list is single-hit or all its scores are equal, its present hit(s) normalize to 1.0 and carry `normalization_degenerate`.
 
+Equal fused scores are ordered by best input rank, then extraction view and start/end offsets, then chunk id.
+
 The evidence reports `w*=0.5`, selected by tie-break, not learned. Its dev sweep is flat: every tested weight from 0.0 through 1.0 gives dev MRR 1.0000. The weight is selected on dev only.
 
 ## Runnable demo

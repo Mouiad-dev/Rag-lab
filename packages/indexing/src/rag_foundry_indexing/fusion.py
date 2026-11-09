@@ -162,8 +162,14 @@ def _tag(hit, source):
     ]
 
 
+def fusion_sort_key(score: float, best_rank: int, hit: RetrievedChunk, chunk_id: str) -> tuple:
+    return (-round(score, 12), best_rank, hit.extraction_view_id, hit.start, hit.end, chunk_id)
+
+
 def _result(records, results, technique_id, scoring, k):
-    ordered = sorted(records.items(), key=lambda item: (-round(item[1]["score"], 12), item[1]["rank"], item[0]))
+    ordered = sorted(
+        records.items(), key=lambda item: fusion_sort_key(item[1]["score"], item[1]["rank"], item[1]["hit"], item[0])
+    )
     hits = []
     for rank, (chunk_id, record) in enumerate(ordered[:k], start=1):
         hit = record["hit"]

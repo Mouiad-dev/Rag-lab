@@ -6,7 +6,7 @@ RRF combines ordered result lists when their raw scores have different scales. I
 
 ## Mechanism
 
-For each occurrence, add `1/(k+rank)`; the conventional constant is `k=60` (Cormack, Clarke, Buettcher, 2009). Rank is taken from each input list. A missing list contributes zero. Candidates are de-duplicated by `chunk_id`. The implementation breaks equal fused scores by best input rank, then lexicographically by `chunk_id`. Raw scores are ignored.
+For each occurrence, add `1/(k+rank)`; the conventional constant is `k=60` (Cormack, Clarke, Buettcher, 2009). Rank is taken from each input list. A missing list contributes zero. Candidates are de-duplicated by `chunk_id`. The implementation breaks equal fused scores by best input rank, then extraction view and start/end offsets, then chunk id. Raw scores are ignored.
 
 ## Runnable demo
 

@@ -6,7 +6,7 @@ import pytest
 from rag_foundry_domain.errors import IndexingError
 from rag_foundry_indexing import MultiQueryExpansion, RagFusion, RagFusionConfig, register_builtin_plugins
 from rag_foundry_indexing.fusion import check_inputs
-from rag_foundry_techniques import TechniqueRegistry, load_catalogue
+from rag_foundry_techniques import RetrievalResult, RetrievedChunk, TechniqueRegistry, load_catalogue
 
 from tests.chunking._scripted_models import ScriptedChat
 from tests.indexing._recording_retriever import RecordingRetriever
@@ -47,6 +47,38 @@ def test_rrf_exact_hand_computation():
         out = await RagFusion().run(q, chat=_chat(["v1", "v2"]), retriever=retriever)
         target = next(hit for hit in out.result.hits if hit.chunk_id == "target")
         assert target.score == 1 / 61 + 1 / 63
+
+    asyncio.run(check())
+
+
+def test_rag_fusion_tie_order_stable_across_builds():
+    class SpanRetriever:
+        def __init__(self, ids):
+            self.ids = ids
+
+        async def retrieve(self, query):
+            ordered = self.ids if query == "q" else tuple(reversed(self.ids))
+            hits = tuple(
+                RetrievedChunk(
+                    chunk_id=cid,
+                    extraction_view_id="view",
+                    start=0 if cid == self.ids[0] else 10,
+                    end=5 if cid == self.ids[0] else 15,
+                    block_ids=("b",),
+                    text=cid,
+                    score=1.0,
+                    rank=rank,
+                )
+                for rank, cid in enumerate(ordered, 1)
+            )
+            return RetrievalResult(technique_id="R03", grounding="corpus", index_version_id="v1", hits=hits)
+
+    async def check():
+        orders = []
+        for ids in (("zz", "aa"), ("aa", "zz")):
+            out = await RagFusion().run("q", chat=_chat(["v1"]), retriever=SpanRetriever(ids))
+            orders.append([hit.start for hit in out.result.hits])
+        assert orders == [[0, 10], [0, 10]]
 
     asyncio.run(check())
 

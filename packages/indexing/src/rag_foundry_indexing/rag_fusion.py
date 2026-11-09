@@ -7,7 +7,7 @@ from typing import ClassVar
 from pydantic import ConfigDict, Field
 from rag_foundry_techniques import Fidelity, PluginKind, PluginManifest, RetrievalResult, RetrievedChunk, ScoreComponent
 
-from rag_foundry_indexing.fusion import rrf_contribution
+from rag_foundry_indexing.fusion import fusion_sort_key, rrf_contribution
 from rag_foundry_indexing.multi_query import MultiQueryConfig, generate_variants, retrieve_all
 from rag_foundry_indexing.query_transform import TransformedRetrieval
 
@@ -44,9 +44,10 @@ class RagFusion:
                         name=f"q{qi}_rrf", value=contribution, source=result.technique_id, source_rank=hit.rank
                     )
                 )
-        ordered = sorted(records.items(), key=lambda pair: (-round(pair[1]["score"], 12), pair[1]["rank"], pair[0]))[
-            : self.config.k
-        ]
+        ordered = sorted(
+            records.items(),
+            key=lambda pair: fusion_sort_key(pair[1]["score"], pair[1]["rank"], pair[1]["hit"], pair[0]),
+        )[: self.config.k]
         hits = tuple(
             RetrievedChunk(
                 chunk_id=cid,
