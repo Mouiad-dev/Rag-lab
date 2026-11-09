@@ -10,6 +10,8 @@ from rag_foundry_core.settings import load_settings
 from rag_foundry_domain.errors import IndexingError, QueryTransformError
 from rag_foundry_indexing import (
     DecomposeConfig,
+    DenseConfig,
+    DenseRetriever,
     HydeConfig,
     HydeRetriever,
     MultiQueryConfig,
@@ -18,9 +20,9 @@ from rag_foundry_indexing import (
     QuestionRewriter,
     RagFusion,
     RagFusionConfig,
-    RewriteConfig,
     StepBackConfig,
     StepBackRetrieval,
+    retrieve_with_rewrite,
 )
 from rag_foundry_providers.adapters.ollama import (
     OllamaChatModel,
@@ -35,11 +37,16 @@ pytestmark = [
 ]
 
 
-class RecordingRetriever:
-    async def retrieve(self, query):
-        from rag_foundry_techniques import RetrievalResult
+class RecordingDense:
+    """Real dense retrieval over the live bge-m3 index; records each query it is given."""
 
-        return RetrievalResult(technique_id="R02", grounding="corpus", index_version_id=None, hits=())
+    def __init__(self, inner):
+        self.inner = inner
+        self.queries = []
+
+    async def retrieve(self, query):
+        self.queries.append(query)
+        return await self.inner.retrieve(query)
 
 
 def test_query_transforms_live_smoke():
@@ -49,17 +56,30 @@ def test_query_transforms_live_smoke():
             ollama_chat_profile(model="gemma4:e4b"), api_base=settings.ollama_base_url, timeout_s=300
         )
         question = "How often does the Port Sallow observatory record sea levels?"
-        recorder = RecordingRetriever()
-        cases = (
-            ("R13", QuestionRewriter(RewriteConfig(), recorder), (question,)),
-            ("R14", MultiQueryExpansion(MultiQueryConfig(n_queries=2), recorder), (question,)),
-            ("R15", QuestionDecomposition(DecomposeConfig(), recorder), (question,)),
-            ("R16", StepBackRetrieval(StepBackConfig(), recorder), (question,)),
-            ("R18", RagFusion(RagFusionConfig(), recorder), (question,)),
+        embedder = OllamaEmbeddingModel(ollama_embedding_profile(model="bge-m3"), api_base=settings.ollama_base_url)
+        texts = (FACT_EN, FACT_AR, *DISTRACTORS[:4])
+        owner, _, index, version = await ready_index([(0, len(text), text) for text in texts], embedder)
+        recorder = RecordingDense(
+            DenseRetriever(DenseConfig(k=3), scope=owner, index_version=version, index=index, embedder=embedder)
         )
-        for technique, transform, args in cases:
+        cases = (
+            (
+                "R13",
+                lambda: retrieve_with_rewrite(question, rewriter=QuestionRewriter(), chat=chat, retriever=recorder),
+            ),
+            (
+                "R14",
+                lambda: MultiQueryExpansion(MultiQueryConfig(n_variants=2)).run(
+                    question, chat=chat, retriever=recorder
+                ),
+            ),
+            ("R15", lambda: QuestionDecomposition(DecomposeConfig()).run(question, chat=chat, retriever=recorder)),
+            ("R16", lambda: StepBackRetrieval(StepBackConfig()).run(question, chat=chat, retriever=recorder)),
+            ("R18", lambda: RagFusion(RagFusionConfig()).run(question, chat=chat, retriever=recorder)),
+        )
+        for technique, call in cases:
             try:
-                result = await transform.retrieve(*args, chat=chat)
+                result = await call()
             except QueryTransformError as exc:
                 print(f"{technique} error={exc.code}")
                 continue
@@ -67,6 +87,9 @@ def test_query_transforms_live_smoke():
             assert result.trace.technique_id == technique
             assert result.trace.original_question == question
             print(f"{technique} status={result.trace.status}")
+            print(f"retrieval_queries={list(result.trace.retrieval_queries)}")
+            top = result.result.hits[0].text[:60] if result.result.hits else None
+            print(f"top_hit={top!r} fact_en_first={bool(result.result.hits) and result.result.hits[0].text == FACT_EN}")
             print(f"generated={[q.text for q in result.trace.generated]}")
             for item in result.trace.usage:
                 print(
@@ -77,9 +100,6 @@ def test_query_transforms_live_smoke():
                     f"output_tokens={item.output_tokens}",
                     f"latency_ms={item.latency_ms}",
                 )
-        embedder = OllamaEmbeddingModel(ollama_embedding_profile(model="bge-m3"), api_base=settings.ollama_base_url)
-        texts = (FACT_EN, FACT_AR, *DISTRACTORS[:4])
-        owner, _, index, version = await ready_index([(0, len(text), text) for text in texts], embedder)
         try:
             result = await HydeRetriever(
                 HydeConfig(), scope=owner, index_version=version, index=index, embedder=embedder
