@@ -517,15 +517,15 @@
       "phase": 5,
       "roadmap_step": "P5.1",
       "legacy_milestone": "M3",
-      "status": "planned",
+      "status": "implemented",
       "catalog_status": "accepted",
       "mechanism": "Use an actual supported learned sparse encoder.",
       "acceptance": "Persist sparse outputs and compare lexical/semantic matches and memory.",
       "requirements_note": "Verify model/backend and compute needs before scheduling; no unapproved download or spend.",
       "primary_source": "https://arxiv.org/abs/2107.05720",
       "date_added": "2026-10-14",
-      "implementation_path": null,
-      "evidence_path": null,
+      "implementation_path": "packages/indexing/src/rag_foundry_indexing/sparse.py",
+      "evidence_path": "docs/evidence/P5.1/learned_sparse_observations.md",
       "production_eligible": false
     },
     {
