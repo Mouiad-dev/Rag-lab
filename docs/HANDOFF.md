@@ -9,7 +9,7 @@ Read this first, then `CLAUDE.md`, `docs/PROGRESS.md` (Current state, the P5.x r
 - Phase 4 is done. Phase 5:
   - P5.1 done: R03 BM25, R04 PostgreSQL FTS. R05 code reviewed and committed 2026-11-09; catalogue/lesson/evidence still open.
   - P5.2 done: R06 hybrid, R07 RRF, R08 weighted fusion, paired report `docs/evidence/P5.2/paired_vs_dense.md`.
-  - P5.3 done: R10 dedup and R11 metadata filters done; R09 MMR done 2026-11-09; R12 self-query done 2026-11-09 (live run passed); P5.3-05 docs done 2026-11-09. **P5.3 done.** R05 catalogue/lesson/evidence done 2026-11-09 (P5.1-05). P5.4 planned (P5.4-01..05); P5.4-01 R13, P5.4-02 R14/R18 and P5.4-03 R15/R16 and P5.4-04 R17 done; live smoke passed; P5.4-05 docs done. **P5.4 done 2026-11-09.** Next: P5.5 reranking and inspection (not planned), plus follow-up: stable tie key for R18/R07 fusion (random chunk ids).
+  - P5.3 done: R10 dedup and R11 metadata filters done; R09 MMR done 2026-11-09; R12 self-query done 2026-11-09 (live run passed); P5.3-05 docs done 2026-11-09. **P5.3 done.** R05 catalogue/lesson/evidence done 2026-11-09 (P5.1-05). P5.4 planned (P5.4-01..05); P5.4-01 R13, P5.4-02 R14/R18 and P5.4-03 R15/R16 and P5.4-04 R17 done; live smoke passed; P5.4-05 docs done. **P5.4 done 2026-11-09.** P5.5 planned (P5.5-01..05); P5.5-01 stable tie key done; owner chose BAAI/bge-reranker-v2-m3 rev 953dc6f6 for R19 (downloaded to var/models/bge-reranker-v2-m3).
   - P5.4, P5.5 not planned yet.
 
 ## R05 learned sparse (committed 2026-11-09; this section is history)
