@@ -162,6 +162,9 @@ class IndexingError(IntakeError):
         "representation_technique_mismatch",
         "representation_kind_mismatch",
         "representation_source_mismatch",
+        "too_many_chunks",
+        "representations_exist",
+        "representation_invalid_output",
     )
 
     def __init__(self, code: str) -> None:
