@@ -27,7 +27,7 @@ from rag_foundry_techniques import TechniqueRegistry, load_catalogue
 
 from tests.evaluation._corpus import DOC_KEY, bound_index, build_dataset, make_factory
 from tests.indexing._lexical_embedder import LexicalTestEmbedder
-from tests.indexing._paired_fixture import SPANS
+from tests.indexing._paired_fixture import DOC, SPANS
 
 ROOT = Path(__file__).resolve().parents[2]
 ROWS = (
@@ -164,6 +164,20 @@ def test_fingerprint_equal_across_fresh_builds_and_excludes_random_fields():
     # The random per-build fields really differ, so equality above proves they are excluded.
     assert a[4].id != b[4].id
     assert a[4].extraction_view_ids != b[4].extraction_view_ids
+
+
+def test_fingerprint_distinguishes_parents_of_equal_children():
+    children = tuple((a, b, t) for a, b, t in SPANS)
+    parent_a = tuple((a, b, t, 0, len(DOC)) for a, b, t in SPANS)
+    parent_b = tuple((a, b, t, a, b) for a, b, t in SPANS)
+
+    async def go(spans):
+        _, _, owner, index, version, binding = await build(spans)
+        return await index_fingerprint(owner, index, version, binding)
+
+    plain, first, second = run(go(children)), run(go(parent_a)), run(go(parent_b))
+    assert len({plain, first, second}) == 3
+    assert run(go(parent_a)) == first
 
 
 def test_run_id_and_results_change_with_frozen_inputs():

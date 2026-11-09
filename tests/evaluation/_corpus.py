@@ -44,8 +44,17 @@ def build_dataset(rows):
     )
 
 
-def make_factory(owner, index, version, embedder, calls=None):
-    from rag_foundry_indexing import BM25Retriever, DenseRetriever, HybridRetriever
+def make_factory(owner, index, version, embedder, calls=None, source=None):
+    from rag_foundry_indexing import (
+        AutoMergingExpander,
+        BM25Retriever,
+        DenseConfig,
+        DenseRetriever,
+        ExpandingRetriever,
+        HybridRetriever,
+        ParentDocumentExpander,
+        SentenceWindowExpander,
+    )
     from rag_foundry_providers.ledger import RecordingEmbeddingModel
 
     def factory(resolved, config, sinks):
@@ -58,6 +67,14 @@ def make_factory(owner, index, version, embedder, calls=None):
             return DenseRetriever(config, scope=owner, index_version=version, index=index, embedder=wrapped)
         if resolved.technique_id == "R06":
             return HybridRetriever(config, scope=owner, index_version=version, index=index, embedder=wrapped)
+        expanders = {"R21": SentenceWindowExpander, "R22": ParentDocumentExpander, "R25": AutoMergingExpander}
+        if resolved.technique_id in expanders:
+            # The base retriever is fixed to R02 k=5 here; it is not part of RunConfig.
+            base = DenseRetriever(DenseConfig(k=5), scope=owner, index_version=version, index=index, embedder=wrapped)
+            expander = expanders[resolved.technique_id](
+                config, scope=owner, index_version=version, index=index, source=source
+            )
+            return ExpandingRetriever(base, expander)
         raise AssertionError(resolved.technique_id)
 
     return factory
@@ -69,3 +86,20 @@ async def bound_index(embedder, spans=SPANS):
     chunks = await index.list_chunks(owner, version.id, limit=1)
     binding = {DOC_KEY: BoundDocument(extraction_view_id=chunks[0].extraction_view_id, text=DOC)}
     return (owner, index, version), binding
+
+
+def sentence_spans():
+    from rag_foundry_chunking.boundaries import sentence_ranges
+
+    return tuple((start, end, DOC[start:end]) for start, end in sentence_ranges(DOC, 0, len(DOC)))
+
+
+def c18_spans():
+    from rag_foundry_chunking.hierarchy import ParentChildChunker, ParentChildConfig
+    from rag_foundry_techniques import ChunkInput
+
+    chunker = ParentChildChunker(ParentChildConfig(parent_size=200, child_size=50))
+    return tuple(
+        (span.start, span.end, DOC[span.start : span.end], span.parent_start, span.parent_end)
+        for span in chunker.chunk_with_parents(ChunkInput(text=DOC))
+    )

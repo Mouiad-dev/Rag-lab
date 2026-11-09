@@ -55,7 +55,10 @@ async def index_fingerprint(scope, index, version, binding: dict[str, BoundDocum
             )
             if match is None:
                 raise EvaluationError("binding_unbound_view", chunk.extraction_view_id)
-            rows.append([match, chunk.start, chunk.end, hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()])
+            row = [match, chunk.start, chunk.end, hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()]
+            if chunk.parent_start_cp is not None and chunk.parent_end_cp is not None:
+                row.append([chunk.parent_start_cp, chunk.parent_end_cp])
+            rows.append(row)
         offset += len(chunks)
         if len(chunks) < 100:
             break
