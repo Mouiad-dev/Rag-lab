@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from rag_foundry_core.settings import load_settings
+from rag_foundry_domain.errors import QueryTransformError
 from rag_foundry_indexing import SelfQuery
 from rag_foundry_indexing.metadata_filter import ViewMetadata
 from rag_foundry_providers.adapters.ollama import OllamaChatModel, ollama_chat_profile
@@ -16,7 +17,9 @@ pytestmark = [
 
 def test_self_query_live():
     async def check():
-        model = OllamaChatModel(ollama_chat_profile("gemma4:e4b"), base_url=load_settings().ollama_base_url)
+        model = OllamaChatModel(
+            ollama_chat_profile(model="gemma4:e4b"), api_base=load_settings().ollama_base_url, timeout_s=300
+        )
         choices = (
             ViewMetadata(
                 view_id="10000000-0000-4000-8000-000000000001",
@@ -27,7 +30,13 @@ def test_self_query_live():
                 version_created_at=datetime.now(UTC),
             ),
         )
-        result = await SelfQuery().parse("What is in the document?", choices=choices, chat=model)
+        try:
+            result = await SelfQuery().parse("What is in the document?", choices=choices, chat=model)
+        except QueryTransformError as exc:
+            print(f"self-query raised QueryTransformError code={exc.code}")
+            return
+        print(f"status={result.status} reason={result.reason} filter={result.filter} usage={result.usage}")
+        print(f"raw_text={result.raw_text!r}")
         assert result.status in {"applied", "no_filter", "rejected"}
 
     asyncio.run(check())

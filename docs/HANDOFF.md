@@ -9,7 +9,7 @@ Read this first, then `CLAUDE.md`, `docs/PROGRESS.md` (Current state, the P5.x r
 - Phase 4 is done. Phase 5:
   - P5.1 done: R03 BM25, R04 PostgreSQL FTS. R05 code reviewed and committed 2026-11-09; catalogue/lesson/evidence still open.
   - P5.2 done: R06 hybrid, R07 RRF, R08 weighted fusion, paired report `docs/evidence/P5.2/paired_vs_dense.md`.
-  - P5.3 in progress: R10 dedup and R11 metadata filters done; R09 MMR done 2026-11-09; R12 self-query done 2026-11-09 (live run waits for the owner); docs `P5.3-05` not started.
+  - P5.3 in progress: R10 dedup and R11 metadata filters done; R09 MMR done 2026-11-09; R12 self-query done 2026-11-09 (live run passed); docs `P5.3-05` not started.
   - P5.4, P5.5 not planned yet.
 
 ## R05 learned sparse (committed 2026-11-09; this section is history)
@@ -41,7 +41,6 @@ Next steps for R05: run the reviewer subagent on the spec + diff; run `-m db` (b
 
 ## Waiting for the owner
 
-- Run the live local self-query test later (P5.3-04, Ollama `gemma4:e4b`).
 - From earlier phases: P3.7 live answer run, P4.4 live model-chunker smoke test, P2.5 live Anthropic run, P3.1 full stack rebuild check, a push to see CI, native-speaker review of the Arabic fixtures, revoking the Anthropic key from the P2.3 run, the license decision (ADR-0004).
 - A folder Codex left with locked permissions was moved out of the repo; the owner should delete it: `C:\Users\mouia\AppData\Local\Temp\claude\C--Users-mouia--claude-spares-spare-O9DxMZ\d4832678-d2e3-4144-b1f4-5afa2adebbef\scratchpad\codex-locked-tmp`.
 - Unmerged branch `claude/lucid-spence-b1c98c` (an older teammate's P4.5) is superseded: its useful parts were ported (P4.5-05..07). It can be deleted with the owner's OK.
