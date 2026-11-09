@@ -15,6 +15,7 @@ from rag_foundry_domain.indexing import (
     NewIndexVersion,
     ScoredChunk,
 )
+from rag_foundry_domain.representations import NewRepresentation, RepresentationSet, ScoredRepresentation
 
 
 class StagedObject(BaseModel):
@@ -118,6 +119,25 @@ class IndexRepository(Protocol):
         query: tuple[tuple[str, ...], tuple[float, ...]],
         k: int,
     ) -> list: ...
+
+
+@runtime_checkable
+class RepresentationStore(Protocol):
+    """Synthetic chunk representations. Separate from IndexRepository; never evidence."""
+
+    async def add_representations(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        rep_set: RepresentationSet,
+        rows: tuple[NewRepresentation, ...],
+    ) -> None: ...
+
+    async def get_representation_set(self, scope: Scope, index_version_id: str, key: str) -> RepresentationSet: ...
+
+    async def representation_search(
+        self, scope: Scope, index_version_id: str, key: str, query: tuple[float, ...], k: int
+    ) -> list[ScoredRepresentation]: ...
 
 
 @runtime_checkable

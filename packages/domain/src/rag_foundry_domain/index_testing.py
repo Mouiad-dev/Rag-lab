@@ -21,7 +21,14 @@ from rag_foundry_domain.indexing import (
     corpus_sha256_for,
     embedding_key_for,
 )
-from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, IndexRepository
+from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, IndexRepository, RepresentationStore
+from rag_foundry_domain.representations import (
+    NewRepresentation,
+    RepresentationRecord,
+    RepresentationSet,
+    ScoredRepresentation,
+    representation_key_for,
+)
 from rag_foundry_domain.testing import make_new_extraction, make_new_version, make_scope
 
 
@@ -80,6 +87,8 @@ class InMemoryIndexRepository:
         self._chunks: dict[str, list[ChunkRecord]] = {}
         self._vectors: dict[str, tuple[float, ...]] = {}
         self._sparse_vectors: dict[tuple[str, str], tuple[tuple[str, ...], tuple[float, ...]]] = {}
+        self._rep_sets: dict[tuple[str, str], RepresentationSet] = {}
+        self._reps: dict[tuple[str, str], list[tuple[RepresentationRecord, tuple[float, ...]]]] = {}
 
     def _get(self, scope: Scope, iid: str) -> IndexVersion:
         v = self._versions.get(iid)
@@ -206,6 +215,87 @@ class InMemoryIndexRepository:
 
     async def fts_search(self, scope, index_version_id, query, k, *, operator):
         raise IndexingError("fts_unavailable")
+
+    async def add_representations(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        rep_set: RepresentationSet,
+        rows: tuple[NewRepresentation, ...],
+    ) -> None:
+        row = self._get(scope, index_version_id)
+        if row.state is not IndexState.READY:
+            raise IndexingError("not_ready")
+        if len(rows) > 500:
+            raise IndexingError("too_many_rows")
+        if not rows:
+            return
+        chunk_ids = {c.id for c in self._chunks[index_version_id]}
+        if any(r.chunk_id not in chunk_ids for r in rows):
+            raise NotFoundError()
+        if any(len(r.embedding) != row.embedding_dim for r in rows):
+            raise IndexingError("dimension_mismatch")
+        slot = (index_version_id, rep_set.representation_key)
+        known = self._rep_sets.get(slot)
+        if known is not None and known != rep_set:
+            raise IndexingError("representation_set_conflict")
+        existing = {(r.chunk_id, r.kind, r.ordinal) for r, _ in self._reps.get(slot, [])}
+        incoming = [(r.chunk_id, r.kind, r.ordinal) for r in rows]
+        if len(set(incoming)) != len(incoming) or existing & set(incoming):
+            raise IndexingError("duplicate_representation")
+        added = [
+            (
+                RepresentationRecord(
+                    **r.model_dump(exclude={"embedding"}),
+                    index_version_id=row.id,
+                    tenant_id=scope.tenant_id,
+                    project_id=scope.project_id,
+                    representation_key=rep_set.representation_key,
+                ),
+                r.embedding,
+            )
+            for r in rows
+        ]
+        self._rep_sets[slot] = rep_set
+        self._reps.setdefault(slot, []).extend(added)
+
+    async def get_representation_set(self, scope: Scope, index_version_id: str, key: str) -> RepresentationSet:
+        self._get(scope, index_version_id)
+        found = self._rep_sets.get((index_version_id, key))
+        if found is None:
+            raise NotFoundError()
+        return found
+
+    async def representation_search(
+        self, scope: Scope, index_version_id: str, key: str, query: tuple[float, ...], k: int
+    ) -> list[ScoredRepresentation]:
+        row = self._get(scope, index_version_id)
+        if row.state is not IndexState.READY:
+            raise IndexingError("not_ready")
+        if not 1 <= k <= 100:
+            raise IndexingError("invalid_k")
+        q = check_vector(query)
+        if len(q) != row.embedding_dim:
+            raise IndexingError("dimension_mismatch")
+        slot = (index_version_id, key)
+        if slot not in self._rep_sets:
+            raise NotFoundError()
+        stored = self._reps.get(slot, [])
+        if not stored:
+            raise IndexingError("representations_unavailable")
+        chunks = {c.id: c for c in self._chunks[index_version_id]}
+        candidates = []
+        for rec, v in stored:
+            cosine = sum(a * b for a, b in zip(q, v, strict=True)) / (
+                math.sqrt(sum(a * a for a in q)) * math.sqrt(sum(b * b for b in v))
+            )
+            chunk = chunks[rec.chunk_id]
+            candidates.append(((1.0 - cosine, chunk.ordinal, rec.kind, rec.ordinal), chunk, rec))
+        candidates.sort(key=lambda x: x[0])
+        return [
+            ScoredRepresentation(chunk=c, representation=r, distance=key_[0], rank=i + 1)
+            for i, (key_, c, r) in enumerate(candidates[:k])
+        ]
 
 
 async def check_parent_spans(factory: IndexRepoFactory) -> None:
@@ -378,3 +468,121 @@ async def check_chunk_embeddings(factory: IndexRepoFactory) -> None:
 
 
 INDEX_REPOSITORY_CHECKS = (check_index_repository, check_chunk_embeddings)
+
+
+def make_representation(
+    chunk_id: str, kind: str, ordinal: int, text: str, vector: Sequence[float]
+) -> NewRepresentation:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return NewRepresentation(
+        chunk_id=chunk_id,
+        kind=kind,
+        ordinal=ordinal,
+        text=text,
+        text_sha256=digest,
+        embedded_input_sha256=hashlib.sha256(("embed:" + text).encode("utf-8")).hexdigest(),
+        embedding=tuple(vector),
+    )
+
+
+async def check_representations(factory: IndexRepoFactory) -> None:
+    scope, other_tenant = make_scope(), make_scope()
+    docs, view_repo, repo = await factory([scope, other_tenant])
+    if not isinstance(repo, RepresentationStore):
+        raise AssertionError("repository must implement RepresentationStore")
+    views = []
+    for i, sc in enumerate((scope, other_tenant)):
+        out = await docs.create_document_or_get(sc, make_new_version(f"rep-{i}"), display_name="fixture")
+        views.append((await view_repo.create_view_or_get(sc, make_new_extraction(out.version, tag=f"rep-{i}"))).view)
+    version = await repo.create_index_version(scope, make_new_index_version((views[0].id,)))
+    await repo.add_chunks(
+        scope,
+        version.id,
+        (make_chunk(views[0].id, 0, (1, 0, 0, 0), "alpha"), make_chunk(views[0].id, 1, (0, 1, 0, 0), "beta")),
+    )
+    chunk_a, chunk_b = await repo.list_chunks(scope, version.id)
+    foreign_version = await repo.create_index_version(other_tenant, make_new_index_version((views[1].id,)))
+    await repo.add_chunks(other_tenant, foreign_version.id, (make_chunk(views[1].id, 0, (1, 0, 0, 0), "foreign"),))
+    foreign_chunk = (await repo.list_chunks(other_tenant, foreign_version.id))[0]
+
+    key = representation_key_for({"technique": "R23", "model": "m", "prompt": 1})
+    rep_set = RepresentationSet(representation_key=key, technique_id="R23", generator_json='{"model":"m"}')
+    summary_a = make_representation(chunk_a.id, "summary", 0, "summary of alpha", (1, 0, 0, 0))
+    question_b0 = make_representation(chunk_b.id, "question", 0, "what is beta?", (0, 1, 0, 0))
+    question_b1 = make_representation(chunk_b.id, "question", 1, "why beta?", (0.6, 0.8, 0, 0))
+    rows = (summary_a, question_b0, question_b1)
+
+    await _expect_error(repo.add_representations(scope, version.id, rep_set, rows), "not_ready")
+    await _expect_error(repo.representation_search(scope, version.id, key, (1, 0, 0, 0), 1), "not_ready")
+    await repo.mark_ready(scope, version.id)
+
+    await repo.add_representations(scope, version.id, rep_set, ())
+    await _expect_not_found(repo.get_representation_set(scope, version.id, key))
+    await _expect_error(repo.add_representations(scope, version.id, rep_set, (summary_a,) * 501), "too_many_rows")
+    # 500 rows is within the limit: a repeated row is a duplicate, and nothing is written.
+    await _expect_error(
+        repo.add_representations(scope, version.id, rep_set, (summary_a,) * 500), "duplicate_representation"
+    )
+    await _expect_not_found(repo.get_representation_set(scope, version.id, key))
+    unknown_chunk = make_representation(new_id(), "summary", 0, "orphan", (1, 0, 0, 0))
+    foreign_row = make_representation(foreign_chunk.id, "summary", 0, "foreign summary", (1, 0, 0, 0))
+    for bad in (unknown_chunk, foreign_row):
+        await _expect_not_found(repo.add_representations(scope, version.id, rep_set, (summary_a, bad)))
+    short = make_representation(chunk_a.id, "question", 2, "short vector", (1, 0, 0))
+    await _expect_error(repo.add_representations(scope, version.id, rep_set, (summary_a, short)), "dimension_mismatch")
+    await _expect_not_found(repo.get_representation_set(scope, version.id, key))
+
+    for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
+        await _expect_not_found(repo.add_representations(stranger, version.id, rep_set, rows))
+        await _expect_not_found(repo.get_representation_set(stranger, version.id, key))
+        await _expect_not_found(repo.representation_search(stranger, version.id, key, (1, 0, 0, 0), 1))
+    await _expect_not_found(repo.get_representation_set(scope, version.id, key))
+
+    await repo.add_representations(scope, version.id, rep_set, rows)
+    if await repo.get_representation_set(scope, version.id, key) != rep_set:
+        raise AssertionError("representation set must round-trip")
+    for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
+        late = make_representation(chunk_a.id, "question", 5, "late question", (0, 0, 1, 0))
+        await _expect_not_found(repo.get_representation_set(stranger, version.id, key))
+        await _expect_not_found(repo.representation_search(stranger, version.id, key, (1, 0, 0, 0), 1))
+        await _expect_not_found(repo.add_representations(stranger, version.id, rep_set, (late,)))
+    other_technique = RepresentationSet(
+        representation_key=key, technique_id="R24", generator_json=rep_set.generator_json
+    )
+    other_generator = RepresentationSet(representation_key=key, technique_id="R23", generator_json='{"model":"x"}')
+    for conflicting in (other_technique, other_generator):
+        extra = make_representation(chunk_a.id, "question", 3, "extra question", (0, 0, 1, 0))
+        await _expect_error(
+            repo.add_representations(scope, version.id, conflicting, (extra,)), "representation_set_conflict"
+        )
+    await _expect_error(
+        repo.add_representations(scope, version.id, rep_set, (question_b1,)), "duplicate_representation"
+    )
+    twin = make_representation(chunk_a.id, "question", 4, "twin", (0, 0, 1, 0))
+    await _expect_error(repo.add_representations(scope, version.id, rep_set, (twin, twin)), "duplicate_representation")
+
+    hits = await repo.representation_search(scope, version.id, key, (1, 0, 0, 0), 3)
+    got = [(h.chunk.id, h.representation.kind, h.representation.ordinal, h.rank) for h in hits]
+    if got != [(chunk_a.id, "summary", 0, 1), (chunk_b.id, "question", 1, 2), (chunk_b.id, "question", 0, 3)]:
+        raise AssertionError("representation search order must follow distance then chunk, kind, ordinal")
+    if any(abs(h.distance - d) > 1e-5 for h, d in zip(hits, (0.0, 0.4, 1.0), strict=True)):
+        raise AssertionError("representation distances must be approximately 0.0, 0.4, 1.0")
+    if any(h.representation.synthetic is not True for h in hits):
+        raise AssertionError("representations must be labelled synthetic")
+    if [h.chunk.text for h in hits] != ["alpha", "beta", "beta"] or hits[0].representation.text == hits[0].chunk.text:
+        raise AssertionError("search must return original chunk text separate from synthetic text")
+    if [h.chunk.id for h in await repo.representation_search(scope, version.id, key, (1, 0, 0, 0), 2)] != [
+        chunk_a.id,
+        chunk_b.id,
+    ]:
+        raise AssertionError("k=2 must return the first two hits")
+    await _expect_error(repo.representation_search(scope, version.id, key, (1, 0, 0, 0), 0), "invalid_k")
+    await _expect_error(repo.representation_search(scope, version.id, key, (1, 0, 0, 0), 101), "invalid_k")
+    await _expect_error(repo.representation_search(scope, version.id, key, (1, 0, 0), 1), "dimension_mismatch")
+    await _expect_not_found(repo.representation_search(scope, version.id, "0" * 64, (1, 0, 0, 0), 1))
+    await _expect_not_found(repo.get_representation_set(scope, version.id, "0" * 64))
+    if len(await repo.representation_search(scope, version.id, key, (1, 0, 0, 0), 100)) != 3:
+        raise AssertionError("failed writes must not add rows")
+
+
+REPRESENTATION_STORE_CHECKS = (check_representations,)

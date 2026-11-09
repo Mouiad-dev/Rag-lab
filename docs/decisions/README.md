@@ -18,5 +18,7 @@
 | [ADR-0014](ADR-0014-adapter-factories-runtime-settings-prompt-store.md) | Adapter factories, runtime settings and prompt store | accepted |
 | [ADR-0015](ADR-0015-layering-unit-of-work.md) | Layering, engine lifecycle and Unit of Work | accepted |
 | [ADR-0016](ADR-0016-chunk-parent-spans.md) | Chunk parent spans | accepted |
+| [ADR-0017](ADR-0017-sparse-encoder-port.md) | Sparse encoder port | accepted |
+| [ADR-0018](ADR-0018-chunk-representations.md) | Chunk representations | accepted |
 
 New ADRs use [the template](../templates/ADR.md).

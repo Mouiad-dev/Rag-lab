@@ -153,6 +153,12 @@ class IndexingError(IntakeError):
         "expansion_version_mismatch",
         "expansion_view_not_in_index",
         "expansion_source_mismatch",
+        "parent_unavailable",
+        "auto_merge_index_too_large",
+        "too_many_rows",
+        "representation_set_conflict",
+        "duplicate_representation",
+        "representations_unavailable",
     )
 
     def __init__(self, code: str) -> None:

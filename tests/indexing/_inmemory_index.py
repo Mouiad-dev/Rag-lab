@@ -32,7 +32,7 @@ async def ready_index(paragraph_spans, embedder, *, ready=True):
     )
     version = await index.create_index_version(owner, version_config)
     chunks = []
-    for ordinal, (start, end, text) in enumerate(paragraph_spans):
+    for ordinal, (start, end, text, *parent) in enumerate(paragraph_spans):
         embedded = await embedder.embed([text], input_type="document")
         chunks.append(
             NewChunk(
@@ -45,6 +45,8 @@ async def ready_index(paragraph_spans, embedder, *, ready=True):
                 text=text,
                 text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 embedding=embedded.vectors[0],
+                parent_start_cp=parent[0] if parent else None,
+                parent_end_cp=parent[1] if parent else None,
             )
         )
     await index.add_chunks(owner, version.id, tuple(chunks))

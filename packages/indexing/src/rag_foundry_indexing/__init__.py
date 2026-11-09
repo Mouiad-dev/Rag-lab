@@ -1,3 +1,4 @@
+from rag_foundry_indexing.auto_merge import AutoMergeConfig, AutoMergingExpander
 from rag_foundry_indexing.bm25 import BM25Config, BM25Retriever
 from rag_foundry_indexing.context_expansion import (
     ExpandedContext,
@@ -47,6 +48,7 @@ from rag_foundry_indexing.metadata_filter import (
 )
 from rag_foundry_indexing.mmr import MmrConfig, MmrSelector
 from rag_foundry_indexing.multi_query import MultiQueryConfig, MultiQueryExpansion, merge_best_rank
+from rag_foundry_indexing.parent_document import ParentDocumentConfig, ParentDocumentExpander
 from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
 from rag_foundry_indexing.rag_fusion import RagFusion, RagFusionConfig
 from rag_foundry_indexing.rerank import (
@@ -86,6 +88,10 @@ __all__ = [
     "context_id_for",
     "load_sources",
     "merge_overlapping",
+    "ParentDocumentConfig",
+    "ParentDocumentExpander",
+    "AutoMergeConfig",
+    "AutoMergingExpander",
     "SentenceWindowConfig",
     "SentenceWindowExpander",
     "BM25Config",

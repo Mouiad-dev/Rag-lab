@@ -142,6 +142,11 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.sentence_window import SentenceWindowExpander
 
     registry.register(SentenceWindowExpander)
+    from rag_foundry_indexing.auto_merge import AutoMergingExpander
+    from rag_foundry_indexing.parent_document import ParentDocumentExpander
+
+    registry.register(ParentDocumentExpander)
+    registry.register(AutoMergingExpander)
     from rag_foundry_indexing.hyde import HydeRetriever
 
     registry.register(HydeRetriever)
