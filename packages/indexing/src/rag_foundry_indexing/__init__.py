@@ -51,6 +51,14 @@ from rag_foundry_indexing.multi_query import MultiQueryConfig, MultiQueryExpansi
 from rag_foundry_indexing.parent_document import ParentDocumentConfig, ParentDocumentExpander
 from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
 from rag_foundry_indexing.rag_fusion import RagFusion, RagFusionConfig
+from rag_foundry_indexing.representations import (
+    ContextualRetriever,
+    ContextualSearchConfig,
+    MultiRepresentationRetriever,
+    RepresentationMatch,
+    RepresentationRetrieval,
+    RepresentationSearchConfig,
+)
 from rag_foundry_indexing.rerank import (
     RankChange,
     RerankedRetrieval,
@@ -75,6 +83,12 @@ from rag_foundry_indexing.sparse import LearnedSparseRetriever, SparseConfig, Sp
 from rag_foundry_indexing.step_back import StepBackConfig, StepBackRetrieval
 
 __all__ = [
+    "ContextualRetriever",
+    "ContextualSearchConfig",
+    "MultiRepresentationRetriever",
+    "RepresentationMatch",
+    "RepresentationRetrieval",
+    "RepresentationSearchConfig",
     "SourceBlockRef",
     "ViewSource",
     "SourceTextReader",

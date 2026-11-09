@@ -159,6 +159,9 @@ class IndexingError(IntakeError):
         "representation_set_conflict",
         "duplicate_representation",
         "representations_unavailable",
+        "representation_technique_mismatch",
+        "representation_kind_mismatch",
+        "representation_source_mismatch",
     )
 
     def __init__(self, code: str) -> None:
