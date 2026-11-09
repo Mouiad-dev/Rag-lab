@@ -18,15 +18,21 @@ from .leakage import (
     question_tokens,
     raise_on_errors,
 )
+from .metrics import CaseMetrics, EvalHit, GroupSummary, aggregate, case_metrics
 
 __all__ = [
     "EvalCase",
     "EvalDataset",
     "EvalDocument",
+    "EvalHit",
+    "CaseMetrics",
     "EvaluationError",
     "LeakageFinding",
     "LeakageReport",
     "RelevantSpan",
+    "GroupSummary",
+    "aggregate",
+    "case_metrics",
     "canonical_json",
     "check_leakage",
     "dataset_sha256",
