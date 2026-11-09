@@ -142,6 +142,8 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.hyde import HydeRetriever
 
     registry.register(HydeRetriever)
+    from rag_foundry_indexing.cross_encoder_rerank import CrossEncoderReranker
     from rag_foundry_indexing.llm_rerank import LlmListwiseReranker
 
     registry.register(LlmListwiseReranker)
+    registry.register(CrossEncoderReranker)
