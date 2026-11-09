@@ -104,6 +104,9 @@ def register_builtin_plugins(registry) -> None:
 
     registry.register(BM25Retriever)
     registry.register(FtsRetriever)
+    from rag_foundry_indexing.sparse import LearnedSparseRetriever
+
+    registry.register(LearnedSparseRetriever)
     from rag_foundry_indexing.hybrid import HybridRetriever
 
     registry.register(HybridRetriever)

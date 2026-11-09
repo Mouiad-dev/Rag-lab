@@ -14,7 +14,7 @@ from rag_foundry_domain.settings_store import SettingsOverrideRepository
 WRITE_METHODS: Mapping[str, frozenset[str]] = {
     "documents": frozenset({"create_document_or_get", "add_version_or_get"}),
     "extractions": frozenset({"create_view_or_get"}),
-    "indexes": frozenset({"create_index_version", "add_chunks", "mark_ready", "mark_failed"}),
+    "indexes": frozenset({"create_index_version", "add_chunks", "add_sparse", "mark_ready", "mark_failed"}),
     "prompts": frozenset({"create", "activate"}),
     "settings": frozenset({"append"}),
 }

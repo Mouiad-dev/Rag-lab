@@ -134,6 +134,10 @@ class IndexingError(IntakeError):
         "fusion_weights_mismatch",
         "selection_invalid_input",
         "selection_version_mismatch",
+        "incompatible_sparse_encoder",
+        "sparse_encoding_count_mismatch",
+        "duplicate_sparse_vector",
+        "sparse_unavailable",
     )
 
     def __init__(self, code: str) -> None:

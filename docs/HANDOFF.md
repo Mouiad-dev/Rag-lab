@@ -7,12 +7,12 @@ Read this first, then `CLAUDE.md`, `docs/PROGRESS.md` (Current state, the P5.x r
 - Branch `p1/toolchain-and-skeleton`, last commit `33d359e`. Nothing is pushed (pushing needs the owner's OK).
 - Last full check on `33d359e`: `uv run python scripts/tasks.py check` exit 0, 2089 passed, 71 skipped.
 - Phase 4 is done. Phase 5:
-  - P5.1 done: R03 BM25, R04 PostgreSQL FTS. R05 is coded but **not finished** (see below).
+  - P5.1 done: R03 BM25, R04 PostgreSQL FTS. R05 code reviewed and committed 2026-11-09; catalogue/lesson/evidence still open.
   - P5.2 done: R06 hybrid, R07 RRF, R08 weighted fusion, paired report `docs/evidence/P5.2/paired_vs_dense.md`.
   - P5.3 in progress: R10 dedup and R11 metadata filters done; R09 MMR (`docs/tasks/P5.3-02-r09-mmr.md`), R12 self-query (`P5.3-04`) and docs (`P5.3-05`) not started.
   - P5.4, P5.5 not planned yet.
 
-## Unfinished work in the working tree: R05 learned sparse (uncommitted)
+## R05 learned sparse (committed 2026-11-09; this section is history)
 
 Spec: `docs/tasks/P5.1-03-r05-learned-sparse.md` (Result section filled by the coder).
 

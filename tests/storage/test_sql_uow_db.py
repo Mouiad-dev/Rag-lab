@@ -160,6 +160,9 @@ async def test_read_only_uow_rejects_every_repository_write():
                         "00000000-0000-4000-8000-000000000001",
                         (make_chunk(extraction.view.id, 0, (1, 0, 0, 0), "readonly"),),
                     ),
+                    "add_sparse": uow.indexes.add_sparse(
+                        scope, "00000000-0000-4000-8000-000000000001", "readonly-encoder", ()
+                    ),
                     "mark_ready": uow.indexes.mark_ready(scope, "00000000-0000-4000-8000-000000000001"),
                     "mark_failed": uow.indexes.mark_failed(scope, "00000000-0000-4000-8000-000000000001"),
                 },

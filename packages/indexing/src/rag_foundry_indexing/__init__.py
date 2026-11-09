@@ -20,6 +20,7 @@ from rag_foundry_indexing.retrievers import (
 )
 from rag_foundry_indexing.selection import DedupConfig, DedupResult, DroppedCandidate, EvidenceDedup, check_single_input
 from rag_foundry_indexing.service import ChunkInspection, IndexService
+from rag_foundry_indexing.sparse import LearnedSparseRetriever, SparseConfig, SparseIndexService
 
 __all__ = [
     "BM25Config",
@@ -52,4 +53,7 @@ __all__ = [
     "NoRetrieval",
     "NoRetrievalConfig",
     "register_builtin_plugins",
+    "LearnedSparseRetriever",
+    "SparseConfig",
+    "SparseIndexService",
 ]

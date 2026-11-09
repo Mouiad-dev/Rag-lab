@@ -16,6 +16,7 @@ from rag_foundry_providers.messages import (
     ChatResult,
     EmbeddingResult,
     RerankResult,
+    SparseEncodingResult,
 )
 
 
@@ -56,6 +57,17 @@ class Reranker(Protocol):
     profile: ModelProfile
 
     async def rerank(self, query: str, documents: Sequence[str], *, top_n: int | None = None) -> RerankResult: ...
+
+
+@runtime_checkable
+class SparseEncoder(Protocol):
+    """Learned sparse encoder. Query encoding uses the model's static vocabulary weights."""
+
+    profile: ModelProfile
+
+    async def encode(
+        self, texts: Sequence[str], *, input_type: Literal["document", "query"]
+    ) -> SparseEncodingResult: ...
 
 
 def check_chat_request(profile: ModelProfile, request: ChatRequest, *, streaming: bool) -> None:

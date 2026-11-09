@@ -108,6 +108,17 @@ class IndexRepository(Protocol):
         self, scope: Scope, index_version_id: str, query: tuple[float, ...], k: int
     ) -> list[ScoredChunk]: ...
 
+    async def add_sparse(self, scope: Scope, index_version_id: str, encoder_key: str, rows: tuple) -> None: ...
+
+    async def sparse_search(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        encoder_key: str,
+        query: tuple[tuple[str, ...], tuple[float, ...]],
+        k: int,
+    ) -> list: ...
+
 
 @runtime_checkable
 class FullTextIndex(Protocol):

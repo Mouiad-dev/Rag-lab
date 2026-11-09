@@ -82,6 +82,111 @@ class SqlIndexRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def add_sparse(self, scope: Scope, index_version_id: str, encoder_key: str, rows: tuple) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            for cid, vector in rows:
+                try:
+                    inserted = await session.execute(
+                        text("""INSERT INTO chunk_sparse_vectors (tenant_id,project_id,index_version_id,chunk_id,encoder_key,terms,weights)
+                    SELECT :t,:p,:i,id,:e,:terms,:weights FROM chunks WHERE id=:c AND tenant_id=:t AND project_id=:p AND index_version_id=:i"""),
+                        {
+                            "t": scope.tenant_id,
+                            "p": scope.project_id,
+                            "i": iid,
+                            "c": _uuid(cid),
+                            "e": encoder_key,
+                            "terms": list(vector[0]),
+                            "weights": list(vector[1]),
+                        },
+                    )
+                except IntegrityError as exc:
+                    if "pk_chunk_sparse_vectors" in str(exc):
+                        raise IndexingError("duplicate_sparse_vector") from None
+                    raise
+                if inserted.rowcount != 1:
+                    raise NotFoundError()
+
+    async def sparse_search(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        encoder_key: str,
+        query: tuple[tuple[str, ...], tuple[float, ...]],
+        k: int,
+    ) -> list:
+        iid = _uuid(index_version_id)
+        if not 1 <= k <= 100:
+            raise IndexingError("invalid_k")
+        async with read(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            exists = await session.scalar(
+                text(
+                    "SELECT 1 FROM chunk_sparse_vectors WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND encoder_key=:e LIMIT 1"
+                ),
+                {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "e": encoder_key},
+            )
+            if exists is None:
+                other_key = await session.scalar(
+                    text(
+                        "SELECT 1 FROM chunk_sparse_vectors WHERE tenant_id=:t AND project_id=:p "
+                        "AND index_version_id=:i AND encoder_key<>:e LIMIT 1"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "e": encoder_key},
+                )
+                raise IndexingError("incompatible_sparse_encoder" if other_key is not None else "sparse_unavailable")
+            rows = (
+                (
+                    await session.execute(
+                        text("""WITH q AS (SELECT * FROM unnest(CAST(:qt AS text[]),CAST(:qw AS real[])) q(term,weight)),
+                d AS (SELECT c.*,sum(v.weight*q.weight) score FROM chunk_sparse_vectors s JOIN chunks c ON c.id=s.chunk_id AND c.tenant_id=s.tenant_id AND c.project_id=s.project_id AND c.index_version_id=s.index_version_id
+                CROSS JOIN LATERAL unnest(s.terms,s.weights) v(term,weight) JOIN q ON q.term=v.term WHERE s.tenant_id=:t AND s.project_id=:p AND s.index_version_id=:i AND s.encoder_key=:e
+                GROUP BY c.id), ranked_terms AS (SELECT s.chunk_id,q.term,sum(q.weight*v.weight) term_weight,row_number() OVER (PARTITION BY s.chunk_id ORDER BY sum(q.weight*v.weight) DESC) rn FROM chunk_sparse_vectors s CROSS JOIN LATERAL unnest(s.terms,s.weights) v(term,weight) JOIN q ON q.term=v.term WHERE s.tenant_id=:t AND s.project_id=:p AND s.index_version_id=:i AND s.encoder_key=:e GROUP BY s.chunk_id,q.term), m AS (SELECT chunk_id,array_agg(term ORDER BY term_weight DESC) terms,array_agg(term_weight ORDER BY term_weight DESC) weights FROM ranked_terms WHERE rn<=8 GROUP BY chunk_id) SELECT d.*,m.terms AS matched_terms,m.weights AS matched_weights FROM d JOIN m ON m.chunk_id=d.id ORDER BY score DESC,ordinal LIMIT :k"""),
+                        {
+                            "qt": list(query[0]),
+                            "qw": list(query[1]),
+                            "t": scope.tenant_id,
+                            "p": scope.project_id,
+                            "i": iid,
+                            "e": encoder_key,
+                            "k": k,
+                        },
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            from types import SimpleNamespace
+
+            result = []
+            for rank, row in enumerate(rows, 1):
+                result.append(
+                    SimpleNamespace(
+                        chunk=_chunk(row),
+                        score=float(row["score"]),
+                        rank=rank,
+                        terms=tuple(
+                            zip(row["matched_terms"][:8], (float(w) for w in row["matched_weights"][:8]), strict=True)
+                        ),
+                    )
+                )
+            return result
+
     async def _locked(self, session: AsyncSession, scope: Scope, iid: str):
         row = (
             (

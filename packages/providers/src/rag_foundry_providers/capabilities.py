@@ -13,6 +13,7 @@ class ModelKind(StrEnum):
     CHAT = "chat"
     EMBEDDING = "embedding"
     RERANKER = "reranker"
+    SPARSE = "sparse"
 
 
 class Capability(StrEnum):

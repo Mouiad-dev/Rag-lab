@@ -79,6 +79,7 @@ class InMemoryIndexRepository:
         self._versions: dict[str, IndexVersion] = {}
         self._chunks: dict[str, list[ChunkRecord]] = {}
         self._vectors: dict[str, tuple[float, ...]] = {}
+        self._sparse_vectors: dict[tuple[str, str], tuple[tuple[str, ...], tuple[float, ...]]] = {}
 
     def _get(self, scope: Scope, iid: str) -> IndexVersion:
         v = self._versions.get(iid)
@@ -184,6 +185,15 @@ class InMemoryIndexRepository:
             candidates.append((1.0 - cosine, c.ordinal, c))
         candidates.sort(key=lambda x: (x[0], x[1]))
         return [ScoredChunk(chunk=c, distance=d, rank=i + 1) for i, (d, _, c) in enumerate(candidates[:k])]
+
+    async def add_sparse(self, scope: Scope, index_version_id: str, encoder_key: str, rows: tuple) -> None:
+        self._get(scope, index_version_id)
+        for chunk_id, vector in rows:
+            self._sparse_vectors[(chunk_id, encoder_key)] = vector
+
+    async def sparse_search(self, scope: Scope, index_version_id: str, encoder_key: str, query, k: int):
+        self._get(scope, index_version_id)
+        raise IndexingError("sparse_unavailable")
 
     async def fts_search(self, scope, index_version_id, query, k, *, operator):
         raise IndexingError("fts_unavailable")

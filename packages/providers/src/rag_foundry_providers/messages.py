@@ -1,5 +1,6 @@
 """Request and result types for the model ports. Framework-neutral, frozen, no vendor types."""
 
+import math
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -58,6 +59,26 @@ class EmbeddingResult(_Frozen):
         if len({len(v) for v in self.vectors}) > 1:
             raise ValueError("all embedding vectors must have equal length")
         return self
+
+
+class SparseVector(_Frozen):
+    terms: tuple[str, ...]
+    weights: tuple[float, ...]
+
+    @model_validator(mode="after")
+    def _valid_sparse(self) -> Self:
+        if len(self.terms) != len(self.weights) or len(self.terms) > 4096:
+            raise ValueError("invalid sparse vector length")
+        if len(set(self.terms)) != len(self.terms) or any(not term for term in self.terms):
+            raise ValueError("sparse vector terms must be unique and nonempty")
+        if any(not math.isfinite(weight) or weight <= 0 for weight in self.weights):
+            raise ValueError("sparse vector weights must be finite and positive")
+        return self
+
+
+class SparseEncodingResult(_Frozen):
+    vectors: tuple[SparseVector, ...]
+    usage: Usage
 
 
 class RerankItem(_Frozen):
