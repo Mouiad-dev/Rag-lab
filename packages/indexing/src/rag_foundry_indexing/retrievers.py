@@ -134,3 +134,8 @@ def register_builtin_plugins(registry) -> None:
 
     registry.register(MultiQueryExpansion)
     registry.register(RagFusion)
+    from rag_foundry_indexing.decompose import QuestionDecomposition
+    from rag_foundry_indexing.step_back import StepBackRetrieval
+
+    registry.register(QuestionDecomposition)
+    registry.register(StepBackRetrieval)

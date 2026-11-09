@@ -1,4 +1,5 @@
 from rag_foundry_indexing.bm25 import BM25Config, BM25Retriever
+from rag_foundry_indexing.decompose import DecomposeConfig, QuestionDecomposition
 from rag_foundry_indexing.fts import FtsConfig, FtsRetriever
 from rag_foundry_indexing.fusion import (
     RrfConfig,
@@ -34,6 +35,7 @@ from rag_foundry_indexing.selection import DedupConfig, DedupResult, DroppedCand
 from rag_foundry_indexing.self_query import SelfQuery, SelfQueryConfig, SelfQueryResult, retrieve_with_self_query
 from rag_foundry_indexing.service import ChunkInspection, IndexService
 from rag_foundry_indexing.sparse import LearnedSparseRetriever, SparseConfig, SparseIndexService
+from rag_foundry_indexing.step_back import StepBackConfig, StepBackRetrieval
 
 __all__ = [
     "BM25Config",
@@ -45,6 +47,10 @@ __all__ = [
     "check_inputs",
     "rrf_contribution",
     "MultiQueryConfig",
+    "DecomposeConfig",
+    "QuestionDecomposition",
+    "StepBackConfig",
+    "StepBackRetrieval",
     "MultiQueryExpansion",
     "merge_best_rank",
     "RagFusion",
