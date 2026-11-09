@@ -19,6 +19,7 @@ from .leakage import (
     raise_on_errors,
 )
 from .metrics import CaseMetrics, EvalHit, GroupSummary, aggregate, case_metrics
+from .report import render_markdown
 from .runner import (
     BoundDocument,
     ResolvedTechnique,
@@ -56,6 +57,7 @@ __all__ = [
     "normalize_question",
     "question_tokens",
     "raise_on_errors",
+    "render_markdown",
     "BoundDocument",
     "ResolvedTechnique",
     "RunConfig",
