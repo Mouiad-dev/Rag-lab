@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # "worktrees": app session checkouts under .claude/worktrees are copies of the repo.
-SKIP_DIRS = {".git", ".idea", ".venv", "node_modules", "private", "__pycache__", "worktrees"}
+SKIP_DIRS = {".git", ".idea", ".venv", "node_modules", "private", "__pycache__", "worktrees", "var"}
 PHASES, STEPS_PER_PHASE = 10, 5
 EXPECTED_AGENTS = {"planner": "opus", "coder": "sonnet", "coder-light": "haiku", "reviewer": "opus"}
 EXPECTED_RULES = 9

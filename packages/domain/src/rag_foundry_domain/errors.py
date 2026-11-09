@@ -141,6 +141,13 @@ class IndexingError(IntakeError):
         "selection_missing_vector",
         "selection_vectors_unavailable",
         "too_many_ids",
+        "rerank_invalid_input",
+        "rerank_too_many_candidates",
+        "rerank_invalid_order",
+        "rerank_added_candidate",
+        "rerank_wrong_model_kind",
+        "inspection_empty",
+        "inspection_version_mismatch",
     )
 
     def __init__(self, code: str) -> None:

@@ -11,6 +11,7 @@ from rag_foundry_indexing.fusion import (
 )
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
+from rag_foundry_indexing.inspection import InspectionStage, RetrievalInspection, inspect_retrieval
 from rag_foundry_indexing.lexical_text import lexical_tokens
 from rag_foundry_indexing.metadata_filter import (
     MetadataFilter,
@@ -24,6 +25,14 @@ from rag_foundry_indexing.mmr import MmrConfig, MmrSelector
 from rag_foundry_indexing.multi_query import MultiQueryConfig, MultiQueryExpansion, merge_best_rank
 from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
 from rag_foundry_indexing.rag_fusion import RagFusion, RagFusionConfig
+from rag_foundry_indexing.rerank import (
+    RankChange,
+    RerankedRetrieval,
+    RerankTrace,
+    apply_order,
+    check_rerank_input,
+    rank_changes,
+)
 from rag_foundry_indexing.retrievers import (
     DenseConfig,
     DenseRetriever,
@@ -40,6 +49,15 @@ from rag_foundry_indexing.step_back import StepBackConfig, StepBackRetrieval
 
 __all__ = [
     "BM25Config",
+    "RankChange",
+    "RerankTrace",
+    "RerankedRetrieval",
+    "apply_order",
+    "check_rerank_input",
+    "rank_changes",
+    "InspectionStage",
+    "RetrievalInspection",
+    "inspect_retrieval",
     "BM25Retriever",
     "RrfConfig",
     "RrfFusion",
