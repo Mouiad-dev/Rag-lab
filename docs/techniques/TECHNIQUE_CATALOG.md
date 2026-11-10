@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R20; remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R25; remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -49,11 +49,11 @@ The acceptance column describes evidence that must exist before validation. Each
 | R18 | query_fusion / P5.4 | RAG fusion | Combine multiple reformulated searches with rank fusion. | Separate expansion benefit from fusion benefit in an ablation. | implemented |
 | R19 | reranking / P5.5 | Cross-encoder reranking | Score query-document pairs after candidate retrieval. | Compare before/after ranking and include reranking latency. | implemented |
 | R20 | reranking / P5.5 | LLM reranking | Use a bounded structured ranking judgment. | Validate item IDs, handle ties/failures and measure order sensitivity. | implemented |
-| R21 | context_retrieval / P6.2 | Sentence windows | Retrieve a sentence and expand nearby source sentences. | Measure missing context versus extra irrelevant tokens. | planned |
-| R22 | context_retrieval / P6.2 | Parent document retrieval | Search children but return authorized parent context. | Bound parent size and maintain child-to-parent source lineage. | planned |
-| R23 | representation / P6.2 | Multiple representations | Index summaries, questions or chunks linked to the original. | Show which representation retrieved the source; cite the original. | planned |
-| R24 | representation / P6.2 | Contextual enrichment | Add document-specific context before indexing a chunk. | Label generated prefixes and compare added cost and retrieval lift. | planned |
-| R25 | context_retrieval / P6.2 | Hierarchical auto-merging | Merge related retrieved children into parent context by policy. | Demonstrate threshold behavior and token growth. | planned |
+| R21 | context_retrieval / P6.2 | Sentence windows | Retrieve a sentence and expand nearby source sentences. | Measure missing context versus extra irrelevant tokens. | implemented |
+| R22 | context_retrieval / P6.2 | Parent document retrieval | Search children but return authorized parent context. | Bound parent size and maintain child-to-parent source lineage. | implemented |
+| R23 | representation / P6.2 | Multiple representations | Index summaries, questions or chunks linked to the original. | Show which representation retrieved the source; cite the original. | implemented |
+| R24 | representation / P6.2 | Contextual enrichment | Add document-specific context before indexing a chunk. | Label generated prefixes and compare added cost and retrieval lift. | implemented |
+| R25 | context_retrieval / P6.2 | Hierarchical auto-merging | Merge related retrieved children into parent context by policy. | Demonstrate threshold behavior and token growth. | implemented |
 | R26 | context / P6.3 | Context compression | Extract or summarize relevant context under a budget. | Check preservation of negation, dates, conditions, units and citations. | planned |
 | R27 | context / P6.3 | Context ordering and packing | Order/deduplicate evidence and reserve model output budget. | Compare positions and record dropped evidence rather than silently truncate. | planned |
 | R28 | workflow / P6.4 | Conversational RAG | Resolve references using bounded conversation state. | Test follow-ups, topic switches and prevention of unsupported memory facts. | planned |
