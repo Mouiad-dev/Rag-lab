@@ -4,6 +4,7 @@ import secrets
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from rag_foundry_contracts.runs import (
@@ -30,12 +31,14 @@ from rag_foundry_domain.runtime_settings import (
     ANSWER_TEMPERATURE_MIN,
     AnswerSettings,
 )
+from rag_foundry_indexing.packing import ContextPacker
 from rag_foundry_ingestion.anchor_service import AnchorService
 from rag_foundry_providers.ledger import UsageLedger
 from rag_foundry_providers.ports import ChatModel
-from rag_foundry_techniques.kinds import Retriever
+from rag_foundry_techniques.kinds import RetrievalResult, Retriever
 
 from rag_foundry_answering.citations import check_answer, normalize_nonce_markers, parse_markers
+from rag_foundry_answering.claims import validate_citations
 from rag_foundry_answering.gate import apply_gate
 from rag_foundry_answering.prompt import build_grounded_request, build_ungrounded_request, nonce_conflicts
 
@@ -87,6 +90,8 @@ class AnswerService:
         ledger: UsageLedger,
         config: AnswerConfig,
         settings_sha256: str | None = None,
+        packer: ContextPacker | None = None,
+        citation_check: Literal["off", "warn"] = "off",
     ) -> RunResponse:
         if index_version is not None and config.min_score is None:
             raise RunError("abstention_threshold_unset")
@@ -159,6 +164,24 @@ class AnswerService:
             return response(RunStatus.UNGROUNDED, answer=text, warnings=warnings)
 
         gate = apply_gate(result.hits, min_score=config.min_score, max_evidence_chars=config.max_evidence_chars)
+        used = gate.used
+        packed = None
+        warnings = ["evidence_truncated"] if gate.truncated else []
+        if gate.outcome == "pass" and packer is not None:
+            packed = packer.pack(
+                RetrievalResult(
+                    technique_id=result.technique_id,
+                    grounding="corpus",
+                    index_version_id=result.index_version_id,
+                    hits=gate.used,
+                ),
+                model_context_window=chat.profile.capabilities.context_window,
+                reserve_output_tokens=config.max_output_tokens,
+                fixed_text=prompts.grounded.system_text + "\n" + question,
+            )
+            used = packed.items
+            if packed.trace.dropped:
+                warnings.append("evidence_packed_dropped")
         evidence: list[Evidence] = []
         anchors_by_marker = {}
         for hit in result.hits:
@@ -170,7 +193,7 @@ class AnswerService:
                     marker=marker,
                     rank=hit.rank,
                     score=hit.score,
-                    used=hit in gate.used,
+                    used=hit in used,
                     anchors=hit_anchors,
                 )
             )
@@ -178,24 +201,31 @@ class AnswerService:
             reason = AbstentionReason.NO_EVIDENCE if gate.outcome == "no_evidence" else AbstentionReason.LOW_SCORE
             return response(RunStatus.ABSTAINED, reason=reason, evidence=evidence)
 
+        if not used:
+            return response(
+                RunStatus.ABSTAINED,
+                reason=AbstentionReason.NO_EVIDENCE,
+                evidence=evidence,
+                warnings=[*warnings, "evidence_packing_empty"],
+            )
+
         request = build_grounded_request(
             prompts.grounded,
             question,
-            tuple((f"S{hit.rank}", hit.text) for hit in gate.used),
+            tuple((f"S{hit.rank}", hit.text) for hit in used),
             nonce=nonce,
             max_output_tokens=config.max_output_tokens,
             temperature=config.temperature,
         )
         completion = await chat.complete(request)
         text = normalize_nonce_markers(completion.text, nonce)
-        check = check_answer(text, completion.finish_reason, {f"S{hit.rank}" for hit in gate.used})
+        check = check_answer(text, completion.finish_reason, {f"S{hit.rank}" for hit in used})
         reason_by_outcome = {
             "declined": AbstentionReason.MODEL_DECLINED,
             "truncated": AbstentionReason.TRUNCATED_OUTPUT,
             "uncited": AbstentionReason.UNCITED_ANSWER,
             "invalid": AbstentionReason.INVALID_CITATION,
         }
-        warnings = ["evidence_truncated"] if gate.truncated else []
         if check.outcome == "ok" and nonce in text:
             # The nonce outside an accepted marker form must never reach a response (ADR-0013 amendment).
             return response(
@@ -205,6 +235,21 @@ class AnswerService:
             return response(
                 RunStatus.ABSTAINED, reason=reason_by_outcome[check.outcome], evidence=evidence, warnings=warnings
             )
+
+        if citation_check == "warn":
+            report = validate_citations(
+                text,
+                provided={f"S{hit.rank}": hit.text for hit in used},
+                known={item.marker for item in evidence},
+            )
+            # claim_invalid_citation cannot occur here: check_answer (known = used markers) has already
+            # abstained with invalid_citation on any unknown or unprovided marker. Kept only as a defensive check.
+            if report.invalid:
+                warnings.append("claim_invalid_citation")
+            if report.uncited:
+                warnings.append("claim_uncited")
+            if report.unsupported:
+                warnings.append("claim_unsupported_lexical")
 
         citations = []
         for marker in check.cited:
@@ -217,6 +262,8 @@ class AnswerService:
                     warnings=warnings,
                 )
             citations.append(Citation(marker=marker, anchors=anchors_by_marker[marker]))
+        # The packer config is not pinned in RunPins, and there is no unsupported_claim reason;
+        # contract v1.2 is deferred by the owner.
         return response(
             RunStatus.ANSWERED,
             answer=text.strip(),
