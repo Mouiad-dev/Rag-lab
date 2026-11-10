@@ -165,6 +165,7 @@ class IndexingError(IntakeError):
         "too_many_chunks",
         "representations_exist",
         "representation_invalid_output",
+        "compression_invalid_input",
     )
 
     def __init__(self, code: str) -> None:

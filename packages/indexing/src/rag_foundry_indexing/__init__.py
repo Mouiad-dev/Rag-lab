@@ -1,5 +1,13 @@
 from rag_foundry_indexing.auto_merge import AutoMergeConfig, AutoMergingExpander
 from rag_foundry_indexing.bm25 import BM25Config, BM25Retriever
+from rag_foundry_indexing.compression import (
+    CompressedRetrieval,
+    CompressingRetriever,
+    CompressionTrace,
+    ExtractiveCompressionConfig,
+    ExtractiveCompressor,
+    SentenceDecision,
+)
 from rag_foundry_indexing.context_expansion import (
     ExpandedContext,
     ExpandedRetrieval,
@@ -16,6 +24,14 @@ from rag_foundry_indexing.context_expansion import (
     merge_overlapping,
 )
 from rag_foundry_indexing.decompose import DecomposeConfig, QuestionDecomposition
+from rag_foundry_indexing.evidence_constraints import (
+    MONTHS,
+    STOPWORDS,
+    UNITS,
+    content_terms,
+    evidence_constraints,
+    is_qualifier,
+)
 from rag_foundry_indexing.fts import FtsConfig, FtsRetriever
 from rag_foundry_indexing.fusion import (
     RrfConfig,
@@ -90,6 +106,18 @@ from rag_foundry_indexing.sparse import LearnedSparseRetriever, SparseConfig, Sp
 from rag_foundry_indexing.step_back import StepBackConfig, StepBackRetrieval
 
 __all__ = [
+    "CompressedRetrieval",
+    "CompressingRetriever",
+    "CompressionTrace",
+    "ExtractiveCompressionConfig",
+    "ExtractiveCompressor",
+    "SentenceDecision",
+    "MONTHS",
+    "STOPWORDS",
+    "UNITS",
+    "content_terms",
+    "evidence_constraints",
+    "is_qualifier",
     "ContextualPrefixBuilder",
     "ContextualPrefixBuildConfig",
     "MultiRepresentationBuilder",

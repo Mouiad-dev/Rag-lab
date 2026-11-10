@@ -159,3 +159,6 @@ def register_builtin_plugins(registry) -> None:
 
     registry.register(LlmListwiseReranker)
     registry.register(CrossEncoderReranker)
+    from rag_foundry_indexing.compression import ExtractiveCompressor
+
+    registry.register(ExtractiveCompressor)
