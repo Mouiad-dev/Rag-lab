@@ -25,5 +25,6 @@ Date: 2026-10-26. Every `primary_source` in `config/techniques.json` was checked
 | R47 | CAG | github.com/hhhuang/CAG | Cache-Augmented Generation repo | correct; paper: arXiv 2412.15605 "Don't Do RAG" (Chan et al., 2024) |
 | R48 | KAG | github.com/OpenSPG/KAG | KAG repo | correct; paper: arXiv 2409.13731 "KAG: Boosting LLMs in Professional Domains…" |
 | R49 | Prefix KV caching | docs.vllm.ai | "Automatic Prefix Caching - vLLM" | correct (HTTP 200) |
+| R27 | Context ordering and packing | arxiv.org/abs/2307.03172 | "Lost in the Middle: How Language Models Use Long Contexts", Liu et al., v1 submitted 2023-07-06 | 2026-11-10: verified via arXiv abstract page by orchestrator |
 
-Summary: 19 links checked, 18 correct, 1 redirect fixed. Added 2026-11-09: R09, R19, R20 (all correct). The other 54 entries have no single primary source yet (`null`); add one when the technique's lesson is written.
+Summary: 19 links checked, 18 correct, 1 redirect fixed. Added 2026-11-09: R09, R19, R20 (all correct). Added 2026-11-10: R27 (correct). The other 54 entries have no single primary source yet (`null`); add one when the technique's lesson is written.

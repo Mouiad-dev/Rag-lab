@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R25; remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R27; remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -54,8 +54,8 @@ The acceptance column describes evidence that must exist before validation. Each
 | R23 | representation / P6.2 | Multiple representations | Index summaries, questions or chunks linked to the original. | Show which representation retrieved the source; cite the original. | implemented |
 | R24 | representation / P6.2 | Contextual enrichment | Add document-specific context before indexing a chunk. | Label generated prefixes and compare added cost and retrieval lift. | implemented |
 | R25 | context_retrieval / P6.2 | Hierarchical auto-merging | Merge related retrieved children into parent context by policy. | Demonstrate threshold behavior and token growth. | implemented |
-| R26 | context / P6.3 | Context compression | Extract or summarize relevant context under a budget. | Check preservation of negation, dates, conditions, units and citations. | planned |
-| R27 | context / P6.3 | Context ordering and packing | Order/deduplicate evidence and reserve model output budget. | Compare positions and record dropped evidence rather than silently truncate. | planned |
+| R26 | context / P6.3 | Context compression | Extract or summarize relevant context under a budget. | Check preservation of negation, dates, conditions, units and citations. | implemented |
+| R27 | context / P6.3 | Context ordering and packing | Order/deduplicate evidence and reserve model output budget. | Compare positions and record dropped evidence rather than silently truncate. | implemented |
 | R28 | workflow / P6.4 | Conversational RAG | Resolve references using bounded conversation state. | Test follow-ups, topic switches and prevention of unsupported memory facts. | planned |
 | R29 | workflow / P8.1 | Corrective RAG adaptation | Grade retrieval, rewrite/retry and exit under a strict budget. | Label adaptation to CRAG, show successful recovery and no-progress termination. | planned |
 | R30 | workflow / P8.1 | Prompt-based self-checks | Validate support and revise/abstain using explicit checks. | Keep separate from trained Self-RAG and test false-positive judge decisions. | planned |
