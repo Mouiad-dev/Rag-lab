@@ -9,6 +9,14 @@ from .dataset import (
     load_dataset,
 )
 from .errors import EvaluationError
+from .languages import (
+    aggregate_language_pairs,
+    document_language,
+    language_pair,
+    language_pair_summaries,
+    render_language_pairs,
+    script_language,
+)
 from .leakage import (
     LeakageFinding,
     LeakageReport,
@@ -18,7 +26,7 @@ from .leakage import (
     question_tokens,
     raise_on_errors,
 )
-from .metrics import CaseMetrics, EvalHit, GroupSummary, aggregate, case_metrics
+from .metrics import CaseMetrics, EvalHit, GroupSummary, aggregate, case_metrics, summarize_group
 from .report import render_markdown
 from .runner import (
     BoundDocument,
@@ -47,6 +55,13 @@ __all__ = [
     "RelevantSpan",
     "GroupSummary",
     "aggregate",
+    "aggregate_language_pairs",
+    "document_language",
+    "language_pair",
+    "language_pair_summaries",
+    "render_language_pairs",
+    "script_language",
+    "summarize_group",
     "case_metrics",
     "canonical_json",
     "check_leakage",

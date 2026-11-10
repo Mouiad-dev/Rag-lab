@@ -40,7 +40,9 @@ class EvalCase(_FrozenModel):
     case_id: str = Field(pattern=KEY)
     question: str = Field(min_length=1, max_length=2000)
     language: Literal["en", "ar", "mixed"]
-    tags: tuple[Literal["identifier", "paraphrase", "diacritics", "table", "ocr"], ...] = ()
+    tags: tuple[
+        Literal["identifier", "paraphrase", "diacritics", "table", "ocr", "name", "negation", "number"], ...
+    ] = ()
     split: Literal["dev", "validation", "held_out"]
     answerable: bool
     relevant: tuple[RelevantSpan, ...]

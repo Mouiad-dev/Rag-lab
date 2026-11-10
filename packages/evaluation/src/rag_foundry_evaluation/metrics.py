@@ -132,6 +132,30 @@ def case_metrics(case: EvalCase, hits: Sequence[EvalHit], *, ks=(1, 3, 5), thres
     )
 
 
+def summarize_group(split, group, members, ks) -> GroupSummary:
+    answerable = [(case, metrics, error) for case, metrics, error in members if case.answerable]
+    count = len(answerable)
+
+    def means(field):
+        if not count:
+            return None
+        return {k: round(sum(getattr(metric, field)[k] for _, metric, _ in answerable) / count, 6) for k in ks}
+
+    mrr = round(sum(metric.rr for _, metric, _ in answerable) / count, 6) if count else None
+    return GroupSummary(
+        split=split,
+        group=group,
+        n_cases=len(members),
+        n_answerable=count,
+        n_unanswerable=sum(not case.answerable for case, _, _ in members),
+        n_errors=sum(error for _, _, error in members),
+        hit_rate=means("hit_rate"),
+        recall=means("recall"),
+        ndcg=means("ndcg"),
+        mrr=mrr,
+    )
+
+
 def aggregate(rows, ks) -> tuple[GroupSummary, ...]:
     ks = _validate_ks(ks)
     group_names = (
@@ -163,27 +187,5 @@ def aggregate(rows, ks) -> tuple[GroupSummary, ...]:
                 )
                 if case.split == split and matches:
                     members.append((case, metrics, error))
-            answerable = [(case, metrics, error) for case, metrics, error in members if case.answerable]
-            count = len(answerable)
-
-            def means(field, answerable=answerable, count=count):
-                if not count:
-                    return None
-                return {k: round(sum(getattr(metric, field)[k] for _, metric, _ in answerable) / count, 6) for k in ks}
-
-            mrr = round(sum(metric.rr for _, metric, _ in answerable) / count, 6) if count else None
-            output.append(
-                GroupSummary(
-                    split=split,
-                    group=group,
-                    n_cases=len(members),
-                    n_answerable=count,
-                    n_unanswerable=sum(not case.answerable for case, _, _ in members),
-                    n_errors=sum(error for _, _, error in members),
-                    hit_rate=means("hit_rate"),
-                    recall=means("recall"),
-                    ndcg=means("ndcg"),
-                    mrr=mrr,
-                )
-            )
+            output.append(summarize_group(split, group, members, ks))
     return tuple(output)
