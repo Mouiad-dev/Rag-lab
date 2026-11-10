@@ -162,3 +162,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.compression import ExtractiveCompressor
 
     registry.register(ExtractiveCompressor)
+    from rag_foundry_indexing.packing import ContextPacker
+
+    registry.register(ContextPacker)

@@ -166,6 +166,10 @@ class IndexingError(IntakeError):
         "representations_exist",
         "representation_invalid_output",
         "compression_invalid_input",
+        "packing_invalid_input",
+        "packing_no_context_window",
+        "packing_window_exceeds_model",
+        "packing_no_budget",
     )
 
     def __init__(self, code: str) -> None:

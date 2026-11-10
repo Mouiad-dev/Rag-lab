@@ -222,3 +222,20 @@ __all__ = [
     "RewriteConfig",
     "retrieve_with_rewrite",
 ]
+from rag_foundry_indexing.packing import (
+    ContextPackConfig,
+    ContextPacker,
+    DroppedEvidence,
+    PackedContext,
+    PackTrace,
+    PlacedEvidence,
+)
+
+__all__ += [
+    "ContextPackConfig",
+    "ContextPacker",
+    "DroppedEvidence",
+    "PackedContext",
+    "PackTrace",
+    "PlacedEvidence",
+]
