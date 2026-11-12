@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -66,29 +67,41 @@ def _write(tmp_path, **changes):
     items = judge_items_v1()
     data = placeholder_labels(items, RUBRIC).model_dump(mode="json")
     data.update(changes)
-    import json
-
     path = tmp_path / "labels.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
 
 
+def _committed_labels_status() -> str | None:
+    if not LABELS_PATH.exists():
+        return None
+    return json.loads(LABELS_PATH.read_text(encoding="utf-8")).get("status")
+
+
 def test_committed_files_equal_dumps():
     items = judge_items_v1()
     placeholder = placeholder_labels(items, RUBRIC)
+    labeled = _committed_labels_status() == "labeled"
     if os.getenv("RAG_WRITE_EVIDENCE") == "1":
         ITEMS_PATH.parent.mkdir(parents=True, exist_ok=True)
         with ITEMS_PATH.open("w", encoding="utf-8", newline="\n") as stream:
             stream.write(dump_judge_items(items))
-        with LABELS_PATH.open("w", encoding="utf-8", newline="\n") as stream:
-            stream.write(dump_human_labels(placeholder))
+        if labeled:  # never overwrite real human labels; still check them strictly
+            load_human_labels(LABELS_PATH, items=items, rubric=RUBRIC)
+        else:
+            with LABELS_PATH.open("w", encoding="utf-8", newline="\n") as stream:
+                stream.write(dump_human_labels(placeholder))
         return
     assert ITEMS_PATH.read_bytes().decode("ascii") == dump_judge_items(items)
-    assert LABELS_PATH.read_bytes().decode("ascii") == dump_human_labels(placeholder)
     loaded = load_human_labels(LABELS_PATH, items=items, rubric=RUBRIC)
+    assert loaded.items_sha256 == judge_items_sha256(items)
+    if labeled:
+        # Real human labels: the strict loader above is the check; the file is not a generated dump.
+        assert loaded.labels
+        return
+    assert LABELS_PATH.read_bytes().decode("ascii") == dump_human_labels(placeholder)
     assert loaded.status == "placeholder_not_labeled"
     assert loaded.labels == ()
-    assert loaded.items_sha256 == judge_items_sha256(items)
 
 
 def test_placeholder_agreement_is_not_yet_measured():
