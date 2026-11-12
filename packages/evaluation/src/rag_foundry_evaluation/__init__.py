@@ -1,3 +1,4 @@
+from .cost_latency import StageLatency, render_cost_latency, summarize_runner_timings, summarize_timings
 from .dataset import (
     EvalCase,
     EvalDataset,
@@ -42,8 +43,16 @@ from .runner import (
     run_experiment,
     run_id,
 )
+from .timing import CallTiming, TimingChatModel, TimingRecorder
 
 __all__ = [
+    "CallTiming",
+    "StageLatency",
+    "TimingChatModel",
+    "TimingRecorder",
+    "render_cost_latency",
+    "summarize_runner_timings",
+    "summarize_timings",
     "EvalCase",
     "EvalDataset",
     "EvalDocument",
