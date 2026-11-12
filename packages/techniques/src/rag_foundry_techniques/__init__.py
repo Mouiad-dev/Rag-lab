@@ -1,7 +1,14 @@
 from rag_foundry_techniques.catalogue import Catalogue, TechniqueEntry, load_catalogue
+from rag_foundry_techniques.discovery import (
+    ENTRY_POINT_GROUP,
+    DiscoveredPlugin,
+    discover_plugins,
+)
 from rag_foundry_techniques.errors import (
     CatalogueError,
     DuplicatePluginError,
+    PluginDiscoveryError,
+    PluginDiscoveryFailure,
     PluginKindError,
     TechniqueError,
     TechniqueUnavailableError,
@@ -30,6 +37,11 @@ from rag_foundry_techniques.protocol import (
 from rag_foundry_techniques.registry import TechniqueRegistry
 
 __all__ = [
+    "ENTRY_POINT_GROUP",
+    "DiscoveredPlugin",
+    "PluginDiscoveryError",
+    "PluginDiscoveryFailure",
+    "discover_plugins",
     "PROTOCOL_VERSION",
     "Catalogue",
     "CatalogueError",
