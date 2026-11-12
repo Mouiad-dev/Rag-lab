@@ -21,5 +21,9 @@ class TechniqueUnavailableError(TechniqueError):
     """A catalogued technique has no available implementation (used in P1.5-05)."""
 
 
+class PluginKindError(TechniqueError):
+    """A plugin's declared kind does not fit the category of its catalogue entry."""
+
+
 class DuplicatePluginError(TechniqueError):
     """Two plugins claim the same catalogue ID (used in P1.5-05)."""

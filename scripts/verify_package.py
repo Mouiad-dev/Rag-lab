@@ -109,6 +109,17 @@ def check_catalogue(errors, roadmap_steps):
     expected = {f"C{i:02}" for i in range(1, 22)} | {f"R{i:02}" for i in range(1, 52)}
     if len(ids) != len(set(ids)) or not expected.issubset(ids):
         errors.append("Technique IDs must be unique and include the committed 72-entry curriculum.")
+    kind_map = registry.get("allowed_plugin_kinds")
+    plugin_kinds = {
+        "chunker", "representation", "retriever", "fusion", "query_transform", "reranker",
+        "context_builder", "workflow", "graph_builder", "knowledge_store", "cache", "evaluator",
+    }  # fmt: skip
+    if not isinstance(kind_map, dict) or set(kind_map) != set(registry["allowed_categories"]):
+        errors.append("allowed_plugin_kinds keys must equal allowed_categories.")
+    else:
+        for category, kinds in kind_map.items():
+            if not isinstance(kinds, list) or not kinds or not set(kinds) <= plugin_kinds:
+                errors.append(f"allowed_plugin_kinds has an empty list or unknown kind: {category}")
     catalogue = read("docs/techniques/TECHNIQUE_CATALOG.md")
     for entry in entries:
         tid = entry["id"]

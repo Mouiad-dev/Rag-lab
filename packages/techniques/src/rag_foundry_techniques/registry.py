@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from rag_foundry_techniques.catalogue import Catalogue, TechniqueEntry
 from rag_foundry_techniques.errors import (
     DuplicatePluginError,
+    PluginKindError,
     TechniqueError,
     TechniqueUnavailableError,
     UnknownTechniqueError,
@@ -22,18 +23,29 @@ class TechniqueRegistry:
         self._catalogue = catalogue
         self._plugins: dict[str, type] = {}
 
-    def register(self, plugin_cls: type) -> type:
+    def check(self, plugin_cls: type) -> PluginManifest:
+        """Validate a plugin class without changing registry state."""
         manifest = getattr(plugin_cls, "manifest", None)
         if not isinstance(manifest, PluginManifest):
             raise TechniqueError(f"plugin {plugin_cls!r} has no valid PluginManifest in 'manifest'")
         tid = manifest.technique_id
         if tid not in self._catalogue:
             raise UnknownTechniqueError(tid)
+        allowed = self._catalogue.kinds_for(tid)
+        if manifest.kind.value not in allowed:
+            raise PluginKindError(
+                f"plugin for {tid}: kind '{manifest.kind.value}' is not allowed for its category; "
+                f"allowed kinds: {', '.join(allowed)}"
+            )
         if manifest.config_model.model_config.get("extra") != "forbid":
             raise TechniqueError(f"plugin for {tid}: config model must set extra='forbid'")
         if tid in self._plugins:
             raise DuplicatePluginError(f"a plugin is already registered for technique {tid}")
-        self._plugins[tid] = plugin_cls
+        return manifest
+
+    def register(self, plugin_cls: type) -> type:
+        manifest = self.check(plugin_cls)
+        self._plugins[manifest.technique_id] = plugin_cls
         return plugin_cls
 
     def entry(self, tid: str) -> TechniqueEntry:

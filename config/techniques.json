@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "status": "curriculum_contract",
-  "schema_notes": "status = implementation state; catalog_status = whether the entry is part of the curriculum (the Tech Scout may only create 'proposed' entries in the app database, never in this file). phase/roadmap_step refer to docs/plan/ROADMAP.md; legacy_milestone keeps the pre-2.0 M0-M9 label. primary_source is null where no single canonical source has been recorded yet.",
+  "schema_notes": "status = implementation state; catalog_status = whether the entry is part of the curriculum (the Tech Scout may only create 'proposed' entries in the app database, never in this file). phase/roadmap_step refer to docs/plan/ROADMAP.md; legacy_milestone keeps the pre-2.0 M0-M9 label. primary_source is null where no single canonical source has been recorded yet. allowed_plugin_kinds maps each category to the plugin kinds a plugin for an entry of that category may declare; the registry refuses any other kind.",
   "allowed_statuses": [
     "planned",
     "in_progress",
@@ -32,6 +32,23 @@
     "retrieval",
     "structured_data"
   ],
+  "allowed_plugin_kinds": {
+    "agentic_workflow": ["query_transform", "workflow"],
+    "baseline": ["retriever"],
+    "cache": ["cache"],
+    "chunking": ["chunker"],
+    "context": ["context_builder"],
+    "evaluation": ["evaluator"],
+    "graph_knowledge": ["graph_builder", "knowledge_store", "retriever"],
+    "knowledge_context": ["knowledge_store", "workflow"],
+    "multimodal": ["representation", "retriever"],
+    "other": ["cache", "chunker", "context_builder", "evaluator", "fusion", "graph_builder", "knowledge_store", "query_transform", "reranker", "representation", "retriever", "workflow"],
+    "query_transform": ["query_transform"],
+    "representation": ["representation"],
+    "reranking": ["reranker"],
+    "retrieval": ["fusion", "retriever"],
+    "structured_data": ["retriever", "workflow"]
+  },
   "completion_policy": "Every entry remains in scope. Production eligibility is separate. Adaptations do not satisfy faithful research reproduction entries.",
   "techniques": [
     {

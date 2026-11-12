@@ -7,6 +7,7 @@ from rag_foundry_techniques import (
     DuplicatePluginError,
     Fidelity,
     PluginKind,
+    PluginKindError,
     PluginManifest,
     RetrievalResult,
     TechniqueError,
@@ -30,10 +31,10 @@ class LaxConfig(BaseModel):
     size: int = 10
 
 
-def _manifest(tid="C01", config=DummyConfig):
+def _manifest(tid="C01", config=DummyConfig, kind=PluginKind.CHUNKER):
     return PluginManifest(
         technique_id=tid,
-        kind=PluginKind.CHUNKER,
+        kind=kind,
         version="0.1.0",
         fidelity=Fidelity.SIMULATION,
         config_model=config,
@@ -155,3 +156,24 @@ def test_plugin_kind_has_twelve_members():
 def test_no_grounding_rejects_hits_or_index_id(values):
     with pytest.raises(ValidationError):
         RetrievalResult(**values)
+
+
+def test_wrong_kind_refused():
+    plugin = type("Wrong", (), {"manifest": _manifest("C01", kind=PluginKind.RERANKER)})
+    with pytest.raises(PluginKindError, match=r"C01.*reranker.*chunker"):
+        _registry().register(plugin)
+
+
+def test_kind_check_runs_before_config_check():
+    plugin = type("WrongLax", (), {"manifest": _manifest("C01", LaxConfig, PluginKind.RERANKER)})
+    with pytest.raises(PluginKindError):
+        _registry().register(plugin)
+
+
+def test_check_does_not_register():
+    reg = _registry()
+    assert reg.check(DummyPlugin).technique_id == "C01"
+    assert reg.registered_ids() == ()
+    reg.register(DummyPlugin)
+    with pytest.raises(DuplicatePluginError):
+        reg.check(DummyPlugin)

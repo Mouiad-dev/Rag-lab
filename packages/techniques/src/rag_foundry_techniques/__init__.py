@@ -2,6 +2,7 @@ from rag_foundry_techniques.catalogue import Catalogue, TechniqueEntry, load_cat
 from rag_foundry_techniques.errors import (
     CatalogueError,
     DuplicatePluginError,
+    PluginKindError,
     TechniqueError,
     TechniqueUnavailableError,
     UnknownTechniqueError,
@@ -45,6 +46,7 @@ __all__ = [
     "DuplicatePluginError",
     "Fidelity",
     "PluginKind",
+    "PluginKindError",
     "PluginManifest",
     "TechniqueEntry",
     "TechniqueError",
