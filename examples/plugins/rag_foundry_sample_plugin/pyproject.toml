@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-sample-plugin"
+version = "0.1.0"
+description = "Sample external RAG Foundry technique plugin (page-block chunker, simulation)"
+requires-python = ">=3.12"
+dependencies = ["rag-foundry-techniques"]
+
+[project.entry-points."rag_foundry.techniques"]
+C11 = "rag_foundry_sample_plugin:PageBlockChunker"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_sample_plugin"]

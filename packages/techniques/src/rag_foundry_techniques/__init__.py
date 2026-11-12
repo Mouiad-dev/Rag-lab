@@ -1,4 +1,5 @@
 from rag_foundry_techniques.catalogue import Catalogue, TechniqueEntry, load_catalogue
+from rag_foundry_techniques.contract import PluginContractError, check_chunker_run, check_plugin_contract
 from rag_foundry_techniques.discovery import (
     ENTRY_POINT_GROUP,
     DiscoveredPlugin,
@@ -37,6 +38,9 @@ from rag_foundry_techniques.protocol import (
 from rag_foundry_techniques.registry import TechniqueRegistry
 
 __all__ = [
+    "PluginContractError",
+    "check_chunker_run",
+    "check_plugin_contract",
     "ENTRY_POINT_GROUP",
     "DiscoveredPlugin",
     "PluginDiscoveryError",
