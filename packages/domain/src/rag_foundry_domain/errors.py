@@ -170,6 +170,16 @@ class IndexingError(IntakeError):
         "packing_no_context_window",
         "packing_window_exceeds_model",
         "packing_no_budget",
+        "graph_scope_mismatch",
+        "graph_source_mismatch",
+        "graph_invalid",
+        "graph_exists",
+        "graph_too_large",
+        "graph_evidence_missing",
+        "graph_key_mismatch",
+        "untraced_claim",
+        "community_cap_exceeded",
+        "global_search_too_many_communities",
     )
 
     def __init__(self, code: str) -> None:
