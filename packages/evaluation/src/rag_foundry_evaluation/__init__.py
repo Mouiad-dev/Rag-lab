@@ -10,6 +10,19 @@ from .dataset import (
     load_dataset,
 )
 from .errors import EvaluationError
+from .judge import (
+    RUBRIC_ANSWER_SUPPORT_V1,
+    JudgeConfig,
+    JudgeEvidence,
+    JudgeItem,
+    JudgeItemSet,
+    JudgeRubric,
+    JudgeVerdict,
+    LlmJudge,
+    dump_judge_items,
+    judge_items_sha256,
+    load_judge_items,
+)
 from .languages import (
     aggregate_language_pairs,
     document_language,
@@ -46,6 +59,17 @@ from .runner import (
 from .timing import CallTiming, TimingChatModel, TimingRecorder
 
 __all__ = [
+    "RUBRIC_ANSWER_SUPPORT_V1",
+    "JudgeConfig",
+    "JudgeEvidence",
+    "JudgeItem",
+    "JudgeItemSet",
+    "JudgeRubric",
+    "JudgeVerdict",
+    "LlmJudge",
+    "dump_judge_items",
+    "judge_items_sha256",
+    "load_judge_items",
     "CallTiming",
     "StageLatency",
     "TimingChatModel",
