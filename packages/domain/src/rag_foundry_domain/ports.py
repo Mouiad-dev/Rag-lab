@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from rag_foundry_domain.documents import Document, DocumentVersion, IntakeOutcome, NewVersion, Scope, Sha256Hex
 from rag_foundry_domain.extraction import ExtractionKey, ExtractionOutcome, ExtractionView, NewExtraction
+from rag_foundry_domain.graphs import EntityGraph
 from rag_foundry_domain.indexing import (
     ChunkRecord,
     FtsScoredChunk,
@@ -138,6 +139,19 @@ class RepresentationStore(Protocol):
     async def representation_search(
         self, scope: Scope, index_version_id: str, key: str, query: tuple[float, ...], k: int
     ) -> list[ScoredRepresentation]: ...
+
+
+@runtime_checkable
+class EntityGraphStore(Protocol):
+    """One immutable entity graph per (index version, graph key). Separate from IndexRepository; never evidence."""
+
+    async def add_entity_graph(self, scope: Scope, index_version_id: str, graph: EntityGraph) -> None:
+        """Atomic: all rows or none."""
+        ...
+
+    async def get_entity_graph(self, scope: Scope, index_version_id: str, graph_key: str) -> EntityGraph:
+        """NotFoundError when missing or outside scope."""
+        ...
 
 
 @runtime_checkable

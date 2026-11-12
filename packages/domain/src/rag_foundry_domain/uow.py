@@ -15,7 +15,15 @@ WRITE_METHODS: Mapping[str, frozenset[str]] = {
     "documents": frozenset({"create_document_or_get", "add_version_or_get"}),
     "extractions": frozenset({"create_view_or_get"}),
     "indexes": frozenset(
-        {"create_index_version", "add_chunks", "add_sparse", "add_representations", "mark_ready", "mark_failed"}
+        {
+            "create_index_version",
+            "add_chunks",
+            "add_sparse",
+            "add_representations",
+            "add_entity_graph",
+            "mark_ready",
+            "mark_failed",
+        }
     ),
     "prompts": frozenset({"create", "activate"}),
     "settings": frozenset({"append"}),
