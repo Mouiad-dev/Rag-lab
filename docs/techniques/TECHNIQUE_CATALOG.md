@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R27; remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R28, R42; remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -56,7 +56,7 @@ The acceptance column describes evidence that must exist before validation. Each
 | R25 | context_retrieval / P6.2 | Hierarchical auto-merging | Merge related retrieved children into parent context by policy. | Demonstrate threshold behavior and token growth. | implemented |
 | R26 | context / P6.3 | Context compression | Extract or summarize relevant context under a budget. | Check preservation of negation, dates, conditions, units and citations. | implemented |
 | R27 | context / P6.3 | Context ordering and packing | Order/deduplicate evidence and reserve model output budget. | Compare positions and record dropped evidence rather than silently truncate. | implemented |
-| R28 | workflow / P6.4 | Conversational RAG | Resolve references using bounded conversation state. | Test follow-ups, topic switches and prevention of unsupported memory facts. | planned |
+| R28 | workflow / P6.4 | Conversational RAG | Resolve references using bounded conversation state. | Test follow-ups, topic switches and prevention of unsupported memory facts. | implemented |
 | R29 | workflow / P8.1 | Corrective RAG adaptation | Grade retrieval, rewrite/retry and exit under a strict budget. | Label adaptation to CRAG, show successful recovery and no-progress termination. | planned |
 | R30 | workflow / P8.1 | Prompt-based self-checks | Validate support and revise/abstain using explicit checks. | Keep separate from trained Self-RAG and test false-positive judge decisions. | planned |
 | R31 | research / P7.5 | Faithful Self-RAG inference | Use a compatible reflection-token model and original method references. | Record checkpoint/license/hardware, actual reflection behavior and deviations. | planned |
@@ -70,7 +70,7 @@ The acceptance column describes evidence that must exist before validation. Each
 | R39 | graph / P7.2 | Community/global GraphRAG | Build graph communities and summaries for corpus-level questions. | Trace summary claims to sources and measure index/update cost. | planned |
 | R40 | multimodal / P7.5 | Text-table-image RAG | Route extraction and use vision-aware answers with source links. | Test chart/table questions and generated-caption errors. | planned |
 | R41 | multimodal / P7.5 | Visual multivector retrieval | Use ColPali-compatible page/query encoders and late-interaction scoring. | Question-dependent real scores, page provenance, memory/latency comparison. | planned |
-| R42 | evaluation_cohort / P6.4 | Cross-language RAG | Search across Arabic/English and mixed-language questions/documents. | Report each language pair separately, including names/numbers/negation. | planned |
+| R42 | evaluation_cohort / P6.4 | Cross-language RAG | Search across Arabic/English and mixed-language questions/documents. | Report each language pair separately, including names/numbers/negation. | implemented |
 | R43 | structured_retrieval / P8.3 | Constrained SQL retrieval | Retrieve factual aggregates through a restricted readonly datasource. | Test scoped views, disallowed functions, timeout and result bounds. | planned |
 | R44 | workflow / P8.2 | Explicit web fallback | Use public web retrieval only under an enabled privacy policy. | Label web sources, avoid private query leakage, handle conflicting freshness. | planned |
 | R45 | retrieval / P7.5 | Text late-interaction retrieval | Use a compatible ColBERT-style token multivector model/scorer. | Contrast single-vector and token matching with the same question set. | planned |
