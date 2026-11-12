@@ -49,6 +49,14 @@ from rag_foundry_indexing.fusion import (
     check_inputs,
     rrf_contribution,
 )
+from rag_foundry_indexing.graph_extract import (
+    R38_SYSTEM_V1,
+    R38_SYSTEM_V1_SHA256,
+    EntityRelationExtractConfig,
+    EntityRelationGraphBuilder,
+    GraphBuildReport,
+    RejectedItem,
+)
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
 from rag_foundry_indexing.inspection import InspectionStage, RetrievalInspection, inspect_retrieval
@@ -246,6 +254,12 @@ from rag_foundry_indexing.packing import (
 )
 
 __all__ += [
+    "R38_SYSTEM_V1",
+    "R38_SYSTEM_V1_SHA256",
+    "EntityRelationExtractConfig",
+    "EntityRelationGraphBuilder",
+    "GraphBuildReport",
+    "RejectedItem",
     "ContextPackConfig",
     "ContextPacker",
     "DroppedEvidence",
