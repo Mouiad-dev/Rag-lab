@@ -129,6 +129,9 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.rewrite import QuestionRewriter
 
     registry.register(QuestionRewriter)
+    from rag_foundry_indexing.conversation import ConversationalRewriter
+
+    registry.register(ConversationalRewriter)
     from rag_foundry_indexing.multi_query import MultiQueryExpansion
     from rag_foundry_indexing.rag_fusion import RagFusion
 

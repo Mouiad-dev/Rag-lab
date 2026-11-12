@@ -194,6 +194,9 @@ class QueryTransformError(IntakeError):
         "constraint_loss",
         "invalid_dependency",
         "too_many_queries",
+        "history_scope_mismatch",
+        "history_order_invalid",
+        "unsupported_memory_fact",
     )
 
     def __init__(self, code: str) -> None:

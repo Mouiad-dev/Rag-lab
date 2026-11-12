@@ -23,6 +23,14 @@ from rag_foundry_indexing.context_expansion import (
     load_sources,
     merge_overlapping,
 )
+from rag_foundry_indexing.conversation import (
+    ConversationalRetrieval,
+    ConversationalRewriter,
+    ConversationConfig,
+    ConversationTrace,
+    ConversationTurn,
+    retrieve_with_conversation,
+)
 from rag_foundry_indexing.decompose import DecomposeConfig, QuestionDecomposition
 from rag_foundry_indexing.evidence_constraints import (
     MONTHS,
@@ -221,6 +229,12 @@ __all__ = [
     "QuestionRewriter",
     "RewriteConfig",
     "retrieve_with_rewrite",
+    "ConversationTurn",
+    "ConversationConfig",
+    "ConversationTrace",
+    "ConversationalRetrieval",
+    "ConversationalRewriter",
+    "retrieve_with_conversation",
 ]
 from rag_foundry_indexing.packing import (
     ContextPackConfig,

@@ -29,7 +29,7 @@ class QueryTransformTrace(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     technique_id: str
-    status: Literal["applied", "rejected", "constraint_loss"]
+    status: Literal["applied", "rejected", "constraint_loss", "no_history", "unsupported_fact"]
     reason: str | None
     original_question: str
     generated: tuple[GeneratedQuery, ...]
