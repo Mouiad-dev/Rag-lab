@@ -31,14 +31,45 @@ def _sha() -> str:
 
 _SHA_AT_IMPORT = _sha()
 
-CASES = [("C11", "chunker", "rag_foundry_plugin_c11"), ("R38", "graph_builder", "rag_foundry_plugin_r38")]
+
+def _free_id(kind, preferred=None):
+    """First catalogue ID that allows this kind, is not built-in and is not implemented/validated."""
+    catalogue = load_catalogue(CATALOGUE)
+    builtin = script._builtin_ids()
+    entries = {e["id"]: e for e in json.loads(CATALOGUE.read_text(encoding="utf-8"))["techniques"]}
+    ids = [preferred] if preferred else sorted(entries)
+    for tid in ids:
+        if (
+            kind in catalogue.kinds_for(tid)
+            and tid not in builtin
+            and entries[tid]["status"]
+            not in (
+                "implemented",
+                "validated",
+            )
+        ):
+            return tid
+    return None
+
+
+def _case(kind, preferred=None):
+    tid = _free_id(kind, preferred)
+    if tid is None:
+        reason = f"no unbuilt catalogue ID allows kind '{kind}'; generator case skipped"
+        return pytest.param("", kind, "", marks=pytest.mark.skip(reason=reason)), None
+    return (tid, kind, f"rag_foundry_plugin_{tid.lower()}"), (tid, kind)
+
+
+_PARAMS_AND_REAL = [_case("chunker", "C11"), _case("graph_builder")]
+PARAMS = [p for p, _ in _PARAMS_AND_REAL]
+CASES = [r for _, r in _PARAMS_AND_REAL if r is not None]
 
 
 @pytest.fixture(scope="module")
 def generated(tmp_path_factory):
     before = _sha()
     result = {}
-    for tid, kind, _pkg in CASES:
+    for tid, kind in CASES:
         out = tmp_path_factory.mktemp(tid) / "plugin"
         assert script.main([tid, "--kind", kind, "--fidelity", "simulation", "--out", str(out)]) == 0
         result[tid] = out
@@ -46,7 +77,7 @@ def generated(tmp_path_factory):
     return result
 
 
-@pytest.mark.parametrize(("tid", "kind", "pkg"), CASES)
+@pytest.mark.parametrize(("tid", "kind", "pkg"), PARAMS)
 def test_files_exist_and_are_ascii(generated, tid, kind, pkg):
     out = generated[tid]
     files = ["pyproject.toml", f"src/{pkg}/__init__.py", "tests/test_contract.py", "README.md"]
@@ -63,7 +94,7 @@ def test_catalogue_unchanged_after_generation(generated):
     assert _sha() == _SHA_AT_IMPORT
 
 
-@pytest.mark.parametrize(("tid", "kind", "pkg"), CASES)
+@pytest.mark.parametrize(("tid", "kind", "pkg"), PARAMS)
 def test_generated_module_passes_contract(generated, monkeypatch, tid, kind, pkg):
     monkeypatch.syspath_prepend(str(generated[tid] / "src"))
     monkeypatch.delitem(sys.modules, pkg, raising=False)
@@ -79,7 +110,7 @@ def test_generated_module_passes_contract(generated, monkeypatch, tid, kind, pkg
     monkeypatch.delitem(sys.modules, pkg, raising=False)
 
 
-@pytest.mark.parametrize(("tid", "kind", "pkg"), CASES)
+@pytest.mark.parametrize(("tid", "kind", "pkg"), PARAMS)
 def test_generated_test_passes_in_subprocess(generated, tid, kind, pkg):
     out = generated[tid]
     env = {**os.environ, "PYTHONPATH": str(out / "src"), "RAG_FOUNDRY_CATALOGUE": str(CATALOGUE)}

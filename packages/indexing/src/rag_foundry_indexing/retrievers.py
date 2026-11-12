@@ -168,3 +168,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.packing import ContextPacker
 
     registry.register(ContextPacker)
+    from rag_foundry_indexing.graph_retrieve import EntityGraphRetriever
+
+    registry.register(EntityGraphRetriever)

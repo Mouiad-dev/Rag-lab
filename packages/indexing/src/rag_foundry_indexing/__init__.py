@@ -57,6 +57,7 @@ from rag_foundry_indexing.graph_extract import (
     GraphBuildReport,
     RejectedItem,
 )
+from rag_foundry_indexing.graph_retrieve import EntityGraphConfig, EntityGraphRetriever, GraphRetrievalTrace
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
 from rag_foundry_indexing.inspection import InspectionStage, RetrievalInspection, inspect_retrieval
@@ -260,6 +261,9 @@ __all__ += [
     "EntityRelationGraphBuilder",
     "GraphBuildReport",
     "RejectedItem",
+    "EntityGraphConfig",
+    "EntityGraphRetriever",
+    "GraphRetrievalTrace",
     "ContextPackConfig",
     "ContextPacker",
     "DroppedEvidence",
