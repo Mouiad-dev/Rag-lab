@@ -12,6 +12,7 @@ pytestmark = [pytest.mark.db, pytest.mark.skipif(not _URL, reason="RAGF_TEST_DAT
 
 if _URL:
     from rag_foundry_domain.errors import IndexingError, NotFoundError, PromptError, SettingsError, StoreError
+    from rag_foundry_domain.graphs import EntityGraph
     from rag_foundry_domain.index_testing import make_chunk, make_new_index_version
     from rag_foundry_domain.prompts import PromptTemplate, prompt_sha256
     from rag_foundry_domain.representations import RepresentationSet
@@ -169,6 +170,20 @@ async def test_read_only_uow_rejects_every_repository_write():
                         "00000000-0000-4000-8000-000000000001",
                         RepresentationSet(representation_key="0" * 64, technique_id="R23", generator_json="{}"),
                         (),
+                    ),
+                    "add_entity_graph": uow.indexes.add_entity_graph(
+                        scope,
+                        "00000000-0000-4000-8000-000000000001",
+                        EntityGraph(
+                            schema="rag_foundry.entity_graph/1",
+                            graph_key="0" * 64,
+                            tenant_id=scope.tenant_id,
+                            project_id=scope.project_id,
+                            index_version_id="00000000-0000-4000-8000-000000000001",
+                            generator_json="{}",
+                            entities=(),
+                            relations=(),
+                        ),
                     ),
                     "mark_ready": uow.indexes.mark_ready(scope, "00000000-0000-4000-8000-000000000001"),
                     "mark_failed": uow.indexes.mark_failed(scope, "00000000-0000-4000-8000-000000000001"),

@@ -750,6 +750,9 @@ async def check_entity_graphs(factory: IndexRepoFactory) -> None:
     if await repo.get_entity_graph(scope, version.id, graph.graph_key) != graph:
         raise AssertionError("entity graph must round-trip")
     await _expect_error(repo.add_entity_graph(scope, version.id, graph), "graph_exists")
+    # The duplicate key is reported before span checks, so a duplicate with a bad span is still graph_exists.
+    duplicate_bad = bad_graph(bad_spans["quote"], "dup").model_copy(update={"graph_key": graph.graph_key})
+    await _expect_error(repo.add_entity_graph(scope, version.id, duplicate_bad), "graph_exists")
     for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
         await _expect_not_found(repo.get_entity_graph(stranger, version.id, graph.graph_key))
 

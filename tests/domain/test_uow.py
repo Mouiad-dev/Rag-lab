@@ -4,7 +4,12 @@ from functools import wraps
 import pytest
 from rag_foundry_domain.documents import Scope
 from rag_foundry_domain.errors import NotFoundError
-from rag_foundry_domain.index_testing import INDEX_REPOSITORY_CHECKS, InMemoryIndexRepository, make_new_index_version
+from rag_foundry_domain.index_testing import (
+    GRAPH_STORE_CHECKS,
+    INDEX_REPOSITORY_CHECKS,
+    InMemoryIndexRepository,
+    make_new_index_version,
+)
 from rag_foundry_domain.prompt_testing import PROMPT_STORE_CHECKS
 from rag_foundry_domain.prompts import InMemoryPromptTemplateStore, PromptTemplate, prompt_sha256
 from rag_foundry_domain.settings_store import InMemorySettingsOverrideRepository, NewSettingOverride
@@ -197,7 +202,7 @@ async def test_per_call_adapters_pass_shared_suites():
 
         await check(extraction_factory)
 
-    for check in INDEX_REPOSITORY_CHECKS:
+    for check in INDEX_REPOSITORY_CHECKS + GRAPH_STORE_CHECKS:  # graph methods must pass through per-call too
 
         async def index_factory(requested):
             docs = InMemoryDocumentRepository(requested)

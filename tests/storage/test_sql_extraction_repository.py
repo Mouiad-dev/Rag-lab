@@ -68,7 +68,8 @@ class _Factory:
         async with maker() as session, session.begin():
             await session.execute(
                 text(
-                    "TRUNCATE runtime_setting_overrides, chunk_representations, representation_sets, "
+                    "TRUNCATE runtime_setting_overrides, graph_spans, graph_relations, "
+                    "graph_entities, entity_graphs, chunk_representations, representation_sets, "
                     "chunk_sparse_vectors, chunks, index_version_views, "
                     "index_versions, extraction_views, "
                     "document_versions, documents, projects, tenants"

@@ -5,6 +5,7 @@ from typing import Any
 from rag_foundry_domain.ports import (
     ChunkVectorReader,
     DocumentRepository,
+    EntityGraphStore,
     ExtractionRepository,
     FullTextIndex,
     IndexRepository,
@@ -45,7 +46,10 @@ class PerCall:
         port = _PORTS[self._family]
         if not hasattr(port, name) and not (
             self._family == "indexes"
-            and (hasattr(FullTextIndex, name) or hasattr(ChunkVectorReader, name) or hasattr(RepresentationStore, name))
+            and any(
+                hasattr(extra, name)
+                for extra in (FullTextIndex, ChunkVectorReader, RepresentationStore, EntityGraphStore)
+            )
         ):
             raise AttributeError(name)
         return invoke

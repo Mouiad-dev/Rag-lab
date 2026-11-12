@@ -9,6 +9,7 @@ from typing import Any
 
 from rag_foundry_domain import NotFoundError, Scope, new_id
 from rag_foundry_domain.errors import IndexingError
+from rag_foundry_domain.graphs import GRAPH_SCHEMA, Entity, EntityGraph, GraphSpan, Relation
 from rag_foundry_domain.indexing import (
     ChunkRecord,
     FtsScoredChunk,
@@ -394,6 +395,185 @@ class SqlIndexRepository:
                 )
                 for n, row in enumerate(rows, 1)
             ]
+
+    async def add_entity_graph(self, scope: Scope, index_version_id: str, graph: EntityGraph) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            graph.check_scope(scope, iid)
+            # Same error order as the in-memory store: a duplicate key is reported before span checks.
+            # The IntegrityError mapping below stays as the fallback for concurrent inserts.
+            if await session.scalar(text("SELECT 1 FROM entity_graphs WHERE graph_key=:g"), {"g": graph.graph_key}):
+                raise IndexingError("graph_exists")
+            spans = [m for e in graph.entities for m in e.mentions] + [s for r in graph.relations for s in r.evidence]
+            chunk_ids = sorted({s.chunk_id for s in spans})
+            chunks: dict[str, Any] = {}
+            if chunk_ids:
+                found = (
+                    await session.execute(
+                        text(
+                            "SELECT id,extraction_view_id,start_cp,end_cp,text FROM chunks "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": chunk_ids},
+                    )
+                ).mappings()
+                chunks = {str(row["id"]): row for row in found}
+            for span in spans:
+                chunk = chunks.get(span.chunk_id)
+                if (
+                    chunk is None
+                    or span.extraction_view_id != str(chunk["extraction_view_id"])
+                    or not chunk["start_cp"] <= span.start < span.end <= chunk["end_cp"]
+                    or chunk["text"][span.start - chunk["start_cp"] : span.end - chunk["start_cp"]] != span.quote
+                ):
+                    raise IndexingError("graph_source_mismatch")
+            base = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": graph.graph_key}
+            try:
+                await session.execute(
+                    text("""INSERT INTO entity_graphs (tenant_id,project_id,index_version_id,graph_key,technique_id,generator_json)
+                    VALUES (:t,:p,:i,:g,:tech,:gen)"""),
+                    {**base, "tech": graph.technique_id, "gen": graph.generator_json},
+                )
+            except IntegrityError as exc:
+                if "pk_entity_graphs" in str(exc) or "uq_entity_graphs" in str(exc):
+                    raise IndexingError("graph_exists") from None
+                raise
+            if graph.entities:
+                await session.execute(
+                    text("""INSERT INTO graph_entities (tenant_id,project_id,index_version_id,graph_key,entity_id,name,type)
+                    VALUES (:t,:p,:i,:g,:eid,:name,:type)"""),
+                    [{**base, "eid": e.entity_id, "name": e.name, "type": e.type} for e in graph.entities],
+                )
+            if graph.relations:
+                await session.execute(
+                    text("""INSERT INTO graph_relations (tenant_id,project_id,index_version_id,graph_key,relation_id,source_id,target_id,label)
+                    VALUES (:t,:p,:i,:g,:rid,:src,:dst,:label)"""),
+                    [
+                        {**base, "rid": r.relation_id, "src": r.source_id, "dst": r.target_id, "label": r.label}
+                        for r in graph.relations
+                    ],
+                )
+            span_rows = [(("entity", e.entity_id), n, m) for e in graph.entities for n, m in enumerate(e.mentions)] + [
+                (("relation", r.relation_id), n, s) for r in graph.relations for n, s in enumerate(r.evidence)
+            ]
+            if span_rows:
+                await session.execute(
+                    text("""INSERT INTO graph_spans
+                    (tenant_id,project_id,index_version_id,graph_key,owner_kind,owner_id,ordinal,chunk_id,extraction_view_id,start_cp,end_cp,quote)
+                    VALUES (:t,:p,:i,:g,:kind,:oid,:o,:c,:v,:s,:e,:q)"""),
+                    [
+                        {
+                            **base,
+                            "kind": owner[0],
+                            "oid": owner[1],
+                            "o": ordinal,
+                            "c": span.chunk_id,
+                            "v": span.extraction_view_id,
+                            "s": span.start,
+                            "e": span.end,
+                            "q": span.quote,
+                        }
+                        for owner, ordinal, span in span_rows
+                    ],
+                )
+
+    async def get_entity_graph(self, scope: Scope, index_version_id: str, graph_key: str) -> EntityGraph:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            params = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": graph_key}
+            where = "tenant_id=:t AND project_id=:p AND index_version_id=:i AND graph_key=:g"
+            head = (
+                (
+                    await session.execute(
+                        text(f"SELECT technique_id,generator_json FROM entity_graphs WHERE {where}"), params
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if head is None:
+                raise NotFoundError()
+            entity_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT entity_id,name,type FROM graph_entities WHERE {where} ORDER BY entity_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            relation_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT relation_id,source_id,target_id,label FROM graph_relations WHERE {where} ORDER BY relation_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            span_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT owner_kind,owner_id,chunk_id,extraction_view_id,start_cp,end_cp,quote FROM graph_spans WHERE {where} ORDER BY owner_kind COLLATE "C", owner_id COLLATE "C", ordinal'
+                    ),
+                    params,
+                )
+            ).mappings()
+            spans: dict[tuple[str, str], list[GraphSpan]] = {}
+            for row in span_rows:
+                spans.setdefault((row["owner_kind"], row["owner_id"]), []).append(
+                    GraphSpan(
+                        chunk_id=str(row["chunk_id"]),
+                        extraction_view_id=str(row["extraction_view_id"]),
+                        start=row["start_cp"],
+                        end=row["end_cp"],
+                        quote=row["quote"],
+                    )
+                )
+            entities = tuple(
+                Entity(
+                    entity_id=row["entity_id"],
+                    name=row["name"],
+                    type=row["type"],
+                    mentions=tuple(spans.get(("entity", row["entity_id"]), ())),
+                )
+                for row in entity_rows
+            )
+            relations = tuple(
+                Relation(
+                    relation_id=row["relation_id"],
+                    source_id=row["source_id"],
+                    target_id=row["target_id"],
+                    label=row["label"],
+                    evidence=tuple(spans.get(("relation", row["relation_id"]), ())),
+                )
+                for row in relation_rows
+            )
+            return EntityGraph(
+                schema=GRAPH_SCHEMA,
+                graph_key=graph_key,
+                tenant_id=scope.tenant_id,
+                project_id=scope.project_id,
+                index_version_id=iid,
+                technique_id=head["technique_id"],
+                generator_json=head["generator_json"],
+                entities=entities,
+                relations=relations,
+            )
 
     async def _locked(self, session: AsyncSession, scope: Scope, iid: str):
         row = (
