@@ -14,6 +14,14 @@ The project is no longer RAG-only. It must cover RAG, GraphRAG and knowledge gra
 5. **Catalogue schema v2** (`config/techniques.json`): adds `category`, `catalog_status` (`accepted` | `proposed` | `rejected` | `deprecated`), `primary_source`, `date_added`, `phase`, `roadmap_step`; keeps `status` (implementation state), `family`, `legacy_milestone`, acceptance and evidence fields. The JSON file is the repository's canonical catalogue; the app imports it into its database, where Tech Scout proposals live until approved.
 6. **Adding a technique** = plugin + catalogue entry + lesson page from `docs/templates/TECHNIQUE.md` + contract tests. No core edits.
 
+## Implementation notes (P7.1)
+- Entry-point group is `rag_foundry.techniques`; the entry-point name must equal the catalogue ID.
+- `config/techniques.json` gets a required top-level map `allowed_plugin_kinds` (owner approved 2026-11-12). Schema stays v2; the change is additive.
+- Discovery is opt-in (`discover_plugins`), sorted and all-or-nothing for the registry. Import side effects are not rolled back.
+- Contract kit: `rag_foundry_techniques.contract` (`check_plugin_contract`, `check_chunker_run`).
+- Experimental local IDs (point 3) are deferred; no allowlist or signing yet.
+- Scaffold: `scripts/new_technique.py` (refuses unknown, built-in, implemented or validated IDs).
+
 ## Alternatives
 - Hard-coded strategy enums in core: simple, but every technique touches core and third parties cannot extend.
 - Fully dynamic, untyped plugins: flexible, but weak validation and poor error messages.

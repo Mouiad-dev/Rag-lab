@@ -47,7 +47,7 @@ Start as one deployable API plus one worker. No microservices until a measured n
 
 ## Technique catalogue
 - 72 entries in `config/techniques.json` (schema v2) mirrored in [TECHNIQUE_CATALOG.md](../techniques/TECHNIQUE_CATALOG.md): C01–C21 chunking/representation, R01–R51 retrieval, query, reranking, context, workflows, graph, CAG/KAG, caches, multimodal, evaluation cohorts.
-- Fields: `category`, `status` (implementation), `catalog_status` (accepted/proposed/rejected/deprecated), `primary_source`, `date_added`, `phase`, `roadmap_step`.
+- Fields: `category`, `status` (implementation), `catalog_status` (accepted/proposed/rejected/deprecated), `primary_source`, `date_added`, `phase`, `roadmap_step`; top-level `allowed_plugin_kinds` (category to plugin kinds, required).
 - Every entry stays in scope; losing a benchmark is a documented result. `validated` needs implementation, fidelity note, demo, tests, comparison and failure analysis. `production_eligible` is separate.
 - Naming honesty: FTS is not BM25; neighbor expansion is not GraphRAG; prompt self-checks are not Self-RAG; per-chunk embedding is not late chunking; response caching is not CAG.
 
