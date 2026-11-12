@@ -11,6 +11,8 @@ Observed in this one run (read from the tables below): with bge-m3, R02 found th
 
 ## Printed output
 
+Markdown headings demoted one level to fit this file; text otherwise as printed.
+
 ### Language pairs
 
 A pair is the question language -> the document language. The document language is the script of the relevant span quotes (>= 80% Arabic letters is ar, <= 20% is en, else mixed; any Latin script counts as en); unanswerable cases map to none.
