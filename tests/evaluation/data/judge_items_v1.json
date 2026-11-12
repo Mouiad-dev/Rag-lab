@@ -1,0 +1,73 @@
+{
+  "format": "rag-foundry.judge-items",
+  "format_version": "1",
+  "items": [
+    {
+      "answer": "The observatory records sea levels every 17 minutes [S1].",
+      "evidence": [
+        {
+          "marker": "S1",
+          "text": "The tidal observatory at Port Sallow records sea levels every 17 minutes."
+        }
+      ],
+      "item_id": "j-01",
+      "question": "How often does the Port Sallow observatory record sea levels?"
+    },
+    {
+      "answer": "The observatory records sea levels every 15 minutes [S1].",
+      "evidence": [
+        {
+          "marker": "S1",
+          "text": "The tidal observatory at Port Sallow records sea levels every 17 minutes."
+        }
+      ],
+      "item_id": "j-02",
+      "question": "How often does the Port Sallow observatory record sea levels?"
+    },
+    {
+      "answer": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a. [S1]",
+      "evidence": [
+        {
+          "marker": "S1",
+          "text": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a."
+        }
+      ],
+      "item_id": "j-03",
+      "question": "\u0643\u0645 \u0645\u062e\u0637\u0648\u0637\u0629 \u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629\u061f"
+    },
+    {
+      "answer": "\u0644\u0627 \u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u0623\u064a \u0645\u062e\u0637\u0648\u0637\u0627\u062a [S1].",
+      "evidence": [
+        {
+          "marker": "S1",
+          "text": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a."
+        }
+      ],
+      "item_id": "j-04",
+      "question": "\u0643\u0645 \u0645\u062e\u0637\u0648\u0637\u0629 \u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629\u061f"
+    },
+    {
+      "answer": "It opens at 08:30 and closes at 20:00 [S1].",
+      "evidence": [
+        {
+          "marker": "S1",
+          "text": "The Oasis Library (\u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629) opens its reading room at 08:30."
+        }
+      ],
+      "item_id": "j-05",
+      "question": "When does the Oasis Library open its reading room?"
+    },
+    {
+      "answer": "The choir meets on Tuesday evenings [S1].",
+      "evidence": [
+        {
+          "marker": "S1",
+          "text": "Members of the chess club meet on Tuesday evenings."
+        }
+      ],
+      "item_id": "j-06",
+      "question": "Which club meets on Tuesday evenings?"
+    }
+  ],
+  "items_id": "answer-support-items"
+}
