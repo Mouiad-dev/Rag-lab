@@ -49,6 +49,18 @@ from rag_foundry_indexing.fusion import (
     check_inputs,
     rrf_contribution,
 )
+from rag_foundry_indexing.graph_community import (
+    R39_SYSTEM_V1,
+    R39_SYSTEM_V1_SHA256,
+    Community,
+    CommunityBuildReport,
+    CommunitySummary,
+    CommunitySummaryBuilder,
+    CommunitySummaryConfig,
+    TracedClaim,
+    detect_communities,
+    trace_claims,
+)
 from rag_foundry_indexing.graph_extract import (
     R38_SYSTEM_V1,
     R38_SYSTEM_V1_SHA256,
@@ -255,6 +267,16 @@ from rag_foundry_indexing.packing import (
 )
 
 __all__ += [
+    "R39_SYSTEM_V1",
+    "R39_SYSTEM_V1_SHA256",
+    "Community",
+    "CommunityBuildReport",
+    "CommunitySummary",
+    "CommunitySummaryBuilder",
+    "CommunitySummaryConfig",
+    "TracedClaim",
+    "detect_communities",
+    "trace_claims",
     "R38_SYSTEM_V1",
     "R38_SYSTEM_V1_SHA256",
     "EntityRelationExtractConfig",

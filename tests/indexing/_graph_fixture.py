@@ -26,6 +26,7 @@ P14 = "Omar Nasser leads the Harbor Authority."
 P15 = (
     "\u0633\u0627\u0645\u064a \u064a\u0639\u0645\u0644 \u0641\u064a \u0645\u064a\u0646\u0627\u0621 \u0635\u0648\u0631."
 )
+P16 = "Mira Yassin tends the lighthouse."
 AR_PERSON = "\u0633\u0627\u0645\u064a"
 AR_PORT = "\u0645\u064a\u0646\u0627\u0621 \u0635\u0648\u0631"
 
@@ -44,10 +45,10 @@ _FILLER = (
     "Students from three schools planted young cedar trees beside the football field.",
 )
 
-PARAGRAPHS = (P0, *_FILLER[:6], P7, *_FILLER[6:], P14, P15)
-assert len(PARAGRAPHS) == 16
-assert min(len(p) for i, p in enumerate(PARAGRAPHS) if i not in (0, 7, 14, 15)) >= max(
-    len(P0), len(P7), len(P14), len(P15)
+PARAGRAPHS = (P0, *_FILLER[:6], P7, *_FILLER[6:], P14, P15, P16)
+assert len(PARAGRAPHS) == 17
+assert min(len(p) for i, p in enumerate(PARAGRAPHS) if i not in (0, 7, 14, 15, 16)) >= max(
+    len(P0), len(P7), len(P14), len(P15), len(P16)
 )
 TEXT = "\n\n".join(PARAGRAPHS)
 
@@ -97,7 +98,17 @@ REPLIES = {
         [_ent(AR_PERSON, "person"), _ent(AR_PORT, "place")],
         [_rel(AR_PERSON, AR_PORT, "works in", P15[:-1])],
     ),
+    P16: _reply([_ent("Mira Yassin", "person")]),
 }
+
+
+def reversed_replies():
+    """The same replies with entities and relations listed in reverse order."""
+    out = {}
+    for key, text in REPLIES.items():
+        data = json.loads(text)
+        out[key] = _reply(data["entities"][::-1], data["relations"][::-1])
+    return out
 
 
 @dataclass
@@ -113,9 +124,10 @@ class Fixture:
     chunks: list
 
 
-async def build_fixture_graph():
+async def build_fixture_graph(*, spans=SPANS, replies=None, config=None):
+    replies = REPLIES if replies is None else replies
     embedder = ScriptedEmbedder(lambda text: (1.0, 0.0, 0.0, 0.0))
-    scope, stranger, index, version = await ready_index(SPANS, embedder)
+    scope, stranger, index, version = await ready_index(spans, embedder)
     chunks = await index.list_chunks(scope, version.id, offset=0, limit=500)
     view_id = chunks[0].extraction_view_id
     view = ViewSource(
@@ -124,15 +136,54 @@ async def build_fixture_graph():
     source = StaticSourceReader({(scope.tenant_id, scope.project_id, view_id): view})
 
     def respond(request):
-        return REPLIES.get(json.loads(request.messages[1].content)["chunk"], _reply()), "stop"
+        return replies.get(json.loads(request.messages[1].content)["chunk"], _reply()), "stop"
 
     chat = ScriptedChat(respond)
     builder = EntityRelationGraphBuilder(
-        EntityRelationExtractConfig(), scope=scope, index_version=version, index=index, source=source, chat=chat
+        config or EntityRelationExtractConfig(),
+        scope=scope,
+        index_version=version,
+        index=index,
+        source=source,
+        chat=chat,
     )
     report = await builder.build()
     graph = await index.get_entity_graph(scope, version.id, report.graph_key)
     return Fixture(scope, stranger, index, version, graph, chat, source, view_id, chunks)
+
+
+async def rebuild_graph_reversed(fx):
+    """Rebuild on the same index from reversed replies; the config differs so the graph key (and key only) differs."""
+
+    def respond(request):
+        return reversed_replies().get(json.loads(request.messages[1].content)["chunk"], _reply()), "stop"
+
+    builder = EntityRelationGraphBuilder(
+        EntityRelationExtractConfig(max_output_tokens=801),
+        scope=fx.scope,
+        index_version=fx.version,
+        index=fx.index,
+        source=fx.source,
+        chat=ScriptedChat(respond),
+    )
+    report = await builder.build()
+    return await fx.index.get_entity_graph(fx.scope, fx.version.id, report.graph_key)
+
+
+def summary_chat(graph, communities, replies=None):
+    """Scripted R39 chat. ``replies`` maps community_id to a raw reply text; the default cites one fact per claim."""
+    replies = replies or {}
+    by_facts = {frozenset(c.entity_ids) | frozenset(c.relation_ids): c.community_id for c in communities}
+
+    def respond(request):
+        facts = json.loads(request.messages[1].content)["facts"]
+        community_id = by_facts[frozenset(f["fact_id"] for f in facts)]
+        if community_id in replies:
+            return replies[community_id], "stop"
+        claims = [{"text": f["text"], "fact_ids": [f["fact_id"]]} for f in facts[-1:]]
+        return json.dumps({"title": "Community " + community_id[-4:], "claims": claims}), "stop"
+
+    return ScriptedChat(respond)
 
 
 def entity_seed(question, chunks, version):
