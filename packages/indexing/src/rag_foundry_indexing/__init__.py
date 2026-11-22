@@ -109,6 +109,7 @@ from rag_foundry_indexing.multi_query import MultiQueryConfig, MultiQueryExpansi
 from rag_foundry_indexing.parent_document import ParentDocumentConfig, ParentDocumentExpander
 from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
 from rag_foundry_indexing.rag_fusion import RagFusion, RagFusionConfig
+from rag_foundry_indexing.raptor_cluster import ClusterConfig, ClusterItem, ClusterResult, cluster_nodes
 from rag_foundry_indexing.representation_build import (
     ContextualPrefixBuildConfig,
     ContextualPrefixBuilder,
@@ -280,6 +281,10 @@ from rag_foundry_indexing.packing import (
 )
 
 __all__ += [
+    "ClusterConfig",
+    "ClusterItem",
+    "ClusterResult",
+    "cluster_nodes",
     "R39_SYSTEM_V1",
     "R39_SYSTEM_V1_SHA256",
     "Community",
