@@ -23,7 +23,11 @@ R38 (entity graph retrieval) and R39 (community summaries, global search) need a
 - R38 and R39 are `retriever` plugins; the graph builders are helpers. Stdlib only, no new dependency.
 
 ## Fidelity
-(Filled in by P7.2-10.)
+Both techniques are adaptations; neither is paper-faithful, validated or benchmarked. Details: [R38](../techniques/lessons/R38-entity-relation-graphrag.md), [R39](../techniques/lessons/R39-community-global-graphrag.md).
+- R38 adapts Microsoft GraphRAG local search: own per-chunk prompt; no gleaning, no description summarization, no alias resolution (exact normalized name merge only), no text-unit embeddings or local-context mix; BFS path or neighborhood retrieval.
+- R39 adapts Edge et al. 2024: single-level label propagation, not hierarchical Leiden; claim-structured summaries; map-reduce with one summary per map call, no batching or shuffling; optional entity-name prefilter that can lose recall.
+- Summaries are synthetic and not persisted; "traced" is not "entailed". Update cost is a full rebuild.
+- R21 is neighbor expansion, never GraphRAG. Evidence: `docs/evidence/P7.2/graphrag_demo.md` (offline plumbing); one local live run recorded R38 recall 0.00.
 
 ## Consequences
 Graph rows are scoped, immutable and traceable to source text. A new generator or chunking gives a new graph instead of edits.

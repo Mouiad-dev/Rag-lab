@@ -66,8 +66,8 @@ The acceptance column describes evidence that must exist before validation. Each
 | R35 | workflow / P8.3 | Multi-source routing | Combine authorized document, SQL and API/MCP evidence. | Preserve source types, freshness and permission boundaries. | planned |
 | R36 | workflow / P8.3 | Multi-agent retrieval | Delegate bounded specialized retrieval tasks where justified. | Compare against one agent, including extra cost, disagreement and fan-out. | planned |
 | R37 | research / P7.3 | RAPTOR hierarchy | Recursively cluster/summarize and retrieve at multiple levels. | Preserve leaf lineage; compare against a flat summary index. | planned |
-| R38 | graph / P7.2 | Entity-relation GraphRAG | Extract grounded entities/relations and retrieve graph neighborhoods. | Answer a relationship question impossible with adjacent-chunk expansion alone. | planned |
-| R39 | graph / P7.2 | Community/global GraphRAG | Build graph communities and summaries for corpus-level questions. | Trace summary claims to sources and measure index/update cost. | planned |
+| R38 | graph / P7.2 | Entity-relation GraphRAG | Extract grounded entities/relations and retrieve graph neighborhoods. | Answer a relationship question impossible with adjacent-chunk expansion alone. | implemented |
+| R39 | graph / P7.2 | Community/global GraphRAG | Build graph communities and summaries for corpus-level questions. | Trace summary claims to sources and measure index/update cost. | implemented |
 | R40 | multimodal / P7.5 | Text-table-image RAG | Route extraction and use vision-aware answers with source links. | Test chart/table questions and generated-caption errors. | planned |
 | R41 | multimodal / P7.5 | Visual multivector retrieval | Use ColPali-compatible page/query encoders and late-interaction scoring. | Question-dependent real scores, page provenance, memory/latency comparison. | planned |
 | R42 | evaluation_cohort / P6.4 | Cross-language RAG | Search across Arabic/English and mixed-language questions/documents. | Report each language pair separately, including names/numbers/negation. | implemented |
