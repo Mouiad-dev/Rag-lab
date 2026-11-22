@@ -38,6 +38,7 @@ from rag_foundry_domain.representations import (
     ScoredRepresentation,
     representation_key_for,
 )
+from rag_foundry_domain.summary_tree import SummaryTree, TreeNode, node_id_for, tree_key_for
 from rag_foundry_domain.testing import make_new_extraction, make_new_version, make_scope
 
 
@@ -99,6 +100,7 @@ class InMemoryIndexRepository:
         self._rep_sets: dict[tuple[str, str], RepresentationSet] = {}
         self._reps: dict[tuple[str, str], list[tuple[RepresentationRecord, tuple[float, ...]]]] = {}
         self._graphs: dict[tuple[str, str], EntityGraph] = {}
+        self._trees: dict[tuple[str, str], SummaryTree] = {}
 
     def _get(self, scope: Scope, iid: str) -> IndexVersion:
         v = self._versions.get(iid)
@@ -331,6 +333,40 @@ class InMemoryIndexRepository:
     async def get_entity_graph(self, scope: Scope, index_version_id: str, graph_key: str) -> EntityGraph:
         self._get(scope, index_version_id)
         found = self._graphs.get((index_version_id, graph_key))
+        if found is None:
+            raise NotFoundError()
+        return found.model_copy(deep=True)
+
+    async def add_summary_tree(self, scope: Scope, index_version_id: str, tree: SummaryTree) -> None:
+        row = self._get(scope, index_version_id)
+        if row.state is not IndexState.READY:
+            raise IndexingError("not_ready")
+        tree.check_scope(scope, index_version_id)
+        slot = (index_version_id, tree.tree_key)
+        if slot in self._trees:
+            raise IndexingError("tree_exists")
+        chunks = {c.id: c for c in self._chunks[index_version_id]}
+        seen: set[str] = set()
+        for node in tree.nodes:
+            if node.kind != "leaf":
+                continue
+            span = node.span
+            chunk = chunks.get(span.chunk_id) if span is not None else None
+            if (
+                span is None
+                or chunk is None
+                or span.chunk_id in seen
+                or span.extraction_view_id != chunk.extraction_view_id
+                or not chunk.start <= span.start < span.end <= chunk.end
+                or chunk.text[span.start - chunk.start : span.end - chunk.start] != span.quote
+            ):
+                raise IndexingError("tree_source_mismatch")
+            seen.add(span.chunk_id)
+        self._trees[slot] = tree.model_copy(deep=True)
+
+    async def get_summary_tree(self, scope: Scope, index_version_id: str, tree_key: str) -> SummaryTree:
+        self._get(scope, index_version_id)
+        found = self._trees.get((index_version_id, tree_key))
         if found is None:
             raise NotFoundError()
         return found.model_copy(deep=True)
@@ -765,3 +801,163 @@ async def check_entity_graphs(factory: IndexRepoFactory) -> None:
 
 
 GRAPH_STORE_CHECKS = (check_entity_graphs,)
+
+
+def _full_span(chunk: ChunkRecord) -> GraphSpan:
+    return GraphSpan(
+        chunk_id=chunk.id,
+        extraction_view_id=chunk.extraction_view_id,
+        start=chunk.start,
+        end=chunk.end,
+        quote=chunk.text,
+    )
+
+
+def _leaf(chunk: ChunkRecord, *, span: GraphSpan | None = None, node_id: str | None = None) -> TreeNode:
+    span = span or _full_span(chunk)
+    return TreeNode(
+        node_id=node_id or node_id_for(0, chunk.id),
+        level=0,
+        kind="leaf",
+        text=span.quote,
+        span=span,
+        children=(),
+        embedding=(1.0, 0.0, 0.0, 0.0),
+        synthetic=False,
+    )
+
+
+def make_summary_tree(scope: Scope, version: IndexVersion, chunks: Sequence[ChunkRecord]) -> SummaryTree:
+    """Two levels: one leaf per chunk (whole chunk span) and one synthetic summary over all leaves."""
+    leaves = [_leaf(c) for c in chunks]
+    children = tuple(sorted(n.node_id for n in leaves))
+    summary = TreeNode(
+        node_id=node_id_for(1, children),
+        level=1,
+        kind="summary",
+        text="summary of " + ", ".join(c.text[:20] for c in chunks),
+        children=children,
+        embedding=(0.5, 0.5, 0.5, 0.5),
+        synthetic=True,
+    )
+    nodes = tuple(sorted((*leaves, summary), key=lambda n: (n.level, n.node_id)))
+    return SummaryTree(
+        schema="rag_foundry.summary_tree/1",
+        tree_key=tree_key_for({"index_version_id": version.id, "chunks": sorted(c.id for c in chunks)}),
+        tenant_id=scope.tenant_id,
+        project_id=scope.project_id,
+        index_version_id=version.id,
+        embedding_key=version.embedding_key,
+        generator_json="{}",
+        nodes=nodes,
+    )
+
+
+def _with_leaf(tree: SummaryTree, tag: str, leaf: TreeNode, *, replace: str | None = None) -> SummaryTree:
+    """Copy of `tree` under a new key with one leaf replaced (or added when `replace` is None)."""
+    kept = [n for n in tree.nodes if n.node_id != replace]
+    nodes = tuple(sorted((*kept, leaf), key=lambda n: (n.level, n.node_id)))
+    return tree.model_copy(update={"tree_key": tree_key_for({"bad": tag}), "nodes": nodes})
+
+
+async def check_summary_trees(factory: IndexRepoFactory) -> None:
+    scope, other_tenant = make_scope(), make_scope()
+    docs, view_repo, repo = await factory([scope, other_tenant])
+    # hasattr, not isinstance: per-call adapters resolve methods dynamically, which runtime protocols cannot see.
+    if not all(hasattr(repo, n) for n in ("add_summary_tree", "get_summary_tree")):
+        raise AssertionError("repository must implement SummaryTreeStore")
+    views = []
+    for i, sc in enumerate((scope, other_tenant)):
+        out = await docs.create_document_or_get(sc, make_new_version(f"tree-{i}"), display_name="fixture")
+        views.append((await view_repo.create_view_or_get(sc, make_new_extraction(out.version, tag=f"tree-{i}"))).view)
+    arabic = "\u0645\u062d\u0645\u062f \u064a\u0639\u0645\u0644 \u0641\u064a \u0627\u0644\u0634\u0631\u0643\u0629"
+    version = await repo.create_index_version(scope, make_new_index_version((views[0].id,)))
+    await repo.add_chunks(
+        scope,
+        version.id,
+        (make_chunk(views[0].id, 0, (1, 0, 0, 0), "Ada wrote notes"), make_chunk(views[0].id, 1, (0, 1, 0, 0), arabic)),
+    )
+    chunk_a, chunk_ar = await repo.list_chunks(scope, version.id)
+    foreign_version = await repo.create_index_version(other_tenant, make_new_index_version((views[1].id,)))
+    await repo.add_chunks(other_tenant, foreign_version.id, (make_chunk(views[1].id, 0, (1, 0, 0, 0), "foreign text"),))
+    await repo.mark_ready(other_tenant, foreign_version.id)
+    foreign_chunk = (await repo.list_chunks(other_tenant, foreign_version.id))[0]
+    sibling = await repo.create_index_version(scope, make_new_index_version((views[0].id,)))
+    await repo.add_chunks(scope, sibling.id, (make_chunk(views[0].id, 0, (1, 0, 0, 0), "Ada wrote notes"),))
+    await repo.mark_ready(scope, sibling.id)
+    sibling_chunk = (await repo.list_chunks(scope, sibling.id))[0]
+
+    tree = make_summary_tree(scope, version, (chunk_a,))
+    await _expect_error(repo.add_summary_tree(scope, version.id, tree), "not_ready")
+    await repo.mark_ready(scope, version.id)
+
+    # A tree built for version B must not be stored under version A, even in the same scope.
+    sibling_tree = make_summary_tree(scope, sibling, (sibling_chunk,))
+    await _expect_error(repo.add_summary_tree(scope, version.id, sibling_tree), "tree_scope_mismatch")
+    await _expect_not_found(repo.get_summary_tree(scope, version.id, sibling_tree.tree_key))
+
+    for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
+        await _expect_not_found(repo.add_summary_tree(stranger, version.id, tree))
+        await _expect_not_found(repo.get_summary_tree(stranger, version.id, tree.tree_key))
+    await _expect_not_found(repo.get_summary_tree(scope, version.id, tree.tree_key))
+
+    leaf = next(n for n in tree.nodes if n.kind == "leaf")
+    good = leaf.span
+    assert good is not None
+    leaf_id = node_id_for(0, chunk_a.id)
+    bad_spans = {
+        "quote": good.model_copy(update={"quote": "X" * len(good.quote)}),
+        "outside": GraphSpan(
+            chunk_id=chunk_a.id,
+            extraction_view_id=chunk_a.extraction_view_id,
+            start=chunk_a.end,
+            end=chunk_a.end + 2,
+            quote="xx",
+        ),
+        "other_tenant_chunk": GraphSpan(
+            chunk_id=foreign_chunk.id,
+            extraction_view_id=foreign_chunk.extraction_view_id,
+            start=0,
+            end=3,
+            quote="for",
+        ),
+        # Same scope and same text as chunk_a, but the chunk belongs to a different index version.
+        "sibling_version_chunk": GraphSpan(
+            chunk_id=sibling_chunk.id,
+            extraction_view_id=sibling_chunk.extraction_view_id,
+            start=0,
+            end=3,
+            quote="Ada",
+        ),
+        # Valid quote and offsets, but the view is not the chunk's view.
+        "wrong_view": good.model_copy(update={"extraction_view_id": views[1].id}),
+    }
+    bad_trees = {}
+    for tag, bad in bad_spans.items():
+        bad_leaf = _leaf(chunk_a, span=bad, node_id=leaf_id)
+        bad_trees[tag] = _with_leaf(tree, tag, bad_leaf, replace=leaf_id)
+    # The same chunk cited by two leaves is rejected (an extra orphan leaf is structurally valid).
+    bad_trees["duplicate_chunk"] = _with_leaf(tree, "duplicate_chunk", _leaf(chunk_a, node_id=node_id_for(0, "dup")))
+    for bad_tree in bad_trees.values():
+        await _expect_error(repo.add_summary_tree(scope, version.id, bad_tree), "tree_source_mismatch")
+        await _expect_not_found(repo.get_summary_tree(scope, version.id, bad_tree.tree_key))
+
+    await repo.add_summary_tree(scope, version.id, tree)
+    if await repo.get_summary_tree(scope, version.id, tree.tree_key) != tree:
+        raise AssertionError("summary tree must round-trip")
+    await _expect_error(repo.add_summary_tree(scope, version.id, tree), "tree_exists")
+    # The duplicate key is reported before leaf checks, so a duplicate with a bad span is still tree_exists.
+    duplicate_bad = bad_trees["quote"].model_copy(update={"tree_key": tree.tree_key})
+    await _expect_error(repo.add_summary_tree(scope, version.id, duplicate_bad), "tree_exists")
+    for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
+        await _expect_not_found(repo.get_summary_tree(stranger, version.id, tree.tree_key))
+
+    arabic_tree = make_summary_tree(scope, version, (chunk_ar,))
+    await repo.add_summary_tree(scope, version.id, arabic_tree)
+    loaded = await repo.get_summary_tree(scope, version.id, arabic_tree.tree_key)
+    quotes = {n.span.quote for n in loaded.nodes if n.span is not None}
+    if loaded != arabic_tree or quotes != {arabic}:
+        raise AssertionError("Arabic quotes must round-trip unchanged")
+
+
+TREE_STORE_CHECKS = (check_summary_trees,)

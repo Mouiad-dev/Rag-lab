@@ -10,6 +10,7 @@ from rag_foundry_domain.ports import (
     FullTextIndex,
     IndexRepository,
     RepresentationStore,
+    SummaryTreeStore,
 )
 from rag_foundry_domain.prompts import PromptTemplateStore
 from rag_foundry_domain.settings_store import SettingsOverrideRepository
@@ -48,7 +49,7 @@ class PerCall:
             self._family == "indexes"
             and any(
                 hasattr(extra, name)
-                for extra in (FullTextIndex, ChunkVectorReader, RepresentationStore, EntityGraphStore)
+                for extra in (FullTextIndex, ChunkVectorReader, RepresentationStore, EntityGraphStore, SummaryTreeStore)
             )
         ):
             raise AttributeError(name)

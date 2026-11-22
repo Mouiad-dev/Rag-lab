@@ -7,6 +7,7 @@ from rag_foundry_domain.errors import NotFoundError
 from rag_foundry_domain.index_testing import (
     GRAPH_STORE_CHECKS,
     INDEX_REPOSITORY_CHECKS,
+    TREE_STORE_CHECKS,
     InMemoryIndexRepository,
     make_new_index_version,
 )
@@ -202,7 +203,9 @@ async def test_per_call_adapters_pass_shared_suites():
 
         await check(extraction_factory)
 
-    for check in INDEX_REPOSITORY_CHECKS + GRAPH_STORE_CHECKS:  # graph methods must pass through per-call too
+    for check in (
+        INDEX_REPOSITORY_CHECKS + GRAPH_STORE_CHECKS + TREE_STORE_CHECKS
+    ):  # extra-port methods pass through per-call too
 
         async def index_factory(requested):
             docs = InMemoryDocumentRepository(requested)
