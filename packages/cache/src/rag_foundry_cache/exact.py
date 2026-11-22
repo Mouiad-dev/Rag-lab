@@ -94,6 +94,55 @@ def served_copy(response: RunResponse, run_id: str) -> RunResponse:
     return response.model_copy(update={"run_id": run_id, "usage": usage})
 
 
+async def drop_entry(store: ResponseCacheStore, scope: Scope, key: str) -> None:
+    try:
+        await store.delete(scope, key)
+    except Exception as exc:
+        _LOG.warning("cache delete failed: %s", type(exc).__name__)
+
+
+async def check_entry(
+    store: ResponseCacheStore,
+    scope: Scope,
+    key: str,
+    entry: CacheEntry,
+    now: datetime,
+    *,
+    expected_index_version_id: str | None,
+    anchors: AnchorService,
+    gate: SourceGate,
+) -> tuple[str | None, tuple[CacheEntry, RunResponse] | None]:
+    """Shared by R50 and R51: scope, parse, revalidate. Returns (miss reason, None) or (None, (entry, response)).
+
+    A foreign-scope entry is never parsed and never deleted. Any other failed check deletes the entry.
+    """
+    if entry.tenant_id != scope.tenant_id or entry.project_id != scope.project_id:
+        return "scope_mismatch", None
+    try:
+        stored = RunResponse.model_validate_json(entry.response_json)
+    except ValidationError:
+        await drop_entry(store, scope, key)
+        return "entry_invalid", None
+    try:
+        reason = await revalidate(
+            scope,
+            entry,
+            stored,
+            now=now,
+            expected_index_version_id=expected_index_version_id,
+            anchors=anchors,
+            gate=gate,
+        )
+    except Exception as exc:
+        _LOG.warning("cache revalidation failed: %s", type(exc).__name__)
+        return "cache_error", None
+    if reason is None:
+        return None, (entry, stored)
+    if reason != "scope_mismatch":
+        await drop_entry(store, scope, key)
+    return reason, None
+
+
 class ExactResponseCache:
     manifest: ClassVar[PluginManifest] = PluginManifest(
         technique_id="R50",
@@ -190,37 +239,16 @@ class ExactResponseCache:
             return "cache_error", None
         if entry is None:
             return "not_found", None
-        if entry.tenant_id != scope.tenant_id or entry.project_id != scope.project_id:
-            return "scope_mismatch", None  # checked before parsing; the foreign entry is never deleted
-        try:
-            stored = RunResponse.model_validate_json(entry.response_json)
-        except ValidationError:
-            await self._drop(scope, key)
-            return "entry_invalid", None
-        try:
-            reason = await revalidate(
-                scope,
-                entry,
-                stored,
-                now=now,
-                expected_index_version_id=expected_index_version_id,
-                anchors=anchors,
-                gate=gate,
-            )
-        except Exception as exc:
-            _LOG.warning("cache revalidation failed: %s", type(exc).__name__)
-            return "cache_error", None
-        if reason is None:
-            return None, (entry, stored)
-        if reason != "scope_mismatch":
-            await self._drop(scope, key)
-        return reason, None
-
-    async def _drop(self, scope: Scope, key: str) -> None:
-        try:
-            await self._store.delete(scope, key)
-        except Exception as exc:
-            _LOG.warning("cache delete failed: %s", type(exc).__name__)
+        return await check_entry(
+            self._store,
+            scope,
+            key,
+            entry,
+            now,
+            expected_index_version_id=expected_index_version_id,
+            anchors=anchors,
+            gate=gate,
+        )
 
     async def _store_answer(
         self,

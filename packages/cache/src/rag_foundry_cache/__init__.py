@@ -17,20 +17,30 @@ from rag_foundry_cache.prefix import (
 )
 from rag_foundry_cache.prefix import register_builtin_plugins as _register_prefix
 from rag_foundry_cache.revalidate import AllowAllSourceGate, SourceGate, revalidate
+from rag_foundry_cache.semantic import (
+    CalibrationReport,
+    SemanticCacheConfig,
+    SemanticResponseCache,
+    calibrate,
+)
 
 
 def register_builtin_plugins(registry) -> None:
     _register_prefix(registry)
     registry.register(ExactResponseCache)
+    registry.register(SemanticResponseCache)
 
 
 __all__ = [
     "AllowAllSourceGate",
     "ArmSummary",
     "CacheTrace",
+    "CalibrationReport",
     "CachedRun",
     "ExactCacheConfig",
     "ExactResponseCache",
+    "SemanticCacheConfig",
+    "SemanticResponseCache",
     "SourceGate",
     "GenerationParams",
     "PrefixCacheProbe",
@@ -38,6 +48,7 @@ __all__ = [
     "PrefixProbeReport",
     "ProbeCallRecord",
     "ResponseKeyInputs",
+    "calibrate",
     "exact_key",
     "partition_key",
     "register_builtin_plugins",

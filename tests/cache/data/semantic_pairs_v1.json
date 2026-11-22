@@ -1,0 +1,221 @@
+{
+ "header": "Small illustrative sets, not a benchmark. Hand-written to exercise the calibration mechanics with the test-only lexical embedder.",
+ "pairs": [
+  {
+   "id": "dev-01",
+   "split": "dev",
+   "kind": "paraphrase",
+   "lang": "en",
+   "a": "What is the refund window for annual subscription plans in the billing portal",
+   "b": "For annual subscription plans in the billing portal what is the refund window",
+   "note": "word order"
+  },
+  {
+   "id": "dev-02",
+   "split": "dev",
+   "kind": "paraphrase",
+   "lang": "en",
+   "a": "How do I reset the admin password for the billing portal",
+   "b": "How can I reset the billing portal admin password",
+   "note": "reworded"
+  },
+  {
+   "id": "dev-03",
+   "split": "dev",
+   "kind": "paraphrase",
+   "lang": "ar",
+   "a": "\u0645\u0627 \u0647\u064a \u0645\u062f\u0629 \u0627\u0644\u0627\u0633\u062a\u0631\u062f\u0627\u062f \u0644\u0644\u062e\u0637\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629 \u0641\u064a \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0641\u0648\u0627\u062a\u064a\u0631",
+   "b": "\u0645\u062f\u0629 \u0627\u0644\u0627\u0633\u062a\u0631\u062f\u0627\u062f \u0644\u0644\u062e\u0637\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629 \u0641\u064a \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0641\u0648\u0627\u062a\u064a\u0631 \u0645\u0627 \u0647\u064a",
+   "note": "word order"
+  },
+  {
+   "id": "dev-04",
+   "split": "dev",
+   "kind": "paraphrase",
+   "lang": "en",
+   "a": "Which regions does the customer support team cover during weekends and public holidays",
+   "b": "During weekends and public holidays which regions does the customer support team cover",
+   "note": "word order"
+  },
+  {
+   "id": "dev-05",
+   "split": "dev",
+   "kind": "paraphrase",
+   "lang": "mixed",
+   "a": "\u0643\u064a\u0641 \u0623\u0635\u062f\u0631 \u0627\u0644\u062a\u0642\u0631\u064a\u0631 \u0625\u0644\u0649 PDF \u0645\u0646 \u0644\u0648\u062d\u0629 dashboard",
+   "b": "\u0645\u0646 \u0644\u0648\u062d\u0629 dashboard \u0643\u064a\u0641 \u0623\u0635\u062f\u0631 \u0627\u0644\u062a\u0642\u0631\u064a\u0631 \u0625\u0644\u0649 PDF",
+   "note": "word order"
+  },
+  {
+   "id": "dev-06",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "What is the revenue target for the regional sales team in 2025",
+   "b": "What is the revenue target for the regional sales team in 2026",
+   "note": "year"
+  },
+  {
+   "id": "dev-07",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Is the data export feature included in the standard plan for new customers",
+   "b": "Is the data export feature not included in the standard plan for new customers",
+   "note": "negation"
+  },
+  {
+   "id": "dev-08",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "What is the current status of ticket TCK-4410 in the support queue",
+   "b": "What is the current status of ticket TCK-4401 in the support queue",
+   "note": "identifier"
+  },
+  {
+   "id": "dev-09",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Which subscription plans include more than 5 user seats",
+   "b": "Which subscription plans include less than 5 user seats",
+   "note": "comparative"
+  },
+  {
+   "id": "dev-10",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Can a customer request a refund within 30 days of the original purchase date",
+   "b": "Can a customer request a refund within 90 days of the original purchase date",
+   "note": "number"
+  },
+  {
+   "id": "dev-11",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Who manages the vendor contract renewal process for the Finland office",
+   "b": "Who manages the vendor contract renewal process for the Norway office",
+   "note": "entity swap without digits (documented losing case)"
+  },
+  {
+   "id": "dev-12",
+   "split": "dev",
+   "kind": "adversarial",
+   "lang": "mixed",
+   "a": "What is the refund window for monthly plans",
+   "b": "\u0645\u0627 \u0647\u064a \u0645\u062f\u0629 \u0627\u0644\u0627\u0633\u062a\u0631\u062f\u0627\u062f \u0644\u0644\u062e\u0637\u0637 \u0627\u0644\u0634\u0647\u0631\u064a\u0629",
+   "note": "cross-language"
+  },
+  {
+   "id": "held-01",
+   "split": "held_out",
+   "kind": "paraphrase",
+   "lang": "en",
+   "a": "Where can an employee find the travel expense policy for international trips",
+   "b": "For international trips where can an employee find the travel expense policy",
+   "note": "word order"
+  },
+  {
+   "id": "held-02",
+   "split": "held_out",
+   "kind": "paraphrase",
+   "lang": "en",
+   "a": "Who approves a laptop replacement request for the engineering department",
+   "b": "Who approves the engineering department laptop replacement request",
+   "note": "reworded"
+  },
+  {
+   "id": "held-03",
+   "split": "held_out",
+   "kind": "paraphrase",
+   "lang": "ar",
+   "a": "\u0645\u0646 \u064a\u0648\u0627\u0641\u0642 \u0639\u0644\u0649 \u0637\u0644\u0628 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629 \u0644\u0645\u0648\u0638\u0641\u064a \u0642\u0633\u0645 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a",
+   "b": "\u0644\u0645\u0648\u0638\u0641\u064a \u0642\u0633\u0645 \u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0645\u0646 \u064a\u0648\u0627\u0641\u0642 \u0639\u0644\u0649 \u0637\u0644\u0628 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629",
+   "note": "word order"
+  },
+  {
+   "id": "held-04",
+   "split": "held_out",
+   "kind": "paraphrase",
+   "lang": "en",
+   "a": "Which documents are required to open a new corporate account at the main branch",
+   "b": "To open a new corporate account at the main branch which documents are required",
+   "note": "word order"
+  },
+  {
+   "id": "held-05",
+   "split": "held_out",
+   "kind": "paraphrase",
+   "lang": "mixed",
+   "a": "\u0645\u0627 \u0647\u064a \u062d\u062f\u0648\u062f API \u0644\u0643\u0644 \u062f\u0642\u064a\u0642\u0629 \u0639\u0644\u0649 \u062e\u0637\u0629 \u0627\u0644\u0645\u0624\u0633\u0633\u0627\u062a",
+   "b": "\u0639\u0644\u0649 \u062e\u0637\u0629 \u0627\u0644\u0645\u0624\u0633\u0633\u0627\u062a \u0645\u0627 \u0647\u064a \u062d\u062f\u0648\u062f API \u0644\u0643\u0644 \u062f\u0642\u064a\u0642\u0629",
+   "note": "word order"
+  },
+  {
+   "id": "held-06",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "ar",
+   "a": "\u0645\u0627 \u0647\u0648 \u0645\u0639\u062f\u0644 \u0627\u0644\u0646\u0645\u0648 \u0627\u0644\u0645\u0633\u062a\u0647\u062f\u0641 \u0644\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0641\u064a \u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0645\u0627\u0644\u064a\u0629 2025",
+   "b": "\u0645\u0627 \u0647\u0648 \u0645\u0639\u062f\u0644 \u0627\u0644\u0646\u0645\u0648 \u0627\u0644\u0645\u0633\u062a\u0647\u062f\u0641 \u0644\u0644\u0645\u0628\u064a\u0639\u0627\u062a \u0641\u064a \u0627\u0644\u0633\u0646\u0629 \u0627\u0644\u0645\u0627\u0644\u064a\u0629 2026",
+   "note": "year (Arabic)"
+  },
+  {
+   "id": "held-07",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Does the warranty cover accidental damage to the device screen",
+   "b": "Does the warranty not cover accidental damage to the device screen",
+   "note": "negation"
+  },
+  {
+   "id": "held-08",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Which invoice does purchase order PO-7781 belong to in the finance system",
+   "b": "Which invoice does purchase order PO-7718 belong to in the finance system",
+   "note": "identifier"
+  },
+  {
+   "id": "held-09",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "How many vacation days does a new employee receive after 6 months of service",
+   "b": "How many vacation days does a new employee receive after 12 months of service",
+   "note": "number"
+  },
+  {
+   "id": "held-10",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "When does the quarterly security audit for all of the production systems begin this March",
+   "b": "When does the quarterly security audit for all of the production systems begin this May",
+   "note": "month name (documented losing case)"
+  },
+  {
+   "id": "held-11",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "What is the maximum allowed shipping distance for a standard parcel in km",
+   "b": "What is the maximum allowed shipping distance for a standard parcel in miles",
+   "note": "unit (documented losing case)"
+  },
+  {
+   "id": "held-12",
+   "split": "held_out",
+   "kind": "adversarial",
+   "lang": "en",
+   "a": "Which team owns the on call rotation for the Paris data center",
+   "b": "Which team owns the on call rotation for the Berlin data center",
+   "note": "entity swap without digits (documented losing case)"
+  }
+ ]
+}
