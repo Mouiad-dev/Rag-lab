@@ -180,6 +180,18 @@ class IndexingError(IntakeError):
         "untraced_claim",
         "community_cap_exceeded",
         "global_search_too_many_communities",
+        "tree_scope_mismatch",
+        "tree_invalid",
+        "tree_exists",
+        "tree_too_large",
+        "tree_source_mismatch",
+        "raptor_summary_invalid",
+        "kag_schema_invalid",
+        "kag_scope_mismatch",
+        "kag_invalid",
+        "kag_exists",
+        "kag_too_large",
+        "kag_source_mismatch",
     )
 
     def __init__(self, code: str) -> None:
