@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ConfigDict
+from rag_foundry_answering import register_builtin_plugins as register_answering
 from rag_foundry_cache import register_builtin_plugins as register_cache
 from rag_foundry_chunking import register_builtin_plugins as register_chunking
 from rag_foundry_indexing import register_builtin_plugins as register_indexing
@@ -28,6 +29,7 @@ def _builtins():
     register_chunking(registry)
     register_indexing(registry)
     register_cache(registry)
+    register_answering(registry)
     return {tid: registry.plugin(tid) for tid in registry.registered_ids()}
 
 
