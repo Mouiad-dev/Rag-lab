@@ -31,6 +31,7 @@ class Refusal(Exception):
 
 
 def _builtin_ids() -> set[str]:
+    from rag_foundry_cache import register_builtin_plugins as register_cache
     from rag_foundry_chunking import register_builtin_plugins as register_chunking
     from rag_foundry_indexing import register_builtin_plugins as register_indexing
 
@@ -38,6 +39,7 @@ def _builtin_ids() -> set[str]:
     registry = TechniqueRegistry(catalogue)
     register_chunking(registry)
     register_indexing(registry)
+    register_cache(registry)
     return set(registry.registered_ids())
 
 
