@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "rag-foundry-answering",
     "rag-foundry-api",
+    "rag-foundry-cache",
     "rag-foundry-chunking",
     "rag-foundry-contracts",
     "rag-foundry-core",
@@ -28,6 +29,7 @@ dev = [
     { name = "pytest", specifier = ">=9.2" },
     { name = "rag-foundry-answering", editable = "packages/answering" },
     { name = "rag-foundry-api", editable = "apps/api" },
+    { name = "rag-foundry-cache", editable = "packages/cache" },
     { name = "rag-foundry-chunking", editable = "packages/chunking" },
     { name = "rag-foundry-contracts", editable = "packages/contracts" },
     { name = "rag-foundry-core", editable = "packages/core" },
@@ -1043,6 +1045,29 @@ requires-dist = [
     { name = "rag-foundry-providers", extras = ["ollama"], editable = "packages/providers" },
     { name = "rag-foundry-storage", extras = ["sql"], editable = "packages/storage" },
     { name = "uvicorn", specifier = ">=0.54.0" },
+]
+
+[[package]]
+name = "rag-foundry-cache"
+version = "0.0.0"
+source = { editable = "packages/cache" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "rag-foundry-contracts" },
+    { name = "rag-foundry-domain" },
+    { name = "rag-foundry-ingestion" },
+    { name = "rag-foundry-providers" },
+    { name = "rag-foundry-techniques" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.14.2" },
+    { name = "rag-foundry-contracts", editable = "packages/contracts" },
+    { name = "rag-foundry-domain", editable = "packages/domain" },
+    { name = "rag-foundry-ingestion", editable = "packages/ingestion" },
+    { name = "rag-foundry-providers", editable = "packages/providers" },
+    { name = "rag-foundry-techniques", editable = "packages/techniques" },
 ]
 
 [[package]]

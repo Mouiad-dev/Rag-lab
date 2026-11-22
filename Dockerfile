@@ -20,6 +20,7 @@ COPY packages/chunking/pyproject.toml packages/chunking/pyproject.toml
 COPY packages/providers/pyproject.toml packages/providers/pyproject.toml
 COPY packages/indexing/pyproject.toml packages/indexing/pyproject.toml
 COPY packages/answering/pyproject.toml packages/answering/pyproject.toml
+COPY packages/cache/pyproject.toml packages/cache/pyproject.toml
 COPY packages/evaluation/pyproject.toml packages/evaluation/pyproject.toml
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml

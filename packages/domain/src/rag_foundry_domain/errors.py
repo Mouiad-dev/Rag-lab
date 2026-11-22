@@ -238,11 +238,35 @@ class RunError(IntakeError):
         "non_local_model",
         "too_many_runs",
         "run_timeout",
+        "cag_overflow",
+        "cag_too_many_chunks",
+        "cag_nonce_conflict",
+        "cag_snapshot_mismatch",
+        "cag_empty",
     )
 
     def __init__(self, code: str) -> None:
         if code not in self.CODES:
             raise ValueError("unknown run error code")
+        super().__init__(code, code)
+
+
+class CacheError(IntakeError):
+    """Content-free cache failures."""
+
+    CODES = (
+        "cache_key_invalid",
+        "cache_entry_invalid",
+        "cache_scope_mismatch",
+        "cache_unavailable",
+        "cache_policy_invalid",
+        "prefix_probe_invalid",
+        "cache_exists",
+    )
+
+    def __init__(self, code: str) -> None:
+        if code not in self.CODES:
+            raise ValueError("unknown cache error code")
         super().__init__(code, code)
 
 
