@@ -3,6 +3,7 @@
 import asyncio
 import json
 from contextlib import aclosing
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -10,6 +11,7 @@ from rag_foundry_providers import TokenSource
 from rag_foundry_providers.adapters.ollama import OllamaChatModel, ollama_chat_profile
 from rag_foundry_providers.contract_checks import CHAT_CHECKS, DETERMINISTIC_CHAT_CHECKS
 from rag_foundry_providers.errors import MissingCapabilityError, ProviderCallError, ProviderError
+from rag_foundry_providers.ledger import UsageLedger
 from rag_foundry_providers.messages import ChatMessage, ChatRequest, ToolSpec
 from rag_foundry_providers.usage import Operation
 
@@ -132,6 +134,102 @@ def test_usage_estimated_when_a_count_is_missing_or_invalid(extra) -> None:
     usage = asyncio.run(_model(lambda r: httpx.Response(200, json=body)).complete(_req(ARABIC))).usage
     assert usage.token_source is TokenSource.ESTIMATED
     assert usage.input_tokens > 0 and usage.output_tokens > 0
+
+
+_TIMING_KEYS = {
+    "total_duration": 5_000_000,
+    "load_duration": 1_500_000,
+    "prompt_eval_duration": 2_000_000,
+    "eval_duration": 3_250_000,
+}
+
+
+def _complete_usage(extra: dict, drop: tuple[str, ...] = ()):
+    body = _final(extra, content="Hello world")
+    for key in drop:
+        del body[key]
+    return asyncio.run(_model(lambda r: httpx.Response(200, json=body)).complete(_req())).usage
+
+
+def test_complete_maps_durations_ns_to_ms_and_cached_count() -> None:
+    u = _complete_usage({**_TIMING_KEYS, "prompt_eval_cached_count": 20})
+    assert u.timings is not None
+    assert (u.timings.total_ms, u.timings.load_ms, u.timings.prefill_ms, u.timings.decode_ms) == (
+        5.0,
+        1.5,
+        2.0,
+        3.25,
+    )
+    assert u.cache_read_input_tokens == 20 and u.input_tokens == 26
+    assert u.estimated_cost_usd == Decimal(0)
+
+
+def test_missing_eval_duration_only_blanks_decode() -> None:
+    extra = {k: v for k, v in _TIMING_KEYS.items() if k != "eval_duration"}
+    t = _complete_usage(extra).timings
+    assert t is not None and t.decode_ms is None
+    assert (t.total_ms, t.load_ms, t.prefill_ms) == (5.0, 1.5, 2.0)
+
+
+@pytest.mark.parametrize("bad", [-1, True, 1.5, "7"], ids=["negative", "bool", "float", "string"])
+def test_invalid_timing_and_cached_values_are_dropped(bad) -> None:
+    u = _complete_usage({**_TIMING_KEYS, "total_duration": bad, "prompt_eval_cached_count": bad})
+    assert u.timings is not None and u.timings.total_ms is None and u.timings.load_ms == 1.5
+    assert u.cache_read_input_tokens == 0
+
+
+def test_no_timing_fields_gives_none_and_zero_cached() -> None:
+    u = _complete_usage({})
+    assert u.timings is None and u.cache_read_input_tokens == 0
+
+
+def test_stream_final_with_and_without_timings() -> None:
+    async def go(final: dict):
+        content = _nd(_chunk("a"), final)
+        return [c async for c in _model(lambda r: httpx.Response(200, content=content)).stream(_req())]
+
+    plain = asyncio.run(go(_final()))[-1].usage
+    assert plain is not None and plain.timings is None and plain.cache_read_input_tokens == 0
+    rich = asyncio.run(go(_final({**_TIMING_KEYS, "prompt_eval_cached_count": 4})))[-1].usage
+    assert rich is not None and rich.timings is not None and rich.timings.decode_ms == 3.25
+    assert rich.cache_read_input_tokens == 4
+
+
+@pytest.mark.parametrize(
+    ("extra", "reported", "tokens"),
+    [
+        ({"prompt_eval_cached_count": 0}, True, 0),
+        ({"prompt_eval_cached_count": 20}, True, 20),
+        ({}, False, 0),
+        ({"prompt_eval_cached_count": -1}, False, 0),
+        ({"prompt_eval_cached_count": True}, False, 0),
+        ({"prompt_eval_cached_count": 1.5}, False, 0),
+        ({"prompt_eval_cached_count": "3"}, False, 0),
+    ],
+    ids=["zero", "twenty", "absent", "negative", "bool", "float", "string"],
+)
+def test_cache_read_reported_flag(extra, reported, tokens) -> None:
+    u = _complete_usage(extra)
+    assert u.cache_read_reported is reported and u.cache_read_input_tokens == tokens
+
+
+def test_stream_cache_read_reported_flag() -> None:
+    async def go(final: dict):
+        content = _nd(_chunk("a"), final)
+        return [c async for c in _model(lambda r: httpx.Response(200, content=content)).stream(_req())]
+
+    with_count = asyncio.run(go(_final({"prompt_eval_cached_count": 0})))[-1].usage
+    without = asyncio.run(go(_final()))[-1].usage
+    assert with_count.cache_read_reported is True and without.cache_read_reported is False
+
+
+def test_ledger_totals_sum_cache_read_tokens() -> None:
+    ledger = UsageLedger()
+    ledger.append(_complete_usage({"prompt_eval_cached_count": 20}))
+    ledger.append(_complete_usage({}))
+    totals = ledger.totals()
+    assert (totals.input_tokens, totals.output_tokens, totals.cache_read_input_tokens) == (52, 6, 20)
+    assert totals.cost_usd == Decimal(0) and totals.unknown_cost_calls == 0
 
 
 def test_stream_usage_and_operation() -> None:

@@ -25,6 +25,7 @@ from rag_foundry_providers.ports import check_chat_request
 from rag_foundry_providers.usage import (
     Clock,
     Operation,
+    ProviderTimings,
     TokenSource,
     Usage,
     estimate_cost,
@@ -167,6 +168,7 @@ def ollama_chat_profile(
         ),
         cost_per_mtok_in=zero,
         cost_per_mtok_out=zero,
+        cost_per_mtok_cache_read=zero,
     )
 
 
@@ -174,6 +176,23 @@ def _count(value: Any) -> int | None:
     if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
         return value
     return None
+
+
+def _ns_to_ms(value: Any) -> float | None:
+    ns = _count(value)
+    return None if ns is None else ns / 1_000_000
+
+
+def _timings(obj: dict[str, Any]) -> ProviderTimings | None:
+    fields = {
+        "total_ms": _ns_to_ms(obj.get("total_duration")),
+        "load_ms": _ns_to_ms(obj.get("load_duration")),
+        "prefill_ms": _ns_to_ms(obj.get("prompt_eval_duration")),
+        "decode_ms": _ns_to_ms(obj.get("eval_duration")),
+    }
+    if all(v is None for v in fields.values()):
+        return None
+    return ProviderTimings(**fields)
 
 
 class OllamaChatModel:
@@ -253,6 +272,10 @@ class OllamaChatModel:
             tokens_in = sum(estimate_tokens(m.content) for m in request.messages)
             tokens_out = estimate_tokens(text)
             source = TokenSource.ESTIMATED
+        # Whether prompt_eval_count includes cached tokens is undocumented; Ollama cost is 0, so
+        # nothing is charged twice; the P7.4-11 live run records both raw values.
+        cached_raw = _count(obj.get("prompt_eval_cached_count"))
+        cached = cached_raw or 0
         return Usage(
             profile_id=self.profile.id,
             provider=self.profile.provider,
@@ -260,9 +283,12 @@ class OllamaChatModel:
             operation=op,
             input_tokens=tokens_in,
             output_tokens=tokens_out,
+            cache_read_input_tokens=cached,
+            cache_read_reported=cached_raw is not None,
             token_source=source,
             latency_ms=measure_latency_ms(self._clock, start),
-            estimated_cost_usd=estimate_cost(self.profile, tokens_in, tokens_out),
+            estimated_cost_usd=estimate_cost(self.profile, tokens_in, tokens_out, cache_read_tokens=cached),
+            timings=_timings(obj),
         )
 
     async def complete(self, request: ChatRequest) -> ChatResult:

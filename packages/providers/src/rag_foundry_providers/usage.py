@@ -26,6 +26,20 @@ class TokenSource(StrEnum):
     ESTIMATED = "estimated"  # counted locally (for example by the fake provider)
 
 
+class ProviderTimings(BaseModel):
+    """Provider-reported durations in milliseconds; prefill_ms covers uncached prompt tokens only (Ollama).
+
+    Not a cache-hit signal: never infer a cache hit from these values. Absent fields stay None.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    total_ms: float | None = Field(default=None, ge=0)
+    load_ms: float | None = Field(default=None, ge=0)
+    prefill_ms: float | None = Field(default=None, ge=0)
+    decode_ms: float | None = Field(default=None, ge=0)
+
+
 class Usage(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -38,10 +52,13 @@ class Usage(BaseModel):
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
     cache_read_input_tokens: int = Field(0, ge=0)
+    # True only when the provider reported a cache-read count (reported 0 differs from absent).
+    cache_read_reported: bool = False
     cache_write_input_tokens: int = Field(0, ge=0)
     token_source: TokenSource
     latency_ms: float = Field(ge=0)
     estimated_cost_usd: Decimal | None = Field(default=None, ge=0)
+    timings: ProviderTimings | None = None
 
 
 _MTOK = Decimal(1_000_000)
