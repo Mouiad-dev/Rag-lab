@@ -86,6 +86,14 @@ from rag_foundry_indexing.graph_retrieve import EntityGraphConfig, EntityGraphRe
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
 from rag_foundry_indexing.inspection import InspectionStage, RetrievalInspection, inspect_retrieval
+from rag_foundry_indexing.kag_extract import (
+    R48_EXTRACT_SYSTEM_V1,
+    R48_EXTRACT_SYSTEM_V1_SHA256,
+    KagBuildReport,
+    KagExtractConfig,
+    KagGraphBuilder,
+    KagRejectedItem,
+)
 from rag_foundry_indexing.lexical_text import lexical_tokens
 from rag_foundry_indexing.llm_rerank import (
     REJECT_REASONS,
@@ -320,6 +328,12 @@ __all__ += [
     "EntityRelationGraphBuilder",
     "GraphBuildReport",
     "RejectedItem",
+    "R48_EXTRACT_SYSTEM_V1",
+    "R48_EXTRACT_SYSTEM_V1_SHA256",
+    "KagBuildReport",
+    "KagExtractConfig",
+    "KagGraphBuilder",
+    "KagRejectedItem",
     "EntityGraphConfig",
     "EntityGraphRetriever",
     "GraphRetrievalTrace",
