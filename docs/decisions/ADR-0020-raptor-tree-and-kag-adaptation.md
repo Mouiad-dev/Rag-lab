@@ -19,10 +19,21 @@ R37 (RAPTOR recursive summary tree) and R48 (schema-constrained KAG) need stored
 - Error codes for both are registered once in `IndexingError.CODES` (`tree_*`, `raptor_summary_invalid`, `kag_*`).
 
 ## RAPTOR fidelity
-To be filled by P7.3-11 after the demos and the live run.
+Adaptation of Sarthi et al. 2024 (arXiv 2401.18059), not paper-faithful.
+- No UMAP, Gaussian mixture or BIC; cosine k-means with hard clusters and size-cap splitting, stdlib only.
+- Collapsed mode uses `top_nodes` plus leaf expansion, not a token budget.
+- Summaries route retrieval only; the paper puts them in the answer context, here they never are.
+- Offline (scripted, not a benchmark): the fixture summaries were tuned after a first run; Q_BUDGET topic coverage collapsed/flat 1.00, R02 0.67; losing case Q_DETAIL beam-1 traversal 0.00.
+- Live (one local run, not an evaluation): collapsed, flat and R02 picked the same paragraphs on all 4 questions.
+- Update cost = full rebuild; not measured.
 
 ## KAG fidelity
-To be filled by P7.3-11 after the demos and the live run.
+Original adaptation of the KAG idea; no OpenSPG code, dependency or service. Feature table: `docs/techniques/KAG_OPENSPG_FIDELITY.md`.
+- Implemented: schema-constrained grounded extraction, mutual index fact <-> chunk, `retrieve`/`filter`/`sort`/`count`/`output` operators, cited answer through `AnswerService`.
+- Partial: own schema (no taxonomy, events, rules), own logical-form grammar, one re-plan at most, conflicts reported not resolved.
+- Not implemented: open extraction, alias alignment, LLM operators, chunk fallback, incremental update, fine-tuning.
+- Offline (scripted, not a benchmark): R48 ties R02 on Q0-Q3, beats R38 and R02 on count with filter (1.00 vs 0.50), loses on Q4 (0.00 vs 1.00); partial Q2 is answered with 2 of 3 suppliers.
+- Live (one local run, not an evaluation): 1 of 5 answered; the planner is the weak point.
 
 ## Consequences
 Trees and graphs are scoped, immutable and traceable to source text. A new generator, embedding or chunking gives a new tree or graph instead of edits. Incremental update is not supported.
