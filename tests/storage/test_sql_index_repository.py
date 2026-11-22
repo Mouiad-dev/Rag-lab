@@ -17,6 +17,7 @@ if _URL:
     from rag_foundry_domain.index_testing import (
         GRAPH_STORE_CHECKS,
         INDEX_REPOSITORY_CHECKS,
+        KG_STORE_CHECKS,
         REPRESENTATION_STORE_CHECKS,
         TREE_STORE_CHECKS,
     )
@@ -64,7 +65,8 @@ class _Factory:
         async with maker() as session, session.begin():
             await session.execute(
                 text(
-                    "TRUNCATE runtime_setting_overrides, tree_edges, tree_nodes, summary_trees, graph_spans, graph_relations, graph_entities, entity_graphs, chunk_representations, representation_sets, chunk_sparse_vectors, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
+                    "TRUNCATE runtime_setting_overrides, kg_spans, kg_facts, kg_entities, knowledge_graphs, "
+                    "tree_edges, tree_nodes, summary_trees, graph_spans, graph_relations, graph_entities, entity_graphs, chunk_representations, representation_sets, chunk_sparse_vectors, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
                 )
             )
         docs = per_call_documents(db.uow)
@@ -79,7 +81,7 @@ class _Factory:
 
 @pytest.mark.parametrize(
     "check",
-    (INDEX_REPOSITORY_CHECKS + REPRESENTATION_STORE_CHECKS + GRAPH_STORE_CHECKS + TREE_STORE_CHECKS)
+    (INDEX_REPOSITORY_CHECKS + REPRESENTATION_STORE_CHECKS + GRAPH_STORE_CHECKS + TREE_STORE_CHECKS + KG_STORE_CHECKS)
     if _URL
     else [None],
     ids=lambda c: getattr(c, "__name__", "none"),
@@ -525,6 +527,162 @@ async def test_tree_database_guards():
                     )
                 )
                 == 3
+            )
+    finally:
+        await factory.close()
+
+
+@run
+async def test_kg_database_guards():
+    from rag_foundry_domain.errors import IndexingError
+    from rag_foundry_domain.index_testing import make_chunk, make_knowledge_graph, make_new_index_version
+
+    factory = _Factory()
+    try:
+        scope, other = make_scope(), make_scope()
+        docs, views, repo = await factory([scope, other])
+        out = await docs.create_document_or_get(scope, make_new_version("kg-guard"), display_name="d")
+        view = (await views.create_view_or_get(scope, make_new_extraction(out.version, tag="kg-guard"))).view
+        foreign_out = await docs.create_document_or_get(other, make_new_version("kg-guard-b"), display_name="d")
+        foreign_view = (
+            await views.create_view_or_get(other, make_new_extraction(foreign_out.version, tag="kg-guard-b"))
+        ).view
+        version = await repo.create_index_version(scope, make_new_index_version((view.id,)))
+        await repo.add_chunks(
+            scope,
+            version.id,
+            (
+                make_chunk(view.id, 0, (1, 0, 0, 0), "Ada wrote notes"),
+                make_chunk(view.id, 1, (0, 1, 0, 0), "Bob read them"),
+            ),
+        )
+        await repo.mark_ready(scope, version.id)
+        chunk, chunk2 = await repo.list_chunks(scope, version.id)
+        building = await repo.create_index_version(scope, make_new_index_version((view.id,)))
+        foreign_version = await repo.create_index_version(other, make_new_index_version((foreign_view.id,)))
+        await repo.add_chunks(
+            other, foreign_version.id, (make_chunk(foreign_view.id, 0, (1, 0, 0, 0), "Ada wrote notes"),)
+        )
+        foreign_chunk = (await repo.list_chunks(other, foreign_version.id))[0]
+
+        graph = make_knowledge_graph(scope, version, (chunk,))
+        graph_b = make_knowledge_graph(scope, version, (chunk2,))
+        await repo.add_knowledge_graph(scope, version.id, graph)
+        await repo.add_knowledge_graph(scope, version.id, graph_b)
+        person = next(e for e in graph.entities if e.type == "Person")
+        foreign_entity = graph_b.entities[0]
+
+        async def rejected(sql, params, message):
+            with pytest.raises(DBAPIError, match=message):
+                async with factory.database().sessionmaker() as session, session.begin():
+                    await session.execute(text(sql), params)
+
+        async def accepted(sql, params):
+            async with factory.database().sessionmaker() as session, session.begin():
+                await session.execute(text(sql), params)
+
+        base = {"t": scope.tenant_id, "p": scope.project_id, "i": version.id, "g": graph.kg_key}
+        span_sql = (
+            "INSERT INTO kg_spans (tenant_id,project_id,index_version_id,kg_key,owner_kind,owner_id,ordinal,"
+            "chunk_id,extraction_view_id,start_cp,end_cp,quote) VALUES (:t,:p,:i,:g,:k,:o,:n,:c,:v,:s,:e,:q)"
+        )
+        good_span = {
+            **base,
+            "k": "entity",
+            "o": person.entity_id,
+            "n": 1,
+            "c": chunk.id,
+            "v": view.id,
+            "s": 0,
+            "e": 3,
+            "q": "Ada",
+        }
+        # The trigger and keys accept a valid span, so each rejection below is caused by its own defect.
+        await accepted(span_sql, good_span)
+
+        def span(**changes):
+            return {**good_span, "n": 2, **changes}
+
+        await rejected(span_sql, span(c=foreign_chunk.id), "fk_kg_spans_chunk")
+        await rejected(span_sql, span(q="Adx"), "kg span quote does not match chunk text")
+        await rejected(span_sql, span(s=chunk.end, e=chunk.end + 2, q="xx"), "kg span outside chunk")
+        await rejected(span_sql, span(v=foreign_view.id), "kg span view does not match chunk")
+        await rejected(span_sql, span(o="ken_" + "0" * 16), "kg span owner not found")
+        await rejected(span_sql, span(k="fact", o="fct_" + "0" * 16), "kg span owner not found")
+        await rejected(span_sql, span(k="relation"), "ck_kg_spans_kind")
+
+        fact_sql = (
+            "INSERT INTO kg_facts (tenant_id,project_id,index_version_id,kg_key,fact_id,subject_id,predicate,"
+            "object_id,literal_text,literal_int) VALUES (:t,:p,:i,:g,:f,:s,'founded',:o,:lt,:li)"
+        )
+        fact = {**base, "f": "fct_" + "a" * 16, "s": person.entity_id, "o": None, "lt": None, "li": 5}
+        await rejected(fact_sql, {**fact, "o": foreign_entity.entity_id, "li": None}, "fk_kg_facts_object")
+        await rejected(fact_sql, {**fact, "o": person.entity_id}, "ck_kg_facts_value")
+        await rejected(fact_sql, {**fact, "li": None}, "ck_kg_facts_value")
+        await rejected(fact_sql, {**fact, "f": "fct_xyz"}, "ck_kg_facts_id")
+        await accepted(fact_sql, fact)
+
+        kg_sql = (
+            "INSERT INTO knowledge_graphs (tenant_id,project_id,index_version_id,kg_key,technique_id,schema_json,"
+            "schema_sha256,generator_json) VALUES (:t,:p,:i,:g,'R48',:sj,:sha,'{}')"
+        )
+        schema = graph.knowledge_schema
+        kg_row = {**base, "sj": schema._canonical_json(), "sha": schema.schema_sha256()}
+        await rejected(kg_sql, {**kg_row, "i": building.id, "g": "c" * 64}, "index version is not ready")
+        await rejected(kg_sql, {**kg_row, "g": graph.kg_key}, "pk_knowledge_graphs")
+
+        for sql in (
+            "UPDATE knowledge_graphs SET generator_json='z' WHERE index_version_id=:i",
+            "UPDATE kg_entities SET name='z' WHERE index_version_id=:i",
+            "UPDATE kg_facts SET predicate='z' WHERE index_version_id=:i",
+            "UPDATE kg_spans SET quote='z' WHERE index_version_id=:i",
+        ):
+            await rejected(sql, {"i": version.id}, "index rows are immutable")
+
+        # A row set that satisfies every database rule but breaks a domain rule (entity ID is not derived).
+        bad_key = "d" * 64
+        await accepted(kg_sql, {**kg_row, "g": bad_key})
+        bad_id = "ken_" + "1" * 16
+        await accepted(
+            "INSERT INTO kg_entities (tenant_id,project_id,index_version_id,kg_key,entity_id,type,name) "
+            "VALUES (:t,:p,:i,:g,:e,'Person','Zed')",
+            {**base, "g": bad_key, "e": bad_id},
+        )
+        await accepted(span_sql, {**good_span, "g": bad_key, "o": bad_id, "n": 0})
+        with pytest.raises(IndexingError) as info:
+            await repo.get_knowledge_graph(scope, version.id, bad_key)
+        assert info.value.code == "kag_invalid"
+
+        # Alembic runs its own event loop, so it must not run on this test's loop.
+        await asyncio.to_thread(run_migrations, _url(), "downgrade", "0012_summary_trees")
+        async with factory.databases[0].engine.connect() as connection:
+            for table in ("knowledge_graphs", "kg_entities", "kg_facts", "kg_spans"):
+                assert await connection.scalar(text("SELECT to_regclass(:n) IS NULL"), {"n": table})
+            assert await connection.scalar(text("SELECT to_regclass('tree_nodes') IS NOT NULL"))
+            assert (
+                await connection.scalar(text("SELECT count(*) FROM pg_proc WHERE proname='reject_index_update'")) == 1
+            )
+            assert (
+                await connection.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_proc WHERE proname IN ('kg_spans_validate_insert','knowledge_graphs_validate_insert')"
+                    )
+                )
+                == 0
+            )
+        await asyncio.to_thread(run_migrations, _url(), "upgrade", "head")
+        async with factory.databases[0].engine.connect() as connection:
+            assert await connection.scalar(text("SELECT to_regclass('kg_spans') IS NOT NULL"))
+            assert (
+                await connection.scalar(text("SELECT count(*) FROM pg_proc WHERE proname='reject_index_update'")) == 1
+            )
+            assert (
+                await connection.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_trigger WHERE tgname IN ('knowledge_graphs_no_update','kg_entities_no_update','kg_facts_no_update','kg_spans_no_update')"
+                    )
+                )
+                == 4
             )
     finally:
         await factory.close()

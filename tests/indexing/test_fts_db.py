@@ -37,7 +37,8 @@ def test_fts_simple_scope_and_r03_comparison(tmp_path):
             async with db.sessionmaker() as session, session.begin():
                 await session.execute(
                     text(
-                        "TRUNCATE runtime_setting_overrides, tree_edges, tree_nodes, summary_trees, "
+                        "TRUNCATE runtime_setting_overrides, kg_spans, kg_facts, kg_entities, knowledge_graphs, "
+                        "tree_edges, tree_nodes, summary_trees, "
                         "graph_spans, graph_relations, "
                         "graph_entities, entity_graphs, chunk_representations, representation_sets, "
                         "chunk_sparse_vectors, chunks, index_version_views, "
