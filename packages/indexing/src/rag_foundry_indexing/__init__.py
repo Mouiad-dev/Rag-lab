@@ -94,6 +94,15 @@ from rag_foundry_indexing.kag_extract import (
     KagGraphBuilder,
     KagRejectedItem,
 )
+from rag_foundry_indexing.kag_logical_form import (
+    Binding,
+    Execution,
+    LogicalForm,
+    PlanRejection,
+    StepResult,
+    execute,
+    parse_logical_form,
+)
 from rag_foundry_indexing.lexical_text import lexical_tokens
 from rag_foundry_indexing.llm_rerank import (
     REJECT_REASONS,
@@ -334,6 +343,13 @@ __all__ += [
     "KagExtractConfig",
     "KagGraphBuilder",
     "KagRejectedItem",
+    "Binding",
+    "Execution",
+    "LogicalForm",
+    "PlanRejection",
+    "StepResult",
+    "execute",
+    "parse_logical_form",
     "EntityGraphConfig",
     "EntityGraphRetriever",
     "GraphRetrievalTrace",
