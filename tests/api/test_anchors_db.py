@@ -55,7 +55,8 @@ def sql_repositories():
         async with maker() as session, session.begin():
             await session.execute(
                 text(
-                    "TRUNCATE runtime_setting_overrides, kg_spans, kg_facts, kg_entities, knowledge_graphs, "
+                    "TRUNCATE runtime_setting_overrides, response_cache_sources, response_cache_entries, "
+                    "kg_spans, kg_facts, kg_entities, knowledge_graphs, "
                     "tree_edges, tree_nodes, summary_trees, "
                     "graph_spans, graph_relations, "
                     "graph_entities, entity_graphs, chunk_representations, representation_sets, "
