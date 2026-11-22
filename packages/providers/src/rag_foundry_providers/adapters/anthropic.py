@@ -19,6 +19,8 @@ Design notes (owner decisions 2026-11-02):
   threshold the cost is None, never the cheaper rate. 1-hour cache writes are also None.
 - `model_context_window_exceeded` maps to finish_reason "length" (the reply was cut short).
   `refusal` raises ProviderCallError(reason "refused"); its billed usage, when parsed, is on `.usage`.
+- Prompt caching: `cache_breakpoint="system"` adds `cache_control` on the system block (profile declares
+  `prompt_cache_control`); prompts below the model minimum (512 tokens for Haiku 5.5) are silently not cached.
 - Tools, structured output and vision are not implemented (tool calling P8.3, structured output P4.4 or
   P5.4); profiles declare them False.
 """
@@ -120,6 +122,7 @@ def anthropic_chat_profile(id: str, model: str) -> ModelProfile:
             tool_calling=False,
             structured_output=False,
             vision=False,
+            prompt_cache_control=True,
             local=False,
             context_window=info.context_window if info else None,
             max_output_tokens=info.max_output_tokens if info else None,
@@ -171,7 +174,8 @@ class AnthropicChatModel:
     """ChatModel on Anthropic `POST /v1/messages` (complete and SSE stream). Single attempt, no retries.
 
     The key is read from ANTHROPIC_API_KEY at construction and sent only as a Bearer header.
-    Never sends `tools`, `tool_choice`, `temperature` or `cache_control`.
+    Never sends `tools`, `tool_choice` or `temperature`. `cache_control` (ephemeral, 5-minute TTL, no `ttl`
+    field) is sent only on the system block when the request sets `cache_breakpoint="system"`.
     """
 
     def __init__(
@@ -243,7 +247,11 @@ class AnthropicChatModel:
             "messages": messages,
         }
         if system_parts:
-            payload["system"] = "\n\n".join(system_parts)
+            system_text = "\n\n".join(system_parts)
+            if request.cache_breakpoint == "system":
+                payload["system"] = [{"type": "text", "text": system_text, "cache_control": {"type": "ephemeral"}}]
+            else:
+                payload["system"] = system_text
         if self._info is not None:
             payload["thinking"] = dict(self._info.thinking)
         if stream:
@@ -292,6 +300,7 @@ class AnthropicChatModel:
             input_tokens=tokens_in,
             output_tokens=tokens_out,
             cache_read_input_tokens=cache_read,
+            cache_read_reported=raw.get("cache_read_input_tokens") is not None,
             cache_write_input_tokens=total_write,
             token_source=TokenSource.PROVIDER,
             latency_ms=measure_latency_ms(self._clock, start),

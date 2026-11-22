@@ -35,6 +35,7 @@ class ChatRequest(_Frozen):
     temperature: float | None = Field(default=None, ge=0)
     tools: tuple[ToolSpec, ...] = ()
     response_schema: dict[str, Any] | None = None
+    cache_breakpoint: Literal["none", "system"] = "none"
 
 
 class ChatResult(_Frozen):

@@ -95,8 +95,8 @@ def test_capability_numeric_and_strict_validation():
         ModelProfile(id="c", provider="p", model="m", kind="chat", cost_per_mtok_in=Decimal("-1"))
 
 
-def test_capability_enum_has_ten_members():
-    assert len(Capability) == 10
+def test_capability_enum_has_eleven_members():
+    assert len(Capability) == 11
 
 
 def test_declared_table():

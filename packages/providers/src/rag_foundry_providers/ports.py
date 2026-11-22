@@ -80,6 +80,8 @@ def check_chat_request(profile: ModelProfile, request: ChatRequest, *, streaming
         needed.append(Capability.STRUCTURED_OUTPUT)
     if streaming:
         needed.append(Capability.STREAMING)
+    if request.cache_breakpoint == "system":
+        needed.append(Capability.PROMPT_CACHE_CONTROL)
     problems = tuple(
         CapabilityProblem(stage=None, profile_id=profile.id, capability=cap.value, declared=profile.declared(cap))
         for cap in needed

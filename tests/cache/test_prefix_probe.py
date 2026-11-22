@@ -205,3 +205,12 @@ def test_provider_error_propagates_unchanged():
 
     with pytest.raises(RuntimeError, match="provider down"):
         _run(Boom())
+
+
+def test_cache_breakpoint_and_temperature_none_reach_every_request():
+    chat = FakeChat()
+    _run(chat, cache_breakpoint="system", temperature=None)
+    assert chat.requests and all(r.cache_breakpoint == "system" and r.temperature is None for r in chat.requests)
+    chat = FakeChat()
+    _run(chat)
+    assert all(r.cache_breakpoint == "none" for r in chat.requests)

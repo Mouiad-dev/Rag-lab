@@ -725,3 +725,122 @@ def test_leak_check_adapter_ledger_and_repr(caplog) -> None:
     for request in seen:  # key only in the Authorization header
         assert SENTINEL.encode() not in request.content and SENTINEL not in str(request.url)
         assert SENTINEL not in json.dumps({k: v for k, v in request.headers.items() if k != "authorization"})
+
+
+# --- prompt cache breakpoint (P7.4-03a) ---------------------------------------------------------
+
+
+def _sys_req(**kw) -> ChatRequest:
+    return ChatRequest(
+        messages=(ChatMessage(role="system", content="SYS"), ChatMessage(role="user", content="hello")), **kw
+    )
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_cache_breakpoint_payload_shape(stream) -> None:
+    body = _sent(anthropic_haiku_profile(), _sys_req(cache_breakpoint="system"), stream=stream)
+    assert body["system"] == [{"type": "text", "text": "SYS", "cache_control": {"type": "ephemeral"}}]
+    assert "ttl" not in json.dumps(body)
+    assert "cache_control" not in json.dumps(body["messages"])
+
+
+def test_no_breakpoint_keeps_plain_system_string() -> None:
+    body = _sent(anthropic_haiku_profile(), _sys_req())
+    assert body["system"] == "SYS" and "cache_control" not in json.dumps(body)
+
+
+def test_cache_breakpoint_usage_maps_to_usage_and_profile_cost() -> None:
+    usage = _usage(
+        input_tokens=40,
+        output_tokens=10,
+        cache_read_input_tokens=1500,
+        cache_creation_input_tokens=600,
+        cache_creation={"ephemeral_5m_input_tokens": 600, "ephemeral_1h_input_tokens": 0},
+    )
+    model = _model(lambda r: httpx.Response(200, json=_message(usage=usage)))
+    u = run(model.complete(_sys_req(cache_breakpoint="system"))).usage
+    assert (u.input_tokens, u.cache_read_input_tokens, u.cache_write_input_tokens) == (40, 1500, 600)
+    assert u.cache_read_reported is True
+    # 40*0.10 + 10*0.50 + 1500*0.01 + 600*0.125 = 4 + 5 + 15 + 75 = 99 per 1e6
+    assert u.estimated_cost_usd == Decimal("0.000099")
+
+
+def test_cache_read_reported_false_when_field_absent() -> None:
+    model = _model(lambda r: httpx.Response(200, json=_message()))
+    assert run(model.complete(_req())).usage.cache_read_reported is False
+
+
+def test_profiles_without_capability_refuse_breakpoint_before_http() -> None:
+    from rag_foundry_providers.adapters.ollama import ollama_chat_profile
+    from rag_foundry_providers.ports import check_chat_request
+
+    request = _sys_req(cache_breakpoint="system")
+    with pytest.raises(MissingCapabilityError):
+        check_chat_request(ollama_chat_profile(), request, streaming=False)
+    calls: list[httpx.Request] = []
+    caps = anthropic_haiku_profile().capabilities.model_copy(update={"prompt_cache_control": None})
+    model = _model(_ok(calls), anthropic_haiku_profile().model_copy(update={"capabilities": caps}))
+    with pytest.raises(MissingCapabilityError):
+        run(model.complete(request))
+    with pytest.raises(MissingCapabilityError):
+        run(_drain(model, request))
+    assert calls == []
+
+
+def test_openai_compatible_refuses_breakpoint_before_http() -> None:
+    from rag_foundry_providers.adapters.openai_compat import OpenAICompatibleChatModel
+    from rag_foundry_providers.capabilities import Capabilities, ModelKind, ModelProfile
+
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(500)
+
+    profile = ModelProfile(
+        id="compat-chat",
+        provider="openai-compatible",
+        model="m",
+        kind=ModelKind.CHAT,
+        capabilities=Capabilities(streaming=True, local=True),
+    )
+    model = OpenAICompatibleChatModel(
+        profile, api_base="http://127.0.0.1:1234/v1", transport=httpx.MockTransport(handler)
+    )
+    request = _sys_req(cache_breakpoint="system")
+    with pytest.raises(MissingCapabilityError):
+        run(model.complete(request))
+    with pytest.raises(MissingCapabilityError):
+        run(_drain(model, request))
+    assert sent == []
+
+
+def test_key_absent_from_cache_breakpoint_payload() -> None:
+    log: list[httpx.Request] = []
+    run(_model(_ok(log)).complete(_sys_req(cache_breakpoint="system")))
+    assert SENTINEL.encode() not in log[0].content
+    assert SENTINEL not in repr(_sys_req(cache_breakpoint="system"))
+
+
+def test_budget_guard_refuses_over_cap_before_http() -> None:
+    from rag_foundry_providers.budget import BudgetedChatModel, RunBudget, worst_case_chat_cost
+    from rag_foundry_providers.errors import BudgetExceededError
+
+    cap = Decimal("0.05")
+    profile = anthropic_haiku_profile()
+    small = _sys_req(max_output_tokens=64, cache_breakpoint="system")
+    assert worst_case_chat_cost(profile, small, 64) * 6 <= cap
+    # ~2 MB of prompt at the dearer write rate is well above USD 0.05 for one call
+    huge = ChatRequest(
+        messages=(ChatMessage(role="system", content="x" * 2_000_000), ChatMessage(role="user", content="q")),
+        max_output_tokens=64,
+        cache_breakpoint="system",
+    )
+    assert worst_case_chat_cost(profile, huge, 64) > cap
+    calls: list[httpx.Request] = []
+    chat = BudgetedChatModel(_model(_ok(calls)), RunBudget(cap, max_calls=6), default_max_output_tokens=64)
+    with pytest.raises(BudgetExceededError):
+        run(chat.complete(huge))
+    assert calls == []
+    run(chat.complete(small))
+    assert len(calls) == 1

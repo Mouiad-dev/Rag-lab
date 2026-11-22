@@ -30,9 +30,10 @@ class PrefixProbeConfig(BaseModel):
     prefix_text: str = Field(min_length=1, max_length=200_000)
     questions: tuple[str, ...] = Field(min_length=2, max_length=10)
     max_output_tokens: int = Field(default=64, ge=1, le=512)
-    temperature: float = Field(default=0.0, ge=0)
+    temperature: float | None = Field(default=0.0, ge=0)  # None omits it (Anthropic refuses temperature)
     mode: Literal["complete", "stream"] = "complete"
     arms: tuple[ArmName, ...] = Field(default=ALL_ARMS, min_length=1)
+    cache_breakpoint: Literal["none", "system"] = "none"
 
     @field_validator("questions")
     @classmethod
@@ -165,6 +166,7 @@ class PrefixCacheProbe:
             messages=(ChatMessage(role="system", content=system), ChatMessage(role="user", content=question)),
             max_output_tokens=cfg.max_output_tokens,
             temperature=cfg.temperature,
+            cache_breakpoint=cfg.cache_breakpoint,
         )
         start = clock()
         ttft: float | None = None

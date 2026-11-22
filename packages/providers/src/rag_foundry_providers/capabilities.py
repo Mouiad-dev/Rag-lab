@@ -27,6 +27,7 @@ class Capability(StrEnum):
     MULTIVECTOR = "multivector"
     RERANKING = "reranking"
     LOCAL = "local"
+    PROMPT_CACHE_CONTROL = "prompt_cache_control"
 
 
 _CHAT_ONLY = ("streaming", "tool_calling", "structured_output", "vision")
@@ -45,6 +46,7 @@ class Capabilities(BaseModel):
     vision: bool | None = None
     token_embeddings: bool | None = None
     multivector: bool | None = None
+    prompt_cache_control: bool | None = None
     local: bool = False
     context_window: PositiveInt | None = None
     max_output_tokens: PositiveInt | None = None
