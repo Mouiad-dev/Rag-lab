@@ -191,7 +191,49 @@ Update cost = full rebuild; not measured separately.
 
 ## Live run (orchestrator)
 
-<orchestrator>
-Live run result goes here (P7.3-10). Live output is not deterministic and is recorded separately.
-</orchestrator>
+One run, not an evaluation. Live model output is not bit-identical across runs.
+
+- Command: `PYTHONIOENCODING=utf-8 RAG_LIVE_OLLAMA=1 uv run pytest tests/live/test_raptor_live.py tests/live/test_kag_live.py -m live -v -s -p no:cacheprovider`
+- Date: 2026-11-22 (started 14:06 UTC). Local Ollama, cost 0, no model pull.
+- Models: chat `gemma4:e4b`, embeddings `bge-m3` (`ollama list` showed both present before the run).
+- Result: 2 passed in 85.01 s (structural assertions only: lineage, grounding, tracing, call counts).
+
+What this run shows: with live summaries and live `bge-m3` embeddings, R37 collapsed, the flat summary index and R02 picked the same 3 paragraphs for every question, so this run shows no R37 advantage and no R37 loss; traversal (default beam) returned 2 hits each time. The beam-1 losing case from the offline demo was not run live. Recall here is gold spans inside a hit / gold spans, as in the offline table.
+
+Printed output (test_raptor_live.py):
+
+```text
+test_raptor_live_smoke stage=index_embed calls=13 input_tokens=347 output_tokens=0 latency_ms=10312
+full_tree levels=3 nodes=17 summaries=4 leaves=13
+full_tree promoted_clusters=0 sizes=[]
+stage=full_tree_chat calls=4 input_tokens=816 output_tokens=325 latency_ms=19079
+stage=full_tree_embed calls=3 input_tokens=767 output_tokens=0 latency_ms=3663
+flat_tree levels=2 nodes=16 summaries=3 leaves=13
+flat_tree promoted_clusters=0 sizes=[]
+stage=flat_tree_chat calls=3 input_tokens=561 output_tokens=167 latency_ms=3110
+stage=flat_tree_embed calls=2 input_tokens=557 output_tokens=0 latency_ms=860
+question Q_BUDGET: What does each budget pay for?
+Q_BUDGET collapsed hits=['C2', 'O2', 'H2'] recall=0.75 (hits=3)
+Q_BUDGET traversal hits=['C2', 'O2'] recall=0.50 (hits=2)
+Q_BUDGET flat summary index (R37 on max_levels=1) hits=['C2', 'O2', 'H2'] recall=0.75 (hits=3)
+Q_BUDGET R02 dense k=3 hits=['C2', 'O2', 'H2'] recall=0.75 (hits=3)
+question Q_OVERVIEW: Give a municipal overview of shared priorities and finances in the region.
+Q_OVERVIEW collapsed hits=['H2', 'H4', 'O2'] recall=0.23 (hits=3)
+Q_OVERVIEW traversal hits=['H2', 'H4'] recall=0.15 (hits=2)
+Q_OVERVIEW flat summary index (R37 on max_levels=1) hits=['H2', 'H4', 'O2'] recall=0.23 (hits=3)
+Q_OVERVIEW R02 dense k=3 hits=['H2', 'H4', 'O2'] recall=0.23 (hits=3)
+question Q_DETAIL: At what temperature is the clinic vaccine fridge kept?
+Q_DETAIL collapsed hits=['C3', 'C1', 'C5-ar'] recall=1.00 (hits=3)
+Q_DETAIL traversal hits=['C3', 'C1'] recall=1.00 (hits=2)
+Q_DETAIL flat summary index (R37 on max_levels=1) hits=['C3', 'C1', 'C5-ar'] recall=1.00 (hits=3)
+Q_DETAIL R02 dense k=3 hits=['C3', 'C1', 'C5-ar'] recall=1.00 (hits=3)
+question Q_ARABIC: متى تفتح العيادة؟
+Q_ARABIC collapsed hits=['C1', 'C5-ar', 'C4'] recall=1.00 (hits=3)
+Q_ARABIC traversal hits=['C1', 'C5-ar'] recall=1.00 (hits=2)
+Q_ARABIC flat summary index (R37 on max_levels=1) hits=['C1', 'C5-ar', 'C4'] recall=1.00 (hits=3)
+Q_ARABIC R02 dense k=3 hits=['C1', 'C5-ar', 'C4'] recall=1.00 (hits=3)
+query_embed_calls_raptor=12 (3 arms x 4 questions)
+chat ledger calls=7 input_tokens=1377 output_tokens=492
+PASSED
+```
 

@@ -301,7 +301,70 @@ Executor runs make no model call. A question run in more than one section is lis
 
 ## Live run (orchestrator)
 
-<orchestrator>
-Live run result goes here (P7.3-10). Live output is not deterministic and is recorded separately.
-</orchestrator>
+One run, not an evaluation. Live model output is not bit-identical across runs.
+
+- Command: `PYTHONIOENCODING=utf-8 RAG_LIVE_OLLAMA=1 uv run pytest tests/live/test_raptor_live.py tests/live/test_kag_live.py -m live -v -s -p no:cacheprovider`
+- Date: 2026-11-22 (started 14:06 UTC). Local Ollama, cost 0, no model pull.
+- Models: chat `gemma4:e4b`, embeddings `bge-m3` (`ollama list` showed both present before the run).
+- Result: 2 passed in 85.01 s (structural assertions only: lineage, grounding, tracing, call counts).
+
+What this run shows: live extraction kept 15 entities and 8 facts from 18 chunks (1 item rejected, `quote_not_found`; 1 conflict). The live `gemma4:e4b` planner produced an executable, answered plan for 1 of 5 questions (Q2 count, answer 2 after one replan; span recall 0.67 with 2 hits, R02 k=3 also 0.67). The other 4 ended with an explicit status and empty hits: Q0, Q3 and Q4 `rejected` after a replan (`schema_violation`: relations used in the wrong direction, e.g. `founded` with an Organization subject, `leads` from an Organization), Q1 `incomplete` (the founding-year fact was not extracted). R02 k=3 reached span recall 1.00 on those four. So on this run the live planner, not the executor, is the weak point; no failure became a silent fallback. Plan calls 9 (5 first plans + 4 replans), all counted.
+
+Printed output (test_kag_live.py):
+
+```text
+test_kag_live_smoke stage=index_embed calls=18 input_tokens=291 output_tokens=0 latency_ms=6607
+graph entities=15 facts=8 chunks=18
+extraction rejected=1 by_reason={'quote_not_found': 1}
+conflicts=1
+stage=extraction calls=18 input_tokens=6627 output_tokens=1028 latency_ms=17805
+question Q0
+Q0 lookup: Who founded Cedar Labs?
+  attempt=1 prompt_sha256=c3fdb6a2eb6d rejection=('schema_violation', 'unknown predicate founded for Organization') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "founded", "subject": {"entity": {"name": "Cedar Labs", "type": "Organization"}}}]}
+  attempt=2 prompt_sha256=917ec9c8ddb6 rejection=('schema_violation', 'unknown predicate founded_by for Organization') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "founded_by", "subject": {"entity": {"name": "Cedar Labs", "type": "Organization"}}}]}
+  status=rejected hits=0 answer=[] conflicts=0
+  recall R48=0.00 (hits=0) R02 k=3=1.00 (hits=3)
+question Q1
+Q1 lookup: In which year was Cedar Labs founded?
+  attempt=1 prompt_sha256=c3fdb6a2eb6d rejection=None execution_status=incomplete
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "founded_year", "subject": {"entity": {"name": "Cedar Labs", "type": "Organization"}}}, {"id": "s2", "inputs": ["s1"], "op": "output"}]}
+  step=s1 op=retrieve status=missing bindings=0
+  step=s2 op=output status=missing bindings=0
+  status=incomplete hits=0 answer=[] conflicts=0
+  recall R48=0.00 (hits=0) R02 k=3=1.00 (hits=3)
+question Q2
+Q2 count: How many organizations supply the Harbor Authority?
+  attempt=1 prompt_sha256=c3fdb6a2eb6d rejection=('invalid_logical_form', 'exactly one output step is required') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "supplies", "subject": {"entity": {"name": "Harbor Authority", "type": "Organization"}}}, {"id": "s2", "input": "s1", "op": "count"}]}
+  attempt=2 prompt_sha256=917ec9c8ddb6 rejection=None execution_status=answered
+  plan_json={"steps": [{"id": "s1", "object": {"entity": {"name": "Harbor Authority", "type": "Organization"}}, "op": "retrieve", "predicate": "supplies", "subject": null}, {"id": "s2", "input": "s1", "op": "count"}, {"id": "s3", "inputs": ["s2"], "op": "output"}]}
+  step=s1 op=retrieve status=ok bindings=2
+  step=s2 op=count status=ok bindings=1
+  step=s3 op=output status=ok bindings=1
+  status=answered hits=2 answer=['2'] conflicts=0
+  recall R48=0.67 (hits=2) R02 k=3=0.67 (hits=3)
+question Q3
+Q3 multi_hop: Who leads the organization that Cedar Labs supplies?
+  attempt=1 prompt_sha256=c3fdb6a2eb6d rejection=('schema_violation', 'unknown predicate leads for referenced step') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "supplies", "subject": {"entity": {"name": "Cedar Labs", "type": "Organization"}}}, {"id": "s2", "object": null, "op": "retrieve", "predicate": "leads", "subject": {"step": "s1"}}, {"id": "s3", "inputs": ["s2"], "op": "output"}]}
+  attempt=2 prompt_sha256=917ec9c8ddb6 rejection=('schema_violation', 'unknown predicate leads for referenced step') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "supplies", "subject": {"entity": {"name": "Cedar Labs", "type": "Organization"}}}, {"id": "s2", "object": null, "op": "retrieve", "predicate": "supplies", "subject": {"step": "s1"}}, {"id": "s3", "object": null, "op": "retrieve", "predicate": "leads", "subject": {"step": "s2"}}, {"id": "s4", "inputs": ["s3"], "op": "output"}]}
+  status=rejected hits=0 answer=[] conflicts=0
+  recall R48=0.00 (hits=0) R02 k=3=1.00 (hits=3)
+question Q4
+Q4 lookup: Who leads Delta Works?
+  attempt=1 prompt_sha256=c3fdb6a2eb6d rejection=('schema_violation', 'unknown predicate leads for Organization') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "leads", "subject": {"entity": {"name": "Delta Works", "type": "Organization"}}}]}
+  attempt=2 prompt_sha256=917ec9c8ddb6 rejection=('schema_violation', 'unknown predicate leads for Organization') execution_status=None
+  plan_json={"steps": [{"id": "s1", "object": null, "op": "retrieve", "predicate": "leads", "subject": {"entity": {"name": "Delta Works", "type": "Organization"}}}]}
+  status=rejected hits=0 answer=[] conflicts=0
+  recall R48=0.00 (hits=0) R02 k=3=1.00 (hits=3)
+plan rejection reasons by count={'invalid_logical_form': 1, 'schema_violation': 6}
+plan calls=9 first_plans=5 replans=4
+stage=planning calls=9 input_tokens=5429 output_tokens=670 latency_ms=11054
+chat ledger calls=27 input_tokens=12056 output_tokens=1698
+PASSED
+```
 
