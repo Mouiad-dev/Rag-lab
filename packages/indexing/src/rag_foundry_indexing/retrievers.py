@@ -174,3 +174,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.graph_global import CommunityGlobalSearch
 
     registry.register(CommunityGlobalSearch)
+    from rag_foundry_indexing.raptor_retrieve import RaptorRetriever
+
+    registry.register(RaptorRetriever)

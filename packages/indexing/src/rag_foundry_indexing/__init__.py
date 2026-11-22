@@ -117,6 +117,7 @@ from rag_foundry_indexing.raptor_build import (
     RaptorTreeBuilder,
 )
 from rag_foundry_indexing.raptor_cluster import ClusterConfig, ClusterItem, ClusterResult, cluster_nodes
+from rag_foundry_indexing.raptor_retrieve import RaptorConfig, RaptorRetriever, RaptorTrace
 from rag_foundry_indexing.representation_build import (
     ContextualPrefixBuildConfig,
     ContextualPrefixBuilder,
@@ -333,4 +334,7 @@ __all__ += [
     "RaptorBuildConfig",
     "RaptorBuildReport",
     "RaptorTreeBuilder",
+    "RaptorConfig",
+    "RaptorRetriever",
+    "RaptorTrace",
 ]
