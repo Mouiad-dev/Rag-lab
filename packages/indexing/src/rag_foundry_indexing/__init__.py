@@ -109,6 +109,13 @@ from rag_foundry_indexing.multi_query import MultiQueryConfig, MultiQueryExpansi
 from rag_foundry_indexing.parent_document import ParentDocumentConfig, ParentDocumentExpander
 from rag_foundry_indexing.query_transform import GeneratedQuery, QueryTransformTrace, TransformedRetrieval
 from rag_foundry_indexing.rag_fusion import RagFusion, RagFusionConfig
+from rag_foundry_indexing.raptor_build import (
+    R37_SUMMARY_SYSTEM_V1,
+    R37_SUMMARY_SYSTEM_V1_SHA256,
+    RaptorBuildConfig,
+    RaptorBuildReport,
+    RaptorTreeBuilder,
+)
 from rag_foundry_indexing.raptor_cluster import ClusterConfig, ClusterItem, ClusterResult, cluster_nodes
 from rag_foundry_indexing.representation_build import (
     ContextualPrefixBuildConfig,
@@ -321,4 +328,9 @@ __all__ += [
     "PackedContext",
     "PackTrace",
     "PlacedEvidence",
+    "R37_SUMMARY_SYSTEM_V1",
+    "R37_SUMMARY_SYSTEM_V1_SHA256",
+    "RaptorBuildConfig",
+    "RaptorBuildReport",
+    "RaptorTreeBuilder",
 ]
