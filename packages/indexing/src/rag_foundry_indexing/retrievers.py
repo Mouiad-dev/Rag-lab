@@ -171,3 +171,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.graph_retrieve import EntityGraphRetriever
 
     registry.register(EntityGraphRetriever)
+    from rag_foundry_indexing.graph_global import CommunityGlobalSearch
+
+    registry.register(CommunityGlobalSearch)

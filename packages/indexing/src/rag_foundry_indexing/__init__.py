@@ -69,6 +69,19 @@ from rag_foundry_indexing.graph_extract import (
     GraphBuildReport,
     RejectedItem,
 )
+from rag_foundry_indexing.graph_global import (
+    R39_MAP_SYSTEM_V1,
+    R39_MAP_SYSTEM_V1_SHA256,
+    R39_REDUCE_SYSTEM_V1,
+    R39_REDUCE_SYSTEM_V1_SHA256,
+    CitedSentence,
+    CommunityGlobalSearch,
+    GlobalAnswer,
+    GlobalPoint,
+    GlobalSearchConfig,
+    GlobalSearchTrace,
+    MapEntry,
+)
 from rag_foundry_indexing.graph_retrieve import EntityGraphConfig, EntityGraphRetriever, GraphRetrievalTrace
 from rag_foundry_indexing.hybrid import HybridConfig, HybridRetriever
 from rag_foundry_indexing.hyde import HydeConfig, HydeRetriever
@@ -271,6 +284,17 @@ __all__ += [
     "R39_SYSTEM_V1_SHA256",
     "Community",
     "CommunityBuildReport",
+    "CitedSentence",
+    "CommunityGlobalSearch",
+    "GlobalAnswer",
+    "GlobalPoint",
+    "GlobalSearchConfig",
+    "GlobalSearchTrace",
+    "MapEntry",
+    "R39_MAP_SYSTEM_V1",
+    "R39_MAP_SYSTEM_V1_SHA256",
+    "R39_REDUCE_SYSTEM_V1",
+    "R39_REDUCE_SYSTEM_V1_SHA256",
     "CommunitySummary",
     "CommunitySummaryBuilder",
     "CommunitySummaryConfig",
