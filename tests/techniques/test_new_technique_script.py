@@ -60,7 +60,7 @@ def _case(kind, preferred=None):
     return (tid, kind, f"rag_foundry_plugin_{tid.lower()}"), (tid, kind)
 
 
-_PARAMS_AND_REAL = [_case("chunker", "C11"), _case("graph_builder")]
+_PARAMS_AND_REAL = [_case("chunker", "C11"), _case("retriever")]
 PARAMS = [p for p, _ in _PARAMS_AND_REAL]
 CASES = [r for _, r in _PARAMS_AND_REAL if r is not None]
 

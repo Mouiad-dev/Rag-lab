@@ -103,6 +103,16 @@ from rag_foundry_indexing.kag_logical_form import (
     execute,
     parse_logical_form,
 )
+from rag_foundry_indexing.kag_retrieve import (
+    R48_PLAN_SYSTEM_V1,
+    R48_PLAN_SYSTEM_V1_SHA256,
+    KagAttempt,
+    KagBindingTrace,
+    KagConfig,
+    KagRetriever,
+    KagStepTrace,
+    KagTrace,
+)
 from rag_foundry_indexing.lexical_text import lexical_tokens
 from rag_foundry_indexing.llm_rerank import (
     REJECT_REASONS,
@@ -343,6 +353,14 @@ __all__ += [
     "KagExtractConfig",
     "KagGraphBuilder",
     "KagRejectedItem",
+    "R48_PLAN_SYSTEM_V1",
+    "R48_PLAN_SYSTEM_V1_SHA256",
+    "KagAttempt",
+    "KagBindingTrace",
+    "KagConfig",
+    "KagRetriever",
+    "KagStepTrace",
+    "KagTrace",
     "Binding",
     "Execution",
     "LogicalForm",

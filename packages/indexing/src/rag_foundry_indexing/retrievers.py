@@ -177,3 +177,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.raptor_retrieve import RaptorRetriever
 
     registry.register(RaptorRetriever)
+    from rag_foundry_indexing.kag_retrieve import KagRetriever
+
+    registry.register(KagRetriever)
