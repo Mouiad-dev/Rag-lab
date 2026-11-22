@@ -30,6 +30,18 @@ from rag_foundry_domain.indexing import (
     corpus_sha256_for,
     embedding_key_for,
 )
+from rag_foundry_domain.knowledge import (
+    EntityTypeDef,
+    Fact,
+    KEntity,
+    KnowledgeGraph,
+    KnowledgeSchema,
+    PropertyDef,
+    RelationTypeDef,
+    fact_id_for,
+    kentity_id_for,
+    kg_key_for,
+)
 from rag_foundry_domain.ports import DocumentRepository, ExtractionRepository, IndexRepository
 from rag_foundry_domain.representations import (
     NewRepresentation,
@@ -101,6 +113,7 @@ class InMemoryIndexRepository:
         self._reps: dict[tuple[str, str], list[tuple[RepresentationRecord, tuple[float, ...]]]] = {}
         self._graphs: dict[tuple[str, str], EntityGraph] = {}
         self._trees: dict[tuple[str, str], SummaryTree] = {}
+        self._kgs: dict[tuple[str, str], KnowledgeGraph] = {}
 
     def _get(self, scope: Scope, iid: str) -> IndexVersion:
         v = self._versions.get(iid)
@@ -367,6 +380,34 @@ class InMemoryIndexRepository:
     async def get_summary_tree(self, scope: Scope, index_version_id: str, tree_key: str) -> SummaryTree:
         self._get(scope, index_version_id)
         found = self._trees.get((index_version_id, tree_key))
+        if found is None:
+            raise NotFoundError()
+        return found.model_copy(deep=True)
+
+    async def add_knowledge_graph(self, scope: Scope, index_version_id: str, graph: KnowledgeGraph) -> None:
+        row = self._get(scope, index_version_id)
+        if row.state is not IndexState.READY:
+            raise IndexingError("not_ready")
+        graph.check_scope(scope, index_version_id)
+        slot = (index_version_id, graph.kg_key)
+        if slot in self._kgs:
+            raise IndexingError("kag_exists")
+        chunks = {c.id: c for c in self._chunks[index_version_id]}
+        spans = [m for e in graph.entities for m in e.mentions] + [s for f in graph.facts for s in f.evidence]
+        for span in spans:
+            chunk = chunks.get(span.chunk_id)
+            if (
+                chunk is None
+                or span.extraction_view_id != chunk.extraction_view_id
+                or not chunk.start <= span.start < span.end <= chunk.end
+                or chunk.text[span.start - chunk.start : span.end - chunk.start] != span.quote
+            ):
+                raise IndexingError("kag_source_mismatch")
+        self._kgs[slot] = graph.model_copy(deep=True)
+
+    async def get_knowledge_graph(self, scope: Scope, index_version_id: str, kg_key: str) -> KnowledgeGraph:
+        self._get(scope, index_version_id)
+        found = self._kgs.get((index_version_id, kg_key))
         if found is None:
             raise NotFoundError()
         return found.model_copy(deep=True)
@@ -977,3 +1018,177 @@ async def check_summary_trees(factory: IndexRepoFactory) -> None:
 
 
 TREE_STORE_CHECKS = (check_summary_trees,)
+
+
+def _kg_schema() -> KnowledgeSchema:
+    return KnowledgeSchema(
+        schema_id="kg-store-fixture",
+        version="1",
+        entity_types=(
+            EntityTypeDef(name="Person"),
+            EntityTypeDef(
+                name="Organization",
+                properties=(PropertyDef(name="founded_year", value_kind="year", cardinality="one"),),
+            ),
+        ),
+        relation_types=(RelationTypeDef(name="founded", domain="Person", range="Organization", cardinality="many"),),
+    )
+
+
+def make_knowledge_graph(scope: Scope, version: IndexVersion, chunks: Sequence[ChunkRecord]) -> KnowledgeGraph:
+    """Per chunk: a Person (first word), an Organization (rest), a founded relation and two conflicting years."""
+    entities: dict[str, KEntity] = {}
+    facts: dict[str, Fact] = {}
+
+    def span(chunk: ChunkRecord, a: int, b: int) -> GraphSpan:
+        return GraphSpan(
+            chunk_id=chunk.id,
+            extraction_view_id=chunk.extraction_view_id,
+            start=chunk.start + a,
+            end=chunk.start + b,
+            quote=chunk.text[a:b],
+        )
+
+    for chunk in chunks:
+        cut = chunk.text.index(" ")
+        org_name = chunk.text[cut + 1 :]
+        person = KEntity(
+            entity_id=kentity_id_for(chunk.text[:cut], "Person"),
+            type="Person",
+            name=chunk.text[:cut],
+            mentions=(span(chunk, 0, cut),),
+        )
+        org = KEntity(
+            entity_id=kentity_id_for(org_name, "Organization"),
+            type="Organization",
+            name=org_name,
+            mentions=(span(chunk, cut + 1, len(chunk.text)),),
+        )
+        entities[person.entity_id], entities[org.entity_id] = person, org
+        whole = (span(chunk, 0, len(chunk.text)),)
+        for pred, subj, value in (("founded", person, org), ("founded_year", org, 1999), ("founded_year", org, 2001)):
+            is_ent = isinstance(value, KEntity)
+            fid = fact_id_for(subj.entity_id, pred, value.entity_id if is_ent else value)
+            facts[fid] = Fact(
+                fact_id=fid,
+                subject_id=subj.entity_id,
+                predicate=pred,
+                object_id=value.entity_id if is_ent else None,
+                literal=None if is_ent else value,
+                evidence=whole,
+            )
+    return KnowledgeGraph(
+        schema="rag_foundry.knowledge_graph/1",
+        kg_key=kg_key_for({"index_version_id": version.id, "chunks": sorted(c.id for c in chunks)}),
+        tenant_id=scope.tenant_id,
+        project_id=scope.project_id,
+        index_version_id=version.id,
+        knowledge_schema=_kg_schema(),
+        generator_json="{}",
+        entities=tuple(sorted(entities.values(), key=lambda e: e.entity_id)),
+        facts=tuple(sorted(facts.values(), key=lambda f: f.fact_id)),
+    )
+
+
+async def check_knowledge_graphs(factory: IndexRepoFactory) -> None:
+    scope, other_tenant = make_scope(), make_scope()
+    docs, view_repo, repo = await factory([scope, other_tenant])
+    # hasattr, not isinstance: per-call adapters resolve methods dynamically, which runtime protocols cannot see.
+    if not all(hasattr(repo, n) for n in ("add_knowledge_graph", "get_knowledge_graph")):
+        raise AssertionError("repository must implement KnowledgeGraphStore")
+    views = []
+    for i, sc in enumerate((scope, other_tenant)):
+        out = await docs.create_document_or_get(sc, make_new_version(f"kg-{i}"), display_name="fixture")
+        views.append((await view_repo.create_view_or_get(sc, make_new_extraction(out.version, tag=f"kg-{i}"))).view)
+    arabic = "\u0645\u062d\u0645\u062f \u064a\u0639\u0645\u0644 \u0641\u064a \u0627\u0644\u0634\u0631\u0643\u0629"
+    version = await repo.create_index_version(scope, make_new_index_version((views[0].id,)))
+    await repo.add_chunks(
+        scope,
+        version.id,
+        (make_chunk(views[0].id, 0, (1, 0, 0, 0), "Ada wrote notes"), make_chunk(views[0].id, 1, (0, 1, 0, 0), arabic)),
+    )
+    chunk_a, chunk_ar = await repo.list_chunks(scope, version.id)
+    sibling = await repo.create_index_version(scope, make_new_index_version((views[0].id,)))
+    await repo.add_chunks(scope, sibling.id, (make_chunk(views[0].id, 0, (1, 0, 0, 0), "Ada wrote notes"),))
+    await repo.mark_ready(scope, sibling.id)
+    sibling_chunk = (await repo.list_chunks(scope, sibling.id))[0]
+
+    graph = make_knowledge_graph(scope, version, (chunk_a,))
+    # Scope is checked before readiness: a stranger never learns that the version is not ready.
+    await _expect_not_found(repo.add_knowledge_graph(other_tenant, version.id, graph))
+    await _expect_error(repo.add_knowledge_graph(scope, version.id, graph), "not_ready")
+    await repo.mark_ready(scope, version.id)
+
+    # A graph built for version B must not be stored under version A, even in the same scope.
+    sibling_graph = make_knowledge_graph(scope, sibling, (sibling_chunk,))
+    await _expect_error(repo.add_knowledge_graph(scope, version.id, sibling_graph), "kag_scope_mismatch")
+    await _expect_not_found(repo.get_knowledge_graph(scope, version.id, sibling_graph.kg_key))
+
+    for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
+        await _expect_not_found(repo.add_knowledge_graph(stranger, version.id, graph))
+        await _expect_not_found(repo.get_knowledge_graph(stranger, version.id, graph.kg_key))
+    await _expect_not_found(repo.get_knowledge_graph(scope, version.id, graph.kg_key))
+
+    def bad_entity_graph(span: GraphSpan, tag: str) -> KnowledgeGraph:
+        entity = graph.entities[0].model_copy(update={"mentions": (span,)})
+        return graph.model_copy(update={"kg_key": kg_key_for({"bad": tag}), "entities": (entity, *graph.entities[1:])})
+
+    def bad_fact_graph(span: GraphSpan, tag: str) -> KnowledgeGraph:
+        fact = graph.facts[0].model_copy(update={"evidence": (span,)})
+        return graph.model_copy(update={"kg_key": kg_key_for({"bad": tag}), "facts": (fact, *graph.facts[1:])})
+
+    good = graph.entities[0].mentions[0]
+    bad_spans = {
+        "quote": good.model_copy(update={"quote": "X" * len(good.quote)}),
+        "outside": GraphSpan(
+            chunk_id=chunk_a.id,
+            extraction_view_id=chunk_a.extraction_view_id,
+            start=chunk_a.end,
+            end=chunk_a.end + 2,
+            quote="xx",
+        ),
+        # Same scope and same text as chunk_a, but the chunk belongs to a different index version.
+        "sibling_version_chunk": GraphSpan(
+            chunk_id=sibling_chunk.id,
+            extraction_view_id=sibling_chunk.extraction_view_id,
+            start=0,
+            end=3,
+            quote="Ada",
+        ),
+        # Valid quote and offsets, but the view is not the chunk's view.
+        "wrong_view": good.model_copy(update={"extraction_view_id": views[1].id}),
+    }
+    bad_graphs = {}
+    for tag, bad in bad_spans.items():
+        bad_graphs[tag] = bad_entity_graph(bad, tag)
+        bad_graphs["fact_" + tag] = bad_fact_graph(bad, "fact_" + tag)
+    for bad_graph in bad_graphs.values():
+        await _expect_error(repo.add_knowledge_graph(scope, version.id, bad_graph), "kag_source_mismatch")
+        await _expect_not_found(repo.get_knowledge_graph(scope, version.id, bad_graph.kg_key))
+
+    await repo.add_knowledge_graph(scope, version.id, graph)
+    loaded = await repo.get_knowledge_graph(scope, version.id, graph.kg_key)
+    if loaded != graph or loaded.to_json() != graph.to_json():
+        raise AssertionError("knowledge graph must round-trip including its schema")
+    if not any(f.literal == 1999 for f in loaded.facts) or len(loaded.conflicts()) != 1:
+        raise AssertionError("literal fact and conflict must round-trip")
+    await _expect_error(repo.add_knowledge_graph(scope, version.id, graph), "kag_exists")
+    # The duplicate key is reported before span checks, so a duplicate with a bad span is still kag_exists.
+    duplicate_bad = bad_graphs["quote"].model_copy(update={"kg_key": graph.kg_key})
+    await _expect_error(repo.add_knowledge_graph(scope, version.id, duplicate_bad), "kag_exists")
+    # The graph's own scope is checked before the duplicate key.
+    duplicate_foreign = sibling_graph.model_copy(update={"kg_key": graph.kg_key})
+    await _expect_error(repo.add_knowledge_graph(scope, version.id, duplicate_foreign), "kag_scope_mismatch")
+    for stranger in (other_tenant, Scope(tenant_id=scope.tenant_id, project_id=new_id())):
+        await _expect_not_found(repo.get_knowledge_graph(stranger, version.id, graph.kg_key))
+
+    arabic_graph = make_knowledge_graph(scope, version, (chunk_ar,))
+    await repo.add_knowledge_graph(scope, version.id, arabic_graph)
+    loaded_ar = await repo.get_knowledge_graph(scope, version.id, arabic_graph.kg_key)
+    cut = arabic.index(" ")
+    quotes = {m.quote for e in loaded_ar.entities for m in e.mentions}
+    if loaded_ar != arabic_graph or quotes != {arabic[:cut], arabic[cut + 1 :]}:
+        raise AssertionError("Arabic quotes must round-trip unchanged")
+
+
+KG_STORE_CHECKS = (check_knowledge_graphs,)

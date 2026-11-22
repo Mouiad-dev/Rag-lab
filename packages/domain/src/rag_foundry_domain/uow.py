@@ -22,6 +22,7 @@ WRITE_METHODS: Mapping[str, frozenset[str]] = {
             "add_representations",
             "add_entity_graph",
             "add_summary_tree",
+            "add_knowledge_graph",
             "mark_ready",
             "mark_failed",
         }

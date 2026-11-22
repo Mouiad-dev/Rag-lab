@@ -16,6 +16,7 @@ from rag_foundry_domain.indexing import (
     NewIndexVersion,
     ScoredChunk,
 )
+from rag_foundry_domain.knowledge import KnowledgeGraph
 from rag_foundry_domain.representations import NewRepresentation, RepresentationSet, ScoredRepresentation
 from rag_foundry_domain.summary_tree import SummaryTree
 
@@ -164,6 +165,19 @@ class SummaryTreeStore(Protocol):
         ...
 
     async def get_summary_tree(self, scope: Scope, index_version_id: str, tree_key: str) -> SummaryTree:
+        """NotFoundError when missing or outside scope."""
+        ...
+
+
+@runtime_checkable
+class KnowledgeGraphStore(Protocol):
+    """One immutable knowledge graph per (index version, kg key). Separate from IndexRepository; never evidence."""
+
+    async def add_knowledge_graph(self, scope: Scope, index_version_id: str, graph: KnowledgeGraph) -> None:
+        """Atomic: all rows or none."""
+        ...
+
+    async def get_knowledge_graph(self, scope: Scope, index_version_id: str, kg_key: str) -> KnowledgeGraph:
         """NotFoundError when missing or outside scope."""
         ...
 

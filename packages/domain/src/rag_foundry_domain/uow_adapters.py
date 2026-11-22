@@ -9,6 +9,7 @@ from rag_foundry_domain.ports import (
     ExtractionRepository,
     FullTextIndex,
     IndexRepository,
+    KnowledgeGraphStore,
     RepresentationStore,
     SummaryTreeStore,
 )
@@ -49,7 +50,14 @@ class PerCall:
             self._family == "indexes"
             and any(
                 hasattr(extra, name)
-                for extra in (FullTextIndex, ChunkVectorReader, RepresentationStore, EntityGraphStore, SummaryTreeStore)
+                for extra in (
+                    FullTextIndex,
+                    ChunkVectorReader,
+                    RepresentationStore,
+                    EntityGraphStore,
+                    SummaryTreeStore,
+                    KnowledgeGraphStore,
+                )
             )
         ):
             raise AttributeError(name)
