@@ -144,7 +144,7 @@ class Fact(BaseModel):
 class Conflict(BaseModel):
     model_config = _FROZEN
     subject_id: KEntityId
-    predicate: str
+    predicate: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
     fact_ids: Annotated[tuple[FactId, ...], Field(min_length=2)]
 
 
@@ -182,6 +182,11 @@ class KnowledgeGraph(BaseModel):
         by_id = {e.entity_id: e for e in self.entities}
         declared = {t.name for t in self.knowledge_schema.entity_types}
         if any(e.type not in declared for e in self.entities):
+            raise IndexingError("kag_invalid")
+        # IDs are derived from content, so one name+type and one (subject, predicate, value) exist once.
+        if any(e.entity_id != kentity_id_for(e.name, e.type) for e in self.entities):
+            raise IndexingError("kag_invalid")
+        if any(f.fact_id != fact_id_for(f.subject_id, f.predicate, f.value) for f in self.facts):
             raise IndexingError("kag_invalid")
         for f in self.facts:
             subject = by_id.get(f.subject_id)
@@ -247,13 +252,13 @@ class KnowledgeGraph(BaseModel):
 
     def conflicts(self) -> tuple[Conflict, ...]:
         by_id = {e.entity_id: e for e in self.entities}
-        groups: dict[tuple[str, str], list[str]] = {}
+        groups: dict[tuple[str, str], dict[str, str | int]] = {}
         for f in self.facts:
             pred = self.knowledge_schema.predicate(by_id[f.subject_id].type, f.predicate)
             if pred is not None and pred.cardinality == "one":
-                groups.setdefault((f.subject_id, f.predicate), []).append(f.fact_id)
+                groups.setdefault((f.subject_id, f.predicate), {})[f.fact_id] = f.value
         return tuple(
             Conflict(subject_id=s, predicate=p, fact_ids=tuple(sorted(ids)))
             for (s, p), ids in sorted(groups.items())
-            if len(ids) >= 2
+            if len(set(map(repr, ids.values()))) >= 2
         )

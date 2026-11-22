@@ -372,3 +372,23 @@ def test_same_year_from_two_spans_is_one_fact():
 def test_no_conflicts_in_basic_graph():
     kg, *_ = basic()
     assert kg.conflicts() == ()
+
+
+def test_fact_id_must_match_content():
+    _, ana, acme, _ = basic()
+    good = fact(acme, "founded_year", 1999)
+    twin = fact(acme, "founded_year", 1999, fact_id="fct_" + "0" * 16)
+    with pytest.raises(IndexingError) as exc:
+        make_kg([ana, acme], [good, twin])
+    assert code(exc) == "kag_invalid"
+    with pytest.raises(IndexingError) as exc:
+        make_kg([ana, acme], [twin])
+    assert code(exc) == "kag_invalid"
+
+
+def test_entity_id_must_match_name_and_type():
+    acme = ent("Acme", "Organization")
+    other = KEntity(entity_id="ken_" + "0" * 16, type="Organization", name="acme", mentions=(span(),))
+    with pytest.raises(IndexingError) as exc:
+        make_kg([acme, other])
+    assert code(exc) == "kag_invalid"
