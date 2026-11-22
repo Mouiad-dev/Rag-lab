@@ -12,11 +12,12 @@ pytestmark = [pytest.mark.db, pytest.mark.skipif(not _URL, reason="RAGF_TEST_DAT
 
 if _URL:
     from rag_foundry_domain.errors import IndexingError, NotFoundError, PromptError, SettingsError, StoreError
-    from rag_foundry_domain.graphs import EntityGraph
+    from rag_foundry_domain.graphs import EntityGraph, GraphSpan
     from rag_foundry_domain.index_testing import make_chunk, make_new_index_version
     from rag_foundry_domain.prompts import PromptTemplate, prompt_sha256
     from rag_foundry_domain.representations import RepresentationSet
     from rag_foundry_domain.settings_store import NewSettingOverride
+    from rag_foundry_domain.summary_tree import SummaryTree, TreeNode, node_id_for
     from rag_foundry_domain.testing import make_new_extraction, make_new_version, make_scope
     from rag_foundry_domain.uow import WRITE_METHODS
     from rag_foundry_storage.sql.database import create_database, run_db_main
@@ -183,6 +184,36 @@ async def test_read_only_uow_rejects_every_repository_write():
                             generator_json="{}",
                             entities=(),
                             relations=(),
+                        ),
+                    ),
+                    "add_summary_tree": uow.indexes.add_summary_tree(
+                        scope,
+                        "00000000-0000-4000-8000-000000000001",
+                        SummaryTree(
+                            schema="rag_foundry.summary_tree/1",
+                            tree_key="0" * 64,
+                            tenant_id=scope.tenant_id,
+                            project_id=scope.project_id,
+                            index_version_id="00000000-0000-4000-8000-000000000001",
+                            embedding_key="readonly-embedding",
+                            generator_json="{}",
+                            nodes=(
+                                TreeNode(
+                                    node_id=node_id_for(0, "00000000-0000-4000-8000-000000000002"),
+                                    level=0,
+                                    kind="leaf",
+                                    text="x",
+                                    span=GraphSpan(
+                                        chunk_id="00000000-0000-4000-8000-000000000002",
+                                        extraction_view_id=extraction.view.id,
+                                        start=0,
+                                        end=1,
+                                        quote="x",
+                                    ),
+                                    embedding=(1.0,),
+                                    synthetic=False,
+                                ),
+                            ),
                         ),
                     ),
                     "mark_ready": uow.indexes.mark_ready(scope, "00000000-0000-4000-8000-000000000001"),

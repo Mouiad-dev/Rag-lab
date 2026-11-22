@@ -18,6 +18,7 @@ if _URL:
         GRAPH_STORE_CHECKS,
         INDEX_REPOSITORY_CHECKS,
         REPRESENTATION_STORE_CHECKS,
+        TREE_STORE_CHECKS,
     )
     from rag_foundry_domain.testing import CheckSkippedError, make_new_extraction, make_new_version, make_scope
     from rag_foundry_domain.uow_adapters import per_call_documents, per_call_extractions, per_call_indexes
@@ -63,7 +64,7 @@ class _Factory:
         async with maker() as session, session.begin():
             await session.execute(
                 text(
-                    "TRUNCATE runtime_setting_overrides, graph_spans, graph_relations, graph_entities, entity_graphs, chunk_representations, representation_sets, chunk_sparse_vectors, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
+                    "TRUNCATE runtime_setting_overrides, tree_edges, tree_nodes, summary_trees, graph_spans, graph_relations, graph_entities, entity_graphs, chunk_representations, representation_sets, chunk_sparse_vectors, chunks, index_version_views, index_versions, extraction_views, document_versions, documents, projects, tenants"
                 )
             )
         docs = per_call_documents(db.uow)
@@ -78,7 +79,9 @@ class _Factory:
 
 @pytest.mark.parametrize(
     "check",
-    (INDEX_REPOSITORY_CHECKS + REPRESENTATION_STORE_CHECKS + GRAPH_STORE_CHECKS) if _URL else [None],
+    (INDEX_REPOSITORY_CHECKS + REPRESENTATION_STORE_CHECKS + GRAPH_STORE_CHECKS + TREE_STORE_CHECKS)
+    if _URL
+    else [None],
     ids=lambda c: getattr(c, "__name__", "none"),
 )
 @run
@@ -355,5 +358,173 @@ async def test_graph_database_guards():
         await asyncio.to_thread(run_migrations, _url(), "upgrade", "head")
         async with factory.databases[0].engine.connect() as connection:
             assert await connection.scalar(text("SELECT to_regclass('graph_spans') IS NOT NULL"))
+    finally:
+        await factory.close()
+
+
+@run
+async def test_tree_database_guards():
+    from rag_foundry_domain.errors import IndexingError
+    from rag_foundry_domain.index_testing import make_chunk, make_new_index_version, make_summary_tree
+
+    factory = _Factory()
+    try:
+        scope, other = make_scope(), make_scope()
+        docs, views, repo = await factory([scope, other])
+        out = await docs.create_document_or_get(scope, make_new_version("tree-guard"), display_name="d")
+        view = (await views.create_view_or_get(scope, make_new_extraction(out.version, tag="tree-guard"))).view
+        foreign_out = await docs.create_document_or_get(other, make_new_version("tree-guard-b"), display_name="d")
+        foreign_view = (
+            await views.create_view_or_get(other, make_new_extraction(foreign_out.version, tag="tree-guard-b"))
+        ).view
+        version = await repo.create_index_version(scope, make_new_index_version((view.id,)))
+        await repo.add_chunks(
+            scope,
+            version.id,
+            (
+                make_chunk(view.id, 0, (1, 0, 0, 0), "Ada wrote notes"),
+                make_chunk(view.id, 1, (0, 1, 0, 0), "Bob read them"),
+                make_chunk(view.id, 2, (0, 0, 1, 0), "Eve audited both"),
+            ),
+        )
+        await repo.mark_ready(scope, version.id)
+        chunk, chunk2, chunk3 = await repo.list_chunks(scope, version.id)
+        building = await repo.create_index_version(scope, make_new_index_version((view.id,)))
+        foreign_version = await repo.create_index_version(other, make_new_index_version((foreign_view.id,)))
+        await repo.add_chunks(
+            other, foreign_version.id, (make_chunk(foreign_view.id, 0, (1, 0, 0, 0), "Ada wrote notes"),)
+        )
+        foreign_chunk = (await repo.list_chunks(other, foreign_version.id))[0]
+
+        tree = make_summary_tree(scope, version, (chunk,))
+        await repo.add_summary_tree(scope, version.id, tree)
+        leaf = next(n for n in tree.nodes if n.kind == "leaf")
+        summary = next(n for n in tree.nodes if n.kind == "summary")
+
+        async def rejected(sql, params, message):
+            with pytest.raises(DBAPIError, match=message):
+                async with factory.database().sessionmaker() as session, session.begin():
+                    await session.execute(text(sql), params)
+
+        async def accepted(sql, params):
+            async with factory.database().sessionmaker() as session, session.begin():
+                await session.execute(text(sql), params)
+
+        base = {"t": scope.tenant_id, "p": scope.project_id, "i": version.id, "g": tree.tree_key}
+        node_sql = (
+            "INSERT INTO tree_nodes (tenant_id,project_id,index_version_id,tree_key,node_id,level,kind,text,synthetic,"
+            "embedding,chunk_id,extraction_view_id,start_cp,end_cp) "
+            "VALUES (:t,:p,:i,:g,:n,:lv,:kind,:txt,:syn,CAST(:emb AS double precision[]),:c,:v,:s,:e)"
+        )
+        leaf2 = {
+            **base,
+            "n": "rnd_" + "a" * 16,
+            "lv": 0,
+            "kind": "leaf",
+            "txt": "Bob",
+            "syn": False,
+            "emb": [0.5, 0.5, 0.5, 0.5],
+            "c": chunk2.id,
+            "v": view.id,
+            "s": 0,
+            "e": 3,
+        }
+        # The trigger accepts a valid leaf, so each rejection below is caused by its own defect.
+        await accepted(node_sql, leaf2)
+        count = 0
+
+        def variant(**changes):
+            nonlocal count
+            count += 1
+            node_id = "rnd_" + format(count, "x").rjust(16, "b")
+            return {**leaf2, "n": node_id, "c": chunk3.id, "txt": "Eve", **changes}
+
+        # Cross-tenant chunk: the trigger leaves a missing chunk to the foreign key (the view is valid here).
+        await rejected(node_sql, variant(c=foreign_chunk.id), "fk_tree_nodes_chunk")
+        await rejected(node_sql, variant(txt="Evx"), "tree leaf text does not match chunk text")
+        await rejected(node_sql, variant(e=40, txt="x" * 40), "tree leaf outside chunk")
+        await rejected(node_sql, variant(v=foreign_view.id), "tree leaf view does not match chunk")
+        await rejected(node_sql, variant(emb=[0.5, 0.5]), "tree node embedding length does not match tree")
+        await rejected(node_sql, variant(c=None), "ck_tree_nodes_leaf")
+        # A chunk is at most one leaf per tree.
+        await rejected(node_sql, variant(c=chunk2.id, txt="Bob"), "uq_tree_nodes_chunk")
+        summary_row = {**variant(), "n": "rnd_" + "c" * 16, "lv": 1, "kind": "summary", "txt": "s", "syn": True}
+        no_source = {"c": None, "v": None, "s": None, "e": None}
+        await rejected(node_sql, summary_row, "ck_tree_nodes_summary")
+        await rejected(node_sql, {**summary_row, **no_source, "lv": 0}, "ck_tree_nodes_summary")
+        await accepted(node_sql, {**summary_row, **no_source})
+
+        edge_sql = (
+            "INSERT INTO tree_edges (tenant_id,project_id,index_version_id,tree_key,parent_id,child_id,position) "
+            "VALUES (:t,:p,:i,:g,:par,:chd,:pos)"
+        )
+        extra = "rnd_" + "c" * 16
+        # A second parent for a child that already has one.
+        await rejected(edge_sql, {**base, "par": extra, "chd": leaf.node_id, "pos": 1}, "pk_tree_edges")
+        await rejected(
+            edge_sql, {**base, "par": leaf.node_id, "chd": extra, "pos": 0}, "tree edge parent must be a summary"
+        )
+        # Both are level-1 summaries, so the child is not below the parent.
+        await rejected(edge_sql, {**base, "par": summary.node_id, "chd": extra, "pos": 5}, "tree edge child level")
+        await accepted(edge_sql, {**base, "par": extra, "chd": "rnd_" + "a" * 16, "pos": 0})
+        # A fresh leaf (no parent yet) isolates the position rules from the one-parent key.
+        fresh = variant()
+        await accepted(node_sql, fresh)
+        await rejected(edge_sql, {**base, "par": extra, "chd": fresh["n"], "pos": 0}, "uq_tree_edges_position")
+        await rejected(edge_sql, {**base, "par": extra, "chd": fresh["n"], "pos": 50}, "ck_tree_edges_position")
+
+        tree_sql = (
+            "INSERT INTO summary_trees (tenant_id,project_id,index_version_id,tree_key,technique_id,embedding_key,"
+            "embedding_dim,generator_json) VALUES (:t,:p,:i,:k,'R37','e',4,'{}')"
+        )
+        await rejected(tree_sql, {**base, "i": building.id, "k": "c" * 64}, "index version is not ready")
+        await rejected(tree_sql, {**base, "k": tree.tree_key}, "pk_summary_trees")
+
+        for sql in (
+            "UPDATE summary_trees SET generator_json='z' WHERE index_version_id=:i",
+            "UPDATE tree_nodes SET text='z' WHERE index_version_id=:i",
+            "UPDATE tree_edges SET parent_id=child_id WHERE index_version_id=:i",
+        ):
+            await rejected(sql, {"i": version.id}, "index rows are immutable")
+
+        # A row set that satisfies every database rule but breaks a domain rule (summary without children).
+        orphan_key = "d" * 64
+        await accepted(tree_sql, {**base, "k": orphan_key})
+        await accepted(node_sql, {**summary_row, **no_source, "g": orphan_key, "n": "rnd_" + "e" * 16})
+        with pytest.raises(IndexingError) as info:
+            await repo.get_summary_tree(scope, version.id, orphan_key)
+        assert info.value.code == "tree_invalid"
+
+        # Alembic runs its own event loop, so it must not run on this test's loop.
+        await asyncio.to_thread(run_migrations, _url(), "downgrade", "0011_entity_graphs")
+        async with factory.databases[0].engine.connect() as connection:
+            for table in ("summary_trees", "tree_nodes", "tree_edges"):
+                assert await connection.scalar(text("SELECT to_regclass(:n) IS NULL"), {"n": table})
+            assert await connection.scalar(text("SELECT to_regclass('graph_spans') IS NOT NULL"))
+            assert (
+                await connection.scalar(text("SELECT count(*) FROM pg_proc WHERE proname='reject_index_update'")) == 1
+            )
+            assert (
+                await connection.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_proc WHERE proname IN ('tree_nodes_validate_insert','tree_edges_validate_insert','summary_trees_validate_insert')"
+                    )
+                )
+                == 0
+            )
+        await asyncio.to_thread(run_migrations, _url(), "upgrade", "head")
+        async with factory.databases[0].engine.connect() as connection:
+            assert await connection.scalar(text("SELECT to_regclass('tree_nodes') IS NOT NULL"))
+            assert (
+                await connection.scalar(text("SELECT count(*) FROM pg_proc WHERE proname='reject_index_update'")) == 1
+            )
+            assert (
+                await connection.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_trigger WHERE tgname IN ('summary_trees_no_update','tree_nodes_no_update','tree_edges_no_update')"
+                    )
+                )
+                == 3
+            )
     finally:
         await factory.close()

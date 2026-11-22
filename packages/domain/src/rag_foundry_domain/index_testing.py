@@ -959,5 +959,21 @@ async def check_summary_trees(factory: IndexRepoFactory) -> None:
     if loaded != arabic_tree or quotes != {arabic}:
         raise AssertionError("Arabic quotes must round-trip unchanged")
 
+    # Child order is part of the stored tree: a summary whose children are not id-sorted must round-trip.
+    base_tree = make_summary_tree(scope, version, (chunk_a, chunk_ar))
+    unsorted_nodes = tuple(
+        n.model_copy(update={"children": tuple(reversed(n.children))}) if n.kind == "summary" else n
+        for n in base_tree.nodes
+    )
+    unsorted_tree = base_tree.model_copy(
+        update={"tree_key": tree_key_for({"order": "unsorted"}), "nodes": unsorted_nodes}
+    )
+    if all(n.children == tuple(sorted(n.children)) for n in unsorted_tree.nodes):
+        raise AssertionError("fixture must hold unsorted children")
+    await repo.add_summary_tree(scope, version.id, unsorted_tree)
+    reloaded = await repo.get_summary_tree(scope, version.id, unsorted_tree.tree_key)
+    if reloaded != unsorted_tree or reloaded.to_json() != unsorted_tree.to_json():
+        raise AssertionError("child order must round-trip")
+
 
 TREE_STORE_CHECKS = (check_summary_trees,)

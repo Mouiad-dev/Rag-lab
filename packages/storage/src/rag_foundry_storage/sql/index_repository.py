@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from pydantic import ValidationError
 from rag_foundry_domain import NotFoundError, Scope, new_id
 from rag_foundry_domain.errors import IndexingError
 from rag_foundry_domain.graphs import GRAPH_SCHEMA, Entity, EntityGraph, GraphSpan, Relation
@@ -25,6 +26,7 @@ from rag_foundry_domain.representations import (
     RepresentationSet,
     ScoredRepresentation,
 )
+from rag_foundry_domain.summary_tree import TREE_SCHEMA, SummaryTree, TreeNode
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -574,6 +576,180 @@ class SqlIndexRepository:
                 entities=entities,
                 relations=relations,
             )
+
+    async def add_summary_tree(self, scope: Scope, index_version_id: str, tree: SummaryTree) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            tree.check_scope(scope, iid)
+            # Same error order as the in-memory store: a duplicate key is reported before leaf checks.
+            if await session.scalar(text("SELECT 1 FROM summary_trees WHERE tree_key=:k"), {"k": tree.tree_key}):
+                raise IndexingError("tree_exists")
+            leaves = [n for n in tree.nodes if n.kind == "leaf"]
+            chunk_ids = sorted({n.span.chunk_id for n in leaves if n.span is not None})
+            chunks: dict[str, Any] = {}
+            if chunk_ids:
+                found = (
+                    await session.execute(
+                        text(
+                            "SELECT id,extraction_view_id,start_cp,end_cp,text FROM chunks "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": chunk_ids},
+                    )
+                ).mappings()
+                chunks = {str(row["id"]): row for row in found}
+            seen: set[str] = set()
+            for node in leaves:
+                span = node.span
+                chunk = chunks.get(span.chunk_id) if span is not None else None
+                if (
+                    span is None
+                    or chunk is None
+                    or span.chunk_id in seen
+                    or span.extraction_view_id != str(chunk["extraction_view_id"])
+                    or not chunk["start_cp"] <= span.start < span.end <= chunk["end_cp"]
+                    or chunk["text"][span.start - chunk["start_cp"] : span.end - chunk["start_cp"]] != span.quote
+                ):
+                    raise IndexingError("tree_source_mismatch")
+                seen.add(span.chunk_id)
+            base = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": tree.tree_key}
+            try:
+                await session.execute(
+                    text("""INSERT INTO summary_trees
+                    (tenant_id,project_id,index_version_id,tree_key,technique_id,embedding_key,embedding_dim,generator_json)
+                    VALUES (:t,:p,:i,:g,:tech,:ekey,:dim,:gen)"""),
+                    {
+                        **base,
+                        "tech": tree.technique_id,
+                        "ekey": tree.embedding_key,
+                        "dim": len(tree.nodes[0].embedding),
+                        "gen": tree.generator_json,
+                    },
+                )
+            except IntegrityError as exc:
+                if "pk_summary_trees" in str(exc) or "uq_summary_trees" in str(exc):
+                    raise IndexingError("tree_exists") from None
+                raise
+            await session.execute(
+                text("""INSERT INTO tree_nodes
+                (tenant_id,project_id,index_version_id,tree_key,node_id,level,kind,text,synthetic,embedding,chunk_id,extraction_view_id,start_cp,end_cp)
+                VALUES (:t,:p,:i,:g,:nid,:lv,:kind,:txt,:syn,CAST(:emb AS double precision[]),:c,:v,:s,:e)"""),
+                [
+                    {
+                        **base,
+                        "nid": n.node_id,
+                        "lv": n.level,
+                        "kind": n.kind,
+                        "txt": n.text,
+                        "syn": n.synthetic,
+                        "emb": list(n.embedding),
+                        "c": None if n.span is None else n.span.chunk_id,
+                        "v": None if n.span is None else n.span.extraction_view_id,
+                        "s": None if n.span is None else n.span.start,
+                        "e": None if n.span is None else n.span.end,
+                    }
+                    for n in tree.nodes
+                ],
+            )
+            edges = [
+                {**base, "par": n.node_id, "chd": c, "pos": pos} for n in tree.nodes for pos, c in enumerate(n.children)
+            ]
+            if edges:
+                await session.execute(
+                    text("""INSERT INTO tree_edges (tenant_id,project_id,index_version_id,tree_key,parent_id,child_id,position)
+                    VALUES (:t,:p,:i,:g,:par,:chd,:pos)"""),
+                    edges,
+                )
+
+    async def get_summary_tree(self, scope: Scope, index_version_id: str, tree_key: str) -> SummaryTree:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            params = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": tree_key}
+            where = "tenant_id=:t AND project_id=:p AND index_version_id=:i AND tree_key=:g"
+            head = (
+                (
+                    await session.execute(
+                        text(f"SELECT technique_id,embedding_key,generator_json FROM summary_trees WHERE {where}"),
+                        params,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if head is None:
+                raise NotFoundError()
+            node_rows = (
+                await session.execute(
+                    text(
+                        "SELECT node_id,level,kind,text,synthetic,embedding,chunk_id,extraction_view_id,start_cp,end_cp "
+                        f'FROM tree_nodes WHERE {where} ORDER BY level, node_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            edge_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT parent_id,child_id FROM tree_edges WHERE {where} ORDER BY parent_id COLLATE "C", position'
+                    ),
+                    params,
+                )
+            ).mappings()
+            children: dict[str, list[str]] = {}
+            for row in edge_rows:
+                children.setdefault(row["parent_id"], []).append(row["child_id"])
+            # Rebuild through the validating constructors; a stored row set that breaks a domain rule is invalid.
+            try:
+                nodes = tuple(
+                    TreeNode(
+                        node_id=row["node_id"],
+                        level=row["level"],
+                        kind=row["kind"],
+                        text=row["text"],
+                        span=None
+                        if row["chunk_id"] is None
+                        else GraphSpan(
+                            chunk_id=str(row["chunk_id"]),
+                            extraction_view_id=str(row["extraction_view_id"]),
+                            start=row["start_cp"],
+                            end=row["end_cp"],
+                            quote=row["text"],
+                        ),
+                        children=tuple(children.get(row["node_id"], ())),
+                        embedding=tuple(row["embedding"]),
+                        synthetic=row["synthetic"],
+                    )
+                    for row in node_rows
+                )
+                return SummaryTree(
+                    schema=TREE_SCHEMA,
+                    tree_key=tree_key,
+                    tenant_id=scope.tenant_id,
+                    project_id=scope.project_id,
+                    index_version_id=iid,
+                    technique_id=head["technique_id"],
+                    embedding_key=head["embedding_key"],
+                    generator_json=head["generator_json"],
+                    nodes=nodes,
+                )
+            except ValidationError as exc:
+                raise IndexingError("tree_invalid") from exc
 
     async def _locked(self, session: AsyncSession, scope: Scope, iid: str):
         row = (
