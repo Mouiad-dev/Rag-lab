@@ -1,0 +1,93 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R] /Count 4 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 297 >>
+stream
+BT /F1 20 Tf 72 720 Td (Regional report) Tj ET
+BT /F1 12 Tf 72 680 Td (This report summarises visitor activity across four regions.) Tj ET
+BT /F1 12 Tf 72 660 Td (Figures are shown on the following pages.) Tj ET
+BT /F1 12 Tf 72 640 Td (The chart page shows relative visitor counts as bars.) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 378 >>
+stream
+BT /F1 18 Tf 72 720 Td (Visitors by region 2025) Tj ET
+0 0 0 RG 1 w 60 200 m 560 200 l S
+0.2 0.4 0.8 rg 90 200 70 180 re f
+BT /F1 12 Tf 105 180 Td (North) Tj ET
+0.2 0.4 0.8 rg 210 200 70 340 re f
+BT /F1 12 Tf 225 180 Td (South) Tj ET
+0.2 0.4 0.8 rg 330 200 70 120 re f
+BT /F1 12 Tf 345 180 Td (East) Tj ET
+0.2 0.4 0.8 rg 450 200 70 250 re f
+BT /F1 12 Tf 465 180 Td (West) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 638 >>
+stream
+BT /F1 18 Tf 72 720 Td (Opening hours) Tj ET
+0 0 0 RG 1 w 72 680 m 432 680 l S
+BT /F1 12 Tf 80 654 Td (Day) Tj ET
+BT /F1 12 Tf 240 654 Td (Hours) Tj ET
+0 0 0 RG 1 w 72 640 m 432 640 l S
+BT /F1 12 Tf 80 614 Td (Monday) Tj ET
+BT /F1 12 Tf 240 614 Td (09:00 - 17:00) Tj ET
+0 0 0 RG 1 w 72 600 m 432 600 l S
+BT /F1 12 Tf 80 574 Td (Saturday) Tj ET
+BT /F1 12 Tf 240 574 Td (10:00 - 14:00) Tj ET
+0 0 0 RG 1 w 72 560 m 432 560 l S
+BT /F1 12 Tf 80 534 Td (Sunday) Tj ET
+BT /F1 12 Tf 240 534 Td (Closed) Tj ET
+0 0 0 RG 1 w 72 520 m 432 520 l S
+0 0 0 RG 1 w 72 680 m 72 520 l S
+0 0 0 RG 1 w 232 680 m 232 520 l S
+0 0 0 RG 1 w 432 680 m 432 520 l S
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 36 >>
+stream
+0.8 0.2 0.2 rg 156 296 300 200 re f
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000134 00000 n 
+0000000204 00000 n 
+0000000330 00000 n 
+0000000677 00000 n 
+0000000803 00000 n 
+0000001231 00000 n 
+0000001357 00000 n 
+0000002045 00000 n 
+0000002173 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+2259
+%%EOF

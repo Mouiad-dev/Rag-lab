@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "document": "chart_report.pdf",
+  "questions": [
+    {"id": "q-chart", "kind": "chart", "question": "Which region has the most visitors in 2025?", "expected_page_index": 1},
+    {"id": "q-table", "kind": "table", "question": "What are the opening hours on Saturday?", "expected_page_index": 2},
+    {"id": "q-text", "kind": "text", "question": "What does the regional report summarise?", "expected_page_index": 0},
+    {"id": "q-unanswerable", "kind": "unanswerable", "question": "What was the total revenue in 2025?", "expected_page_index": null}
+  ]
+}
