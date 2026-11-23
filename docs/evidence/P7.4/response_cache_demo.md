@@ -98,6 +98,81 @@ A warm R51 hit still pays one cache-embedding call; it avoids the retrieval embe
 ## Live run (orchestrator)
 
 <orchestrator>
-Live run result goes here (P7.4-11). Live output is not deterministic and is recorded separately.
+One local run, not an evaluation; numbers vary between runs; no quality or speed claim.
+
+- Command: `PYTHONIOENCODING=utf-8 RAG_LIVE_OLLAMA=1 uv run pytest tests/live/test_prefix_cag_live.py tests/live/test_response_cache_live.py -m live -v -s -p no:cacheprovider`
+- Date: 2026-11-23. Ollama 0.40.17 (`ollama --version`); models `gemma4:e4b` (chat) and `bge-m3` (embeddings), already pulled, no pull, no paid call.
+- Result: 4 passed in 45.85s (whole command, both files). This replaces a first run in which the stream-mode R49 calls repeated the complete-mode prompts and were therefore not cold (found in review; the test now tags each run and mode).
+- R50: 3 of 3 warm calls hit with 0 model calls and answers equal to the cold answers. Cold and warm totals are printed below; they are single-run wall times, not a benchmark.
+- R51 with real `bge-m3`: chosen threshold 0.87 on 24 illustrative pairs. Held-out at 0.87: paraphrase hits 5/5 (guarded and unguarded); false hits 2/7 guarded, 5/7 unguarded. False hits remain; the pair set is small and this is not a benchmark.
+
+Printed output:
+
+```text
+tests/live/test_response_cache_live.py::test_r50_cold_then_warm_live R50 EN cold outcome=miss status=answered total_ms=1354 lookup_ms=0.0 model_calls=2 input_tokens=439 store_reason=None
+R50 EN warm outcome=hit reason=None total_ms=4 lookup_ms=3.7 calls_avoided=2 input_tokens_avoided=439 model_calls=0
+R50 AR cold outcome=miss status=answered total_ms=1298 lookup_ms=0.0 model_calls=2 input_tokens=421 store_reason=None
+R50 AR warm outcome=hit reason=None total_ms=4 lookup_ms=3.7 calls_avoided=2 input_tokens_avoided=421 model_calls=0
+R50 EN2 cold outcome=miss status=answered total_ms=1474 lookup_ms=0.0 model_calls=2 input_tokens=439 store_reason=None
+R50 EN2 warm outcome=hit reason=None total_ms=4 lookup_ms=3.8 calls_avoided=2 input_tokens_avoided=439 model_calls=0
+R50 hits=3 of 3
+PASSED
+tests/live/test_response_cache_live.py::test_r51_bge_m3_calibration_live R51 pairs=24 embed_calls=24 (separate cache ledger)
+threshold  dev paraphrase hits (ug=unguarded g=guarded)  dev false hits (ug g)
+0.5        ug=5 g=5 of 5  ug=7 g=1 of 7
+0.51       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.52       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.53       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.54       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.55       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.56       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.57       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.58       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.59       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.6        ug=5 g=5 of 5  ug=7 g=1 of 7
+0.61       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.62       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.63       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.64       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.65       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.66       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.67       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.68       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.69       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.7        ug=5 g=5 of 5  ug=7 g=1 of 7
+0.71       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.72       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.73       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.74       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.75       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.76       ug=5 g=5 of 5  ug=7 g=1 of 7
+0.77       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.78       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.79       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.8        ug=5 g=5 of 5  ug=6 g=1 of 7
+0.81       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.82       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.83       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.84       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.85       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.86       ug=5 g=5 of 5  ug=6 g=1 of 7
+0.87       ug=5 g=5 of 5  ug=4 g=0 of 7
+0.88       ug=5 g=5 of 5  ug=4 g=0 of 7
+0.89       ug=5 g=5 of 5  ug=4 g=0 of 7
+0.9        ug=5 g=5 of 5  ug=4 g=0 of 7
+0.91       ug=5 g=5 of 5  ug=2 g=0 of 7
+0.92       ug=5 g=5 of 5  ug=2 g=0 of 7
+0.93       ug=5 g=5 of 5  ug=1 g=0 of 7
+0.94       ug=5 g=5 of 5  ug=1 g=0 of 7
+0.95       ug=5 g=5 of 5  ug=1 g=0 of 7
+0.96       ug=5 g=5 of 5  ug=1 g=0 of 7
+0.97       ug=5 g=5 of 5  ug=0 g=0 of 7
+0.98       ug=4 g=4 of 5  ug=0 g=0 of 7
+0.99       ug=3 g=3 of 5  ug=0 g=0 of 7
+1.0        ug=0 g=0 of 5  ug=0 g=0 of 7
+R51 chosen_threshold=0.87 reason=None
+R51 held_out paraphrase_hits_guarded=5/5 paraphrase_hits_unguarded=5/5 false_hits_guarded=2/7 false_hits_unguarded=5/7
+PASSED
+```
 </orchestrator>
 
