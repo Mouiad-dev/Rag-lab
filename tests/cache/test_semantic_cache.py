@@ -330,7 +330,9 @@ def test_entries_hold_features_and_vector_but_no_question_text(built):  # noqa: 
     entry = entries[0]
     assert entry.features_json and entry.question_vector and entry.vector_key == "stub-embed:" + entry.vector_key[11:]
     text = entry.model_dump_json()
-    assert MARKER not in text and "2025" not in re.sub(r"[0-9a-f]{64}", "", text.replace("2025-", ""))
+    # Strip random UUIDs (scope, run and version ids) and hex digests, which can contain "2025" by chance.
+    scrubbed = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,}", "", text)
+    assert MARKER not in text and "2025" not in scrubbed.replace("2025-", "")
     assert QuestionFeatures.from_json(entry.features_json).hashed
 
 
