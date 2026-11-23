@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R28, R37-R39, R42, R48; remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R28, R37-R39, R42, R47-R51; remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -75,13 +75,13 @@ The acceptance column describes evidence that must exist before validation. Each
 | R44 | workflow / P8.2 | Explicit web fallback | Use public web retrieval only under an enabled privacy policy. | Label web sources, avoid private query leakage, handle conflicting freshness. | planned |
 | R45 | retrieval / P7.5 | Text late-interaction retrieval | Use a compatible ColBERT-style token multivector model/scorer. | Contrast single-vector and token matching with the same question set. | planned |
 | R46 | research / P7.5 | CRAG research reproduction | Reproduce the published correction/refinement approach using primary sources. | Document evaluator/refinement/fallback fidelity separately from R29. | planned |
-| R47 | knowledge_context / P7.4 | Cache-augmented generation (CAG) | Preload bounded versioned knowledge and reuse compatible context KV state. | Compare real cold/warm CAG, uncached full context and RAG; reject overflow; retain source citations. | planned |
+| R47 | knowledge_context / P7.4 | Cache-augmented generation (CAG) | Preload bounded versioned knowledge and reuse compatible context KV state. | Compare real cold/warm CAG, uncached full context and RAG; reject overflow; retain source citations. | implemented |
 | R48 | knowledge_graph_reasoning / P7.3 | Knowledge-augmented generation (KAG) | Build schema-grounded knowledge with source links and logical-form-guided retrieval/reasoning. | Inspect grounded multi-hop operations, conflicts and missing facts; document OpenSPG fidelity and compare graph/dense baselines. | implemented |
-| R49 | inference_optimization / P7.4 | Prefix KV caching | Reuse shared-token-prefix prefill computation in a compatible serving runtime. | Observe actual cache metrics or declare unavailable; measure cold/warm TTFT and eviction; distinguish decode from prefill. | planned |
-| R50 | response_cache / P7.4 | Exact-response caching | Reuse an answer and evidence bundle only for identical effective scoped versioned inputs. | Test hit, changed history/model/corpus/ACL miss, deleted-source denial and freshness bypass; avoid cached side effects. | planned |
-| R51 | response_cache / P7.4 | Semantic-response caching | Reuse eligible answers after partitioned similarity search and intent/evidence validation. | Calibrate held-out paraphrase and adversarial false-hit cases including negation, dates, entity IDs and cross-tenant requests. | planned |
+| R49 | inference_optimization / P7.4 | Prefix KV caching | Reuse shared-token-prefix prefill computation in a compatible serving runtime. | Observe actual cache metrics or declare unavailable; measure cold/warm TTFT and eviction; distinguish decode from prefill. | implemented |
+| R50 | response_cache / P7.4 | Exact-response caching | Reuse an answer and evidence bundle only for identical effective scoped versioned inputs. | Test hit, changed history/model/corpus/ACL miss, deleted-source denial and freshness bypass; avoid cached side effects. | implemented |
+| R51 | response_cache / P7.4 | Semantic-response caching | Reuse eligible answers after partitioned similarity search and intent/evidence validation. | Calibrate held-out paraphrase and adversarial false-hit cases including negation, dates, entity IDs and cross-tenant requests. | implemented |
 
-See [screenshot coverage and cache/knowledge labs](CACHE_AND_KNOWLEDGE_LABS.md) for exact distinctions and safeguards. R47/R48 require compatible context/graph backends; R49 is inference caching, while R50/R51 reuse responses. All remain planned.
+See [screenshot coverage and cache/knowledge labs](CACHE_AND_KNOWLEDGE_LABS.md) for exact distinctions and safeguards. R47/R48 require compatible context/graph backends; R49 is inference caching, while R50/R51 reuse responses. R47-R51 are implemented as adaptations; none are validated.
 
 ## Dependency guide
 

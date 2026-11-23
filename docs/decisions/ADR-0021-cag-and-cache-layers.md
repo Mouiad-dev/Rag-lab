@@ -24,10 +24,10 @@ P7.4 adds R47 (CAG), R49 (prefix-cache probe), R50 (exact response cache) and R5
 - Error codes are registered once: `RunError.CODES` gains `cag_overflow`, `cag_too_many_chunks`, `cag_nonce_conflict`, `cag_snapshot_mismatch`, `cag_empty`; new `CacheError` holds `cache_key_invalid`, `cache_entry_invalid`, `cache_scope_mismatch`, `cache_unavailable`, `cache_policy_invalid`, `prefix_probe_invalid`, `cache_exists`.
 
 ## R47 fidelity
-To be filled by P7.4-12.
+Adaptation of Chan et al. 2024, "Don't Do RAG: When Cache-Augmented Generation is All You Need for Knowledge Tasks" (arXiv 2412.15605, title checked on arxiv.org 2026-11-23; repo hhhuang/CAG is not linked from the abstract page, unverified). Not done: KV precompute, save and truncate (the paper's Hugging Face `DynamicCache` path needs torch and a model download). Prefix reuse is whatever the runtime does between requests; Ollama does not document it. Size checks use the `lab-regex-v1` estimate, not a model tokenizer. Cache reuse does not remove generation. Live evidence: one local run (n=1), see `docs/evidence/P7.4/cag_demo.md`.
 
 ## R49 fidelity
-To be filled by P7.4-12.
+A probe, not a cache: it reports the provider's own cached-token count (`cache_metric = reported`) or says `unavailable`. Observed on Ollama (`prompt_eval_cached_count`) in one local run; Anthropic (`cache_read_input_tokens`) not run, no evidence file. Timings are a proxy, not a hit count. GPU KV caches are not tenant partitions. vLLM not measured. Ollama's `prompt_eval_count` includes cached tokens (observed: input 1368, cached 1367).
 
 ## R50/R51 notes
-To be filled by P7.4-12.
+Both are adaptations with no external reference implementation; neither is validated. R51 calibration uses 24 illustrative pairs; lexical (offline) and bge-m3 (live) results are kept separate. Held-out false hits remain: lexical at 0.93, month (held-10) and unit (held-11), 2/7 guarded; bge-m3 at 0.87, 2/7 guarded (pairs not printed). Entity swaps without digits pass the guard and are stopped only by similarity. Residual risk: stored feature hashes of short values (numbers, identifiers, quoted strings) can be guessed by brute force; they are scoped to one tenant partition and are not encrypted. There is no product source deletion yet; `SourceGate` models revocation.
