@@ -183,3 +183,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.late_chunking import LateChunkingRepresentation
 
     registry.register(LateChunkingRepresentation)
+    from rag_foundry_indexing.late_interaction import LateInteractionRetriever
+
+    registry.register(LateInteractionRetriever)
