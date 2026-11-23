@@ -329,6 +329,32 @@ async def test_delete_cascades_to_sources_and_errors_are_coded():
         await db.dispose()
 
 
+@run
+async def test_zero_vector_ranks_as_similarity_zero_like_the_in_memory_store():
+    db = create_database(_url())
+    try:
+        tenant, project = _uuid4("z/t"), _uuid4("z/p")
+        scope = Scope(tenant_id=tenant, project_id=project)
+        version = _uuid4("z/v")
+        await _seed(db, tenant, project, (version,))
+        store = SqlResponseCacheStore(db)
+        base = _real_entry(tenant, project, "zero", (version,)).model_dump()
+        zero = CacheEntry(**{**base, "question_vector": (0.0, 0.0), "vector_key": "emb-1"})
+        opposite = CacheEntry(
+            **{**base, "key": _hex("key-opposite"), "question_vector": (-1.0, 0.0), "vector_key": "emb-1"}
+        )
+        await store.put(scope, zero)
+        await store.put(scope, opposite)
+        # NaN distance must not sort last: cosine 0.0 beats cosine -1.0, so k=1 returns the zero vector.
+        found = await store.similar(scope, zero.partition, "emb-1", (1.0, 0.0), 1)
+        assert [(entry.key, score) for entry, score in found] == [(zero.key, 0.0)]
+        both = await store.similar(scope, zero.partition, "emb-1", (1.0, 0.0), 2)
+        assert [entry.key for entry, _ in both] == [zero.key, opposite.key]
+        assert both[1][1] == pytest.approx(-1.0)
+    finally:
+        await db.dispose()
+
+
 def test_response_cache_migration_downgrade_and_upgrade():
     run_migrations(_url(), "downgrade", "0013_knowledge_graphs")
     try:

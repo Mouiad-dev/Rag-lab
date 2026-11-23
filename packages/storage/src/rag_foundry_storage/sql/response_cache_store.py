@@ -2,6 +2,11 @@
 
 Each call uses its own short transaction. Rows are inserted and deleted, never updated. Errors are mapped to
 content-free `CacheError` codes; row content and driver messages are never logged or chained.
+
+pgvector stores float4: a vector read back equals the stored one only for values exact in float4, and
+similarity can differ from the in-memory store by about 1e-7. Do not compare stored vectors for equality.
+A zero vector has a NaN cosine distance in PostgreSQL; it is ranked as distance 1.0 (similarity 0.0), as in
+the in-memory store. Source version ids must be canonical UUIDs (they reference document_versions).
 """
 
 import math
@@ -163,7 +168,7 @@ class SqlResponseCacheStore:
                     f"""SELECT {_COLUMNS}, e.question_vector <=> CAST(:q AS vector) AS distance
                     FROM response_cache_entries e
                     WHERE e.tenant_id = :t AND e.project_id = :p AND e.partition = :part AND e.vector_key = :vk
-                    ORDER BY e.question_vector <=> CAST(:q AS vector), e.key LIMIT :k"""
+                    ORDER BY COALESCE(NULLIF(e.question_vector <=> CAST(:q AS vector), 'NaN'), 1.0), e.key LIMIT :k"""
                 ),
                 {
                     "t": scope.tenant_id,
