@@ -180,3 +180,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.kag_retrieve import KagRetriever
 
     registry.register(KagRetriever)
+    from rag_foundry_indexing.late_chunking import LateChunkingRepresentation
+
+    registry.register(LateChunkingRepresentation)
