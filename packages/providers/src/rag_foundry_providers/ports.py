@@ -15,6 +15,7 @@ from rag_foundry_providers.messages import (
     ChatRequest,
     ChatResult,
     EmbeddingResult,
+    MultivectorResult,
     RerankResult,
     SparseEncodingResult,
     TokenEncodingResult,
@@ -90,6 +91,22 @@ class TokenEncoder(Protocol):
         head: Literal["hidden", "colbert"],
         input_type: Literal["document", "query"],
     ) -> TokenEncodingResult: ...
+
+
+@runtime_checkable
+class PageImageEncoder(Protocol):
+    """Page-image multivector port (R41, ColPali style).
+
+    `encode_pages` takes PNG bytes and returns one patch multivector per page; `encode_queries` returns one
+    token multivector per query. Both live in the same space and need MaxSim scoring. Invalid PNGs raise
+    ExtractionError("page_image_invalid") before any decode.
+    """
+
+    profile: ModelProfile
+
+    async def encode_pages(self, pngs: Sequence[bytes]) -> MultivectorResult: ...
+
+    async def encode_queries(self, texts: Sequence[str]) -> MultivectorResult: ...
 
 
 def check_chat_request(profile: ModelProfile, request: ChatRequest, *, streaming: bool) -> None:

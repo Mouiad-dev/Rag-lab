@@ -8,6 +8,7 @@ version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.14.2",
+    "rag-foundry-domain",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +19,9 @@ openai_compatible = ["httpx==0.28.1"]
 sparse = ["sentence-transformers==6.2.0", "torch==2.15.0"]
 # C20/R45 per-token vectors (owner OK 2026-11-23); same pins as sparse. Loads safetensors only.
 tokens = ["sentence-transformers==6.2.0", "torch==2.15.0"]
+# R41 page-image multivectors (owner OK 2026-11-23, option 2): sentence-transformers MultiVectorEncoder + peft LoRA.
+# colpali-engine 0.3.18 needs torch<2.14, so it is not used. Loads safetensors only.
+visual = ["sentence-transformers==6.2.0", "torch==2.15.0", "peft==0.22.0", "pillow==13.0.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rag_foundry_providers"]

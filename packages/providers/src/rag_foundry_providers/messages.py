@@ -109,6 +109,24 @@ class TokenEncodingResult(_Frozen):
     usage: Usage
 
 
+class Multivector(_Frozen):
+    """Patch or token vectors for one page image or one query (all vectors have equal length)."""
+
+    vectors: tuple[tuple[float, ...], ...]
+
+    @model_validator(mode="after")
+    def _equal_lengths(self) -> Self:
+        if len({len(v) for v in self.vectors}) > 1:
+            raise ValueError("all multivector rows must have equal length")
+        return self
+
+
+class MultivectorResult(_Frozen):
+    items: tuple[Multivector, ...]
+    dim: int = Field(ge=0)
+    usage: Usage
+
+
 class RerankItem(_Frozen):
     index: int = Field(ge=0)
     score: float
