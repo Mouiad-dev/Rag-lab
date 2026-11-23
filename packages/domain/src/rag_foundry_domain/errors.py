@@ -70,6 +70,8 @@ class ExtractionError(IntakeError):
         "integrity_mismatch",
         "unsupported_extractor",
         "html_too_complex",
+        "page_render_limit",
+        "page_image_invalid",
     )
 
     def __init__(self, code: str, message: str | None = None) -> None:
@@ -192,6 +194,13 @@ class IndexingError(IntakeError):
         "kag_exists",
         "kag_too_large",
         "kag_source_mismatch",
+        "token_encoding_count_mismatch",
+        "token_offsets_invalid",
+        "late_chunk_span_empty",
+        "late_chunk_window_invalid",
+        "multivector_index_missing",
+        "multivector_dim_mismatch",
+        "visual_index_missing",
     )
 
     def __init__(self, code: str) -> None:
@@ -243,6 +252,9 @@ class RunError(IntakeError):
         "cag_nonce_conflict",
         "cag_snapshot_mismatch",
         "cag_empty",
+        "selfrag_tokens_missing",
+        "selfrag_logprobs_unavailable",
+        "selfrag_output_invalid",
     )
 
     def __init__(self, code: str) -> None:
