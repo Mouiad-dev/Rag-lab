@@ -9,6 +9,8 @@ NEW_INDEXING_CODES = (
     "multivector_index_missing",
     "multivector_dim_mismatch",
     "visual_index_missing",
+    "multivector_count_mismatch",
+    "multivector_page_empty",
 )
 NEW_EXTRACTION_CODES = ("page_render_limit", "page_image_invalid")
 NEW_RUN_CODES = (

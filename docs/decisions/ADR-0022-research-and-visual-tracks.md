@@ -40,7 +40,7 @@ Requirements: image parts in the provider `ChatMessage` schema with size and for
 Requirements: the authors' fine-tuned T5-large retrieval evaluator (link and licence from the official repo); knowledge refinement (decompose, filter, recompose); web search through an approved, budgeted provider in enriched mode. A reranker or LLM grader is R29 (P8.1), not R46.
 
 ### Error codes (registered once)
-- `IndexingError.CODES`: `token_encoding_count_mismatch`, `token_offsets_invalid`, `late_chunk_span_empty`, `late_chunk_window_invalid`, `multivector_index_missing`, `multivector_dim_mismatch`, `visual_index_missing`.
+- `IndexingError.CODES`: `token_encoding_count_mismatch`, `token_offsets_invalid`, `late_chunk_span_empty`, `late_chunk_window_invalid`, `multivector_index_missing`, `multivector_dim_mismatch`, `visual_index_missing`, `multivector_count_mismatch`, `multivector_page_empty`.
 - `ExtractionError.CODES`: `page_render_limit`, `page_image_invalid` (ingestion rendering and R41 provenance checks on source bytes).
 - `RunError.CODES`: `selfrag_tokens_missing`, `selfrag_logprobs_unavailable`, `selfrag_output_invalid`.
 

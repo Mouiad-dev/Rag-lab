@@ -201,6 +201,8 @@ class IndexingError(IntakeError):
         "multivector_index_missing",
         "multivector_dim_mismatch",
         "visual_index_missing",
+        "multivector_count_mismatch",
+        "multivector_page_empty",
     )
 
     def __init__(self, code: str) -> None:

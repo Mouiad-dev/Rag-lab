@@ -186,3 +186,6 @@ def register_builtin_plugins(registry) -> None:
     from rag_foundry_indexing.late_interaction import LateInteractionRetriever
 
     registry.register(LateInteractionRetriever)
+    from rag_foundry_indexing.visual import VisualMultivectorRetriever
+
+    registry.register(VisualMultivectorRetriever)

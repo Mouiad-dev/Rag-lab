@@ -16,5 +16,5 @@ def test_builtin_plugins_fit_their_category_kinds():
     register_cache(reg)
     register_answering(reg)
     ids = set(reg.registered_ids())
-    assert len(ids) == 57  # every built-in plugin, so a quietly dropped one fails here
+    assert len(ids) == 58  # every built-in plugin, so a quietly dropped one fails here
     assert {"R07", "R08", "R09", "R10", "R28"} <= ids  # kinds that differ from their category's main kind
