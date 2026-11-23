@@ -82,6 +82,33 @@ class SparseEncodingResult(_Frozen):
     usage: Usage
 
 
+class TokenEncoding(_Frozen):
+    """Per-token vectors for one text. Offsets are code-point offsets (start, end) into the input text."""
+
+    vectors: tuple[tuple[float, ...], ...]
+    offsets: tuple[tuple[int, int], ...]
+    truncated: bool
+
+    @model_validator(mode="after")
+    def _valid_tokens(self) -> Self:
+        if len(self.vectors) != len(self.offsets):
+            raise ValueError("token vectors and offsets must have equal length")
+        if len({len(v) for v in self.vectors}) > 1:
+            raise ValueError("all token vectors must have equal length")
+        previous = 0
+        for start, end in self.offsets:
+            if start < 0 or end < start or start < previous:
+                raise ValueError("token offsets must satisfy 0 <= start <= end with non-decreasing starts")
+            previous = start
+        return self
+
+
+class TokenEncodingResult(_Frozen):
+    items: tuple[TokenEncoding, ...]
+    dim: int = Field(ge=0)
+    usage: Usage
+
+
 class RerankItem(_Frozen):
     index: int = Field(ge=0)
     score: float

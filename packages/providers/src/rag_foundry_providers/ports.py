@@ -17,6 +17,7 @@ from rag_foundry_providers.messages import (
     EmbeddingResult,
     RerankResult,
     SparseEncodingResult,
+    TokenEncodingResult,
 )
 
 
@@ -68,6 +69,27 @@ class SparseEncoder(Protocol):
     async def encode(
         self, texts: Sequence[str], *, input_type: Literal["document", "query"]
     ) -> SparseEncodingResult: ...
+
+
+@runtime_checkable
+class TokenEncoder(Protocol):
+    """Per-token vector port (C20 hidden states, R45 ColBERT head).
+
+    Special tokens are excluded from items. Offsets are code-point offsets into each input text.
+    `max_tokens` is the longest input (special tokens included) encoded; longer text is truncated
+    and flagged `truncated=True`.
+    """
+
+    profile: ModelProfile
+    max_tokens: int
+
+    async def encode_tokens(
+        self,
+        texts: Sequence[str],
+        *,
+        head: Literal["hidden", "colbert"],
+        input_type: Literal["document", "query"],
+    ) -> TokenEncodingResult: ...
 
 
 def check_chat_request(profile: ModelProfile, request: ChatRequest, *, streaming: bool) -> None:

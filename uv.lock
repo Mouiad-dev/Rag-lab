@@ -1215,6 +1215,11 @@ sparse = [
     { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
 ]
+tokens = [
+    { name = "sentence-transformers" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1223,9 +1228,11 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'openai-compatible'", specifier = "==0.28.1" },
     { name = "pydantic", specifier = ">=2.14.2" },
     { name = "sentence-transformers", marker = "extra == 'sparse'", specifier = "==6.2.0" },
+    { name = "sentence-transformers", marker = "extra == 'tokens'", specifier = "==6.2.0" },
     { name = "torch", marker = "extra == 'sparse'", specifier = "==2.15.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "extra == 'tokens'", specifier = "==2.15.0", index = "https://download.pytorch.org/whl/cpu" },
 ]
-provides-extras = ["ollama", "anthropic", "openai-compatible", "sparse"]
+provides-extras = ["ollama", "anthropic", "openai-compatible", "sparse", "tokens"]
 
 [[package]]
 name = "rag-foundry-storage"
