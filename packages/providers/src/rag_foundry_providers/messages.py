@@ -55,6 +55,14 @@ class TokenLogprob(_Frozen):
     token: str
     logprob: float
     top: tuple[tuple[str, float], ...]
+    token_id: int | None = None
+    top_ids: tuple[int, ...] | None = None
+
+    @model_validator(mode="after")
+    def _aligned_top_ids(self) -> Self:
+        if self.top_ids is not None and len(self.top_ids) != len(self.top):
+            raise ValueError("top_ids and top must have equal length")
+        return self
 
 
 class RawCompletionRequest(_Frozen):
@@ -63,7 +71,7 @@ class RawCompletionRequest(_Frozen):
     temperature: float = Field(default=0.0, ge=0)
     top_p: float = Field(default=1.0, gt=0, le=1)
     top_k: int = Field(default=0, ge=0)
-    top_logprobs: int = Field(ge=1, le=20)
+    top_logprobs: int = Field(ge=1, le=65536)
     stop: tuple[str, ...] = ()
 
 

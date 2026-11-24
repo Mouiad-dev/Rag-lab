@@ -483,6 +483,8 @@ class OllamaRawCompletionModel:
                     ),
                 )
             )
+        if request.top_logprobs > 20:
+            raise ProviderCallError(self.profile.id, "invalid_request")
         options: dict[str, Any] = {
             "temperature": request.temperature,
             "top_p": request.top_p,

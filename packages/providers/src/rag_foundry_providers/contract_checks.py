@@ -279,6 +279,8 @@ async def check_raw_completion(model: Any) -> None:
         _fail(f"complete_raw returned {type(result).__name__}, expected RawCompletionResult")
     if not result.text or not result.tokens:
         _fail("raw completion must return text and token logprobs")
+    if any(token.top_ids is not None and len(token.top_ids) != len(token.top) for token in result.tokens):
+        _fail("raw completion token top_ids and top lengths differ")
     _check_usage(result.usage, model.profile, Operation.CHAT)
 
 

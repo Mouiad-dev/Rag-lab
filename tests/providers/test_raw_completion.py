@@ -107,12 +107,41 @@ def test_non_opted_profile_is_rejected_before_transport() -> None:
 
 
 def test_raw_completion_request_validates_sampler_and_logprob_ranges() -> None:
-    with pytest.raises(ValidationError):
-        RawCompletionRequest(prompt="hello", max_output_tokens=2, top_logprobs=21)
+    assert RawCompletionRequest(prompt="hello", max_output_tokens=2, top_logprobs=21).top_logprobs == 21
     with pytest.raises(ValidationError):
         RawCompletionRequest(prompt="hello", max_output_tokens=2, top_logprobs=1, top_p=0)
     with pytest.raises(ValidationError):
         RawCompletionRequest(prompt="hello", max_output_tokens=2, top_logprobs=1, top_k=-1)
+
+
+def test_ollama_rejects_more_than_20_logprobs_before_transport() -> None:
+    called = False
+
+    async def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(500)
+
+    model = OllamaRawCompletionModel(
+        ollama_raw_completion_profile(), api_base="http://ollama.test", transport=httpx.MockTransport(respond)
+    )
+    request = RawCompletionRequest(prompt="hello", max_output_tokens=2, top_logprobs=21)
+
+    with pytest.raises(ProviderCallError) as caught:
+        asyncio.run(model.complete_raw(request))
+
+    assert caught.value.reason == "invalid_request"
+    assert not called
+
+
+def test_token_logprob_ids_are_optional_and_validate_alignment() -> None:
+    from rag_foundry_providers.messages import TokenLogprob
+
+    old_shape = TokenLogprob(token="x", logprob=-0.1, top=(("x", -0.1),))
+    assert old_shape.token_id is None
+    assert old_shape.top_ids is None
+    with pytest.raises(ValidationError):
+        TokenLogprob(token="x", logprob=-0.1, top=(("x", -0.1),), top_ids=(1, 2))
 
 
 def _good_body(**changes: object) -> dict[str, object]:
