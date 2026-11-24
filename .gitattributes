@@ -1,3 +1,9 @@
 packages/contracts/fixtures/** text eol=lf
 packages/contracts/schemas/*.json text eol=lf
 tests/answering/golden/*.json text eol=lf
+# Byte-compared committed outputs and fixtures: keep LF on every OS (Windows CI checks them byte for byte).
+docs/evidence/** text eol=lf
+tests/evaluation/data/** text eol=lf
+tests/fixtures/** text=auto eol=lf
+*.pdf binary
+*.png binary
