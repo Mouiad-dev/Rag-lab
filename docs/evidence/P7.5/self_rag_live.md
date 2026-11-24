@@ -158,5 +158,19 @@ Observed condition: reflection tokens literal; every group had its tokens availa
 Evidence/output: scored_positions=11 positions_missing_group_tokens=0 share=0.00; pre_sampler_check equal x4
 Blocked rule: none
 R31 status: implemented (adaptation, never validated), per the ADR-0022 owner exception
-Next action: P7.5-12 records R31 as implemented (adaptation) with the losing case and open items; citation guard needs an owner decision
+Next action: P7.5-12 records R31 as implemented (adaptation) with the losing case and open items; citation guard needed an owner decision (decided 2026-11-24: guard added, see "Citation guard (P7.5-17)")
 ```
+
+## Citation guard (P7.5-17)
+
+Owner decision 2026-11-24: `SelfRagConfig.citation_guard` (default on) cites the chosen candidate
+only if the model generated `[Relevant]` at position 0 and a `[Fully supported]` or
+`[Partially supported]` token; otherwise the answer is returned ungrounded with no citation.
+Candidate selection is unchanged (official best total); this is a deviation in citation only.
+
+Live rerun on llama.cpp (same server and test command as "llama.cpp rerun") -> 1 passed in
+109.54s (latencies higher than before; other work ran on the machine): decisions, candidate
+scores and totals unchanged (scored_positions=11, missing 0, share 0.00; threshold rule x4;
+pre_sampler_check equal x4). Citations: retrieval question cited (the one fixture chunk);
+greeting not retrieved; unanswerable and Arabic answers now `citation=None` (their chosen
+candidate generated `[Irrelevant]`). This resolves the losing case above for these two questions.

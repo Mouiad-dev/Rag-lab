@@ -403,3 +403,79 @@ def test_passage_prompt_markers_are_neutralised_and_counted():
     assert prompt.count("### Instruction:") == 1 and prompt.count("### Response:") == 1
     assert workflow.last_trace["passage_prompt_markers_removed"] == 2
     assert workflow.last_trace["passage_reflection_tokens_removed"] == 1
+
+
+def _guard_candidate(relevance_token, support_token, answer="Guarded", *, relevance_id=None, relevant_p=0.5):
+    dist = {"[Relevant]": relevant_p, "[Irrelevant]": 1 - relevant_p}
+    first = _token(relevance_token, dist, token_id=relevance_id)
+    rows = [first]
+    if support_token is not None:
+        support = {"[Fully supported]": 0.4, "[Partially supported]": 0.3, "[No support / Contradictory]": 0.3}
+        rows.append(_token(support_token, support))
+    return SimpleNamespace(
+        text=f"{relevance_token} {answer} {support_token or ''}",
+        tokens=tuple(rows),
+        finish_reason="stop",
+        usage=SimpleNamespace(model_dump=lambda: {"input_tokens": 1, "output_tokens": len(rows)}),
+    )
+
+
+def _guard_run(candidate, config=None):
+    return _run([_decision(0.9), candidate], [_hit("A", 1, "text")], config=config)
+
+
+@pytest.mark.parametrize(
+    ("relevance", "support", "reason"),
+    [
+        ("[Irrelevant]", "[Fully supported]", "irrelevant"),
+        ("[Irrelevant]", None, "irrelevant"),
+        ("[Relevant]", None, "no_support_token"),
+        ("[Relevant]", "[No support / Contradictory]", "not_supported"),
+    ],
+)
+def test_citation_guard_blocks_uncitable_candidate(relevance, support, reason):
+    result, workflow, _ = _guard_run(_guard_candidate(relevance, support))
+    assert result.status == "answered" and result.grounding == "ungrounded" and result.citations == ()
+    assert result.answer == "Guarded"
+    trace = workflow.last_trace
+    assert trace["citation_guard"] == {"enabled": True, "cited": False, "reason": reason}
+    assert trace["answer_grounding"] == "ungrounded"
+
+
+def test_citation_guard_passes_partially_supported_with_exact_citation():
+    result, workflow, _ = _guard_run(_guard_candidate("[Relevant]", "[Partially supported]"))
+    assert result.grounding == "corpus" and len(result.citations) == 1
+    citation = result.citations[0]
+    assert (citation.chunk_id, citation.extraction_view_id) == ("A", "view-A")
+    assert (citation.start, citation.end, citation.block_ids) == (0, 4, ("block-A",))
+    assert workflow.last_trace["citation_guard"] == {"enabled": True, "cited": True, "reason": None}
+    assert workflow.last_trace["answer_grounding"] == "corpus"
+
+
+def test_citation_guard_off_cites_irrelevant_candidate_as_before():
+    config = SelfRagConfig(citation_guard=False)
+    result, workflow, _ = _guard_run(_guard_candidate("[Irrelevant]", "[Fully supported]"), config)
+    assert result.grounding == "corpus" and result.citations[0].chunk_id == "A"
+    assert workflow.last_trace["citation_guard"]["enabled"] is False
+    assert workflow.last_trace["answer_grounding"] == "corpus"
+
+
+def test_citation_guard_id_mode_rejects_relevant_text_with_other_id():
+    candidate = _guard_candidate("[Relevant]", "[Fully supported]", relevance_id=99)
+    assert candidate.tokens[0].token == "[Relevant]"
+    result, workflow, _ = _guard_run(candidate)
+    assert not result.citations
+    assert workflow.last_trace["citation_guard"]["reason"] == "irrelevant"
+
+
+def test_citation_guard_does_not_reselect_a_passing_lower_candidate():
+    # H1 total is higher (relevance .9 vs .2) but has no support token; H2 passes the guard.
+    hits = [_hit("H1", 1, "one"), _hit("H2", 2, "two")]
+    first = _guard_candidate("[Relevant]", None, "Answer H1", relevant_p=0.9)
+    second = _guard_candidate("[Relevant]", "[Fully supported]", "Answer H2", relevant_p=0.2)
+    result, workflow, _ = _run([_decision(0.9), first, second], hits)
+    totals = [row["total"] for row in workflow.last_trace["candidates"]]
+    assert totals[0] > totals[1]
+    assert result.answer == "Answer H1" and result.citations == ()
+    assert workflow.last_trace["chosen_chunk_id"] == "H1"
+    assert workflow.last_trace["citation_guard"]["reason"] == "no_support_token"

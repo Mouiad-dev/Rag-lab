@@ -12,6 +12,12 @@ hashes so they cannot fake instruction or response turns.
 The wide retrieval-decision distribution is requested in a separate one-token
 call. Under the pinned greedy sampler its position 0 matches position 0 of the
 following generation; this costs one additional model call.
+
+Documented deviation from the official procedure (owner decision 2026-11-24):
+with `citation_guard` on (default) the best-scored candidate is still selected
+unchanged, but it is cited only when its own generated tokens show `[Relevant]`
+at position 0 and a `[Fully supported]` or `[Partially supported]` token.
+Otherwise the answer text is returned uncited with grounding "ungrounded".
 """
 
 import math
@@ -59,6 +65,7 @@ class SelfRagConfig(BaseModel):
     w_sup: float = Field(default=1.0, ge=0.0)
     w_use: float = Field(default=1.0, ge=0.0)
     use_seqscore: bool = True
+    citation_guard: bool = True
     k: int = Field(default=5, ge=1, le=50)
     max_new_tokens: int = Field(default=100, ge=1)
     decision_top_logprobs: int = Field(default=20, ge=1, le=65536)
@@ -182,7 +189,7 @@ class SelfRagWorkflow:
             return SelfRagAnswer(status="answered", answer=_strip_reflections(generation.text), grounding="ungrounded")
 
         retrieved: RetrievalResult = await retriever.retrieve(question)
-        scored: list[tuple[float, RetrievedChunk, str, dict]] = []
+        scored: list[tuple[float, RetrievedChunk, str, dict, object]] = []
         if not retrieved.hits:
             trace["answer_grounding"] = "none"
             self.last_trace = trace
@@ -206,7 +213,7 @@ class SelfRagWorkflow:
                 trace["candidates"].append(row)
                 continue
             score = part["total"]
-            scored.append((score, hit, candidate.text, row))
+            scored.append((score, hit, candidate.text, row, candidate))
             trace["candidates"].append(row)
         if not scored:
             trace["answer_grounding"] = "none"
@@ -215,8 +222,20 @@ class SelfRagWorkflow:
                 status="abstained", answer="", grounding="ungrounded", abstention_reason="all_candidates_invalid"
             )
         scored.sort(key=lambda item: (-item[0], item[1].rank))
-        best_score, hit, text, best_row = scored[0]
+        best_score, hit, text, best_row, best_candidate = scored[0]
         best_row["chosen"] = True
+        trace["chosen_chunk_id"] = hit.chunk_id
+        trace["chosen_score"] = best_score
+        reason = _citation_guard_reason(best_candidate, self.config) if self.config.citation_guard else None
+        trace["citation_guard"] = {
+            "enabled": self.config.citation_guard,
+            "cited": reason is None,
+            "reason": reason,
+        }
+        if reason is not None:
+            trace["answer_grounding"] = "ungrounded"
+            self.last_trace = trace
+            return SelfRagAnswer(status="answered", answer=_strip_reflections(text), grounding="ungrounded")
         citation = SelfRagCitation(
             chunk_id=hit.chunk_id,
             extraction_view_id=hit.extraction_view_id,
@@ -224,8 +243,6 @@ class SelfRagWorkflow:
             end=hit.end,
             block_ids=hit.block_ids,
         )
-        trace["chosen_chunk_id"] = hit.chunk_id
-        trace["chosen_score"] = best_score
         trace["answer_grounding"] = "corpus"
         self.last_trace = trace
         return SelfRagAnswer(
@@ -285,6 +302,20 @@ def _generated_reflection(token, names: Sequence[str], config: SelfRagConfig) ->
         name = by_id.get(token.token_id)
         return name if name in names else None
     return token.token if token.token in names else None
+
+
+def _citation_guard_reason(candidate, config: SelfRagConfig) -> str | None:
+    """Return why the chosen candidate may not be cited, judged from its generated tokens."""
+    tokens = candidate.tokens
+    irrelevant = not tokens or _generated_reflection(tokens[0], RELEVANCE[:1], config) is None
+    support = next((name for name in (_generated_reflection(t, SUPPORT, config) for t in tokens) if name), None)
+    if irrelevant:
+        return "irrelevant"
+    if support is None:
+        return "no_support_token"
+    if support == SUPPORT[2]:
+        return "not_supported"
+    return None
 
 
 def _lp(top: dict[str, float], token: str, trace: dict, group: str) -> float:
