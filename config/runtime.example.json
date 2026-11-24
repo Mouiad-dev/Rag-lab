@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "answer": {
+    "max_output_tokens": 512,
+    "temperature": 0.0,
+    "max_evidence_chars": 12000,
+    "min_scores": {"ollama/bge-m3/1024": 0.45}
+  },
+  "run": {
+    "max_attempts": 2,
+    "attempt_timeout_s": 120.0,
+    "retry_timeouts_for_local": false,
+    "deadline_s": 300.0,
+    "max_concurrent": 1
+  },
+  "indexing": {
+    "embed_batch_size": 32,
+    "c05_chunk_size": 800,
+    "c05_chunk_overlap": 100
+  }
+}

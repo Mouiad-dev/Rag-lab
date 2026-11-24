@@ -1,0 +1,11 @@
+{
+  "format": "rag-foundry.human-labels",
+  "format_version": "1",
+  "items_id": "answer-support-items",
+  "items_sha256": "80b9385a8d85c819d23801580466063bdc18ceb467719de053e900c709f0a3bb",
+  "labels": [],
+  "note": "No human has labeled these items yet. Do not fill this file with model output or author guesses.",
+  "rubric_id": "answer-support",
+  "rubric_version": "1",
+  "status": "placeholder_not_labeled"
+}

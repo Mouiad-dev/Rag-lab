@@ -1,0 +1,151 @@
+# Local stack: Postgres (pgvector), API and worker. Ollama is opt-in: --profile ollama.
+# Requires a .env (copy .env.example). Images are pinned by exact tag; digest pinning is P10.4.
+name: rag-foundry
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg18-trixie
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag_foundry}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_foundry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.example to .env and set it}
+    volumes:
+      # PostgreSQL 18 images keep data under a versioned dir inside /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    image: rag-foundry-app:local
+    command: ["rag-foundry-migrate"]
+    environment:
+      RAG_FOUNDRY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rag_foundry}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rag_foundry}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build: .
+    image: rag-foundry-app:local
+    command: ["rag-foundry-api"]
+    volumes:
+      - objects:/data/objects
+    environment:
+      RAG_FOUNDRY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rag_foundry}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rag_foundry}
+      RAG_FOUNDRY_OBJECT_STORE_ROOT: /data/objects
+      RAG_FOUNDRY_API_HOST: 0.0.0.0 # container-internal only; host publish is loopback
+      RAG_FOUNDRY_API_PORT: "8000"
+      RAG_FOUNDRY_ENVIRONMENT: ${RAG_FOUNDRY_ENVIRONMENT:-dev}
+      RAG_FOUNDRY_LOG_LEVEL: ${RAG_FOUNDRY_LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    read_only: true
+    tmpfs:
+      # Starlette spools multipart parts here; a full tmpfs is a 500 envelope, not a host-disk fill.
+      - /tmp:size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    image: rag-foundry-app:local
+    command: ["rag-foundry-worker", "--heartbeat-file", "/tmp/worker.heartbeat"]
+    volumes:
+      - objects:/data/objects:ro
+    environment:
+      RAG_FOUNDRY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rag_foundry}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rag_foundry}
+      RAG_FOUNDRY_OBJECT_STORE_ROOT: /data/objects
+      RAG_FOUNDRY_ENVIRONMENT: ${RAG_FOUNDRY_ENVIRONMENT:-dev}
+      RAG_FOUNDRY_LOG_LEVEL: ${RAG_FOUNDRY_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "rag-foundry-worker", "--check-heartbeat", "/tmp/worker.heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  testdb:
+    # Throwaway Postgres for `pytest -m db`. Start with: docker compose --profile test up -d --wait testdb
+    image: pgvector/pgvector:0.8.7-pg18-trixie
+    profiles: [test]
+    environment:
+      POSTGRES_USER: rag_foundry
+      POSTGRES_DB: rag_foundry
+      # Non-failing form so an old .env still works; the image refuses an empty password.
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:-}
+    tmpfs:
+      - /var/lib/postgresql:size=1g
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  ollama:
+    image: ollama/ollama:0.40.13
+    profiles: [ollama]
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pgdata:
+  objects:
+  ollama-models:

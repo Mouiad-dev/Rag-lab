@@ -1,0 +1,51 @@
+[tool.uv]
+required-version = ">=0.7.9"
+
+[tool.uv.workspace]
+members = ["packages/core", "packages/contracts", "packages/domain", "packages/storage", "packages/ingestion", "packages/techniques", "packages/chunking", "packages/providers", "packages/indexing", "packages/answering", "packages/cache", "packages/evaluation", "apps/api", "apps/worker"]
+
+[tool.uv.sources]
+rag-foundry-core = { workspace = true }
+rag-foundry-contracts = { workspace = true }
+rag-foundry-domain = { workspace = true }
+rag-foundry-storage = { workspace = true }
+rag-foundry-ingestion = { workspace = true }
+rag-foundry-techniques = { workspace = true }
+rag-foundry-chunking = { workspace = true }
+rag-foundry-providers = { workspace = true }
+rag-foundry-indexing = { workspace = true }
+rag-foundry-answering = { workspace = true }
+rag-foundry-cache = { workspace = true }
+rag-foundry-evaluation = { workspace = true }
+rag-foundry-api = { workspace = true }
+rag-foundry-worker = { workspace = true }
+# CPU-only PyTorch for the optional [sparse] extra (https://docs.astral.sh/uv/guides/integration/pytorch/)
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+dev = ["pytest>=9.2", "ruff>=0.17", "rag-foundry-core", "rag-foundry-contracts", "rag-foundry-domain", "rag-foundry-storage[sql]", "rag-foundry-ingestion[html,pdf]", "rag-foundry-techniques", "rag-foundry-chunking", "rag-foundry-providers[ollama]", "rag-foundry-indexing", "rag-foundry-answering", "rag-foundry-cache", "rag-foundry-evaluation", "rag-foundry-api", "rag-foundry-worker"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".claude", "tests/hooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--strict-markers"]
+markers = [
+    "live: opt-in test that calls a real local or remote provider; skipped unless explicitly enabled",
+    "db: needs a real PostgreSQL via RAGF_TEST_DATABASE_URL; skipped when unset",
+]
+
+[tool.ruff.format]
+exclude = ["*.md"]

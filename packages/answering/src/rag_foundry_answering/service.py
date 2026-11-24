@@ -1,0 +1,273 @@
+"""One bounded retrieval-to-answer run."""
+
+import secrets
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+from rag_foundry_contracts.runs import (
+    AbstentionReason,
+    Citation,
+    Evidence,
+    RunPins,
+    RunResponse,
+    RunStatus,
+    RunUsage,
+)
+from rag_foundry_domain.errors import RunError
+from rag_foundry_domain.indexing import IndexVersion
+from rag_foundry_domain.prompts import PromptTemplate
+from rag_foundry_domain.runtime_settings import (
+    ANSWER_K_DEFAULT,
+    ANSWER_K_MAX,
+    ANSWER_K_MIN,
+    ANSWER_MAX_EVIDENCE_CHARS_MAX,
+    ANSWER_MAX_EVIDENCE_CHARS_MIN,
+    ANSWER_MAX_OUTPUT_TOKENS_MAX,
+    ANSWER_MAX_OUTPUT_TOKENS_MIN,
+    ANSWER_TEMPERATURE_MAX,
+    ANSWER_TEMPERATURE_MIN,
+    AnswerSettings,
+)
+from rag_foundry_indexing.packing import ContextPacker
+from rag_foundry_ingestion.anchor_service import AnchorService
+from rag_foundry_providers.ledger import UsageLedger
+from rag_foundry_providers.ports import ChatModel
+from rag_foundry_techniques.kinds import RetrievalResult, Retriever
+
+from rag_foundry_answering.citations import check_answer, normalize_nonce_markers, parse_markers
+from rag_foundry_answering.claims import validate_citations
+from rag_foundry_answering.gate import apply_gate
+from rag_foundry_answering.prompt import build_grounded_request, build_ungrounded_request, nonce_conflicts
+
+
+@dataclass(frozen=True)
+class RunPrompts:
+    grounded: PromptTemplate
+    ungrounded: PromptTemplate
+
+
+class AnswerConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    k: int = Field(default=ANSWER_K_DEFAULT, ge=ANSWER_K_MIN, le=ANSWER_K_MAX)  # fixed: ADR-0014 D3
+    min_score: float | None = Field(default=None, ge=-1, le=1, allow_inf_nan=False)
+    max_output_tokens: int = Field(
+        default=AnswerSettings().max_output_tokens, ge=ANSWER_MAX_OUTPUT_TOKENS_MIN, le=ANSWER_MAX_OUTPUT_TOKENS_MAX
+    )  # fixed: ADR-0014 D3
+    temperature: float | None = Field(
+        default=AnswerSettings().temperature, ge=ANSWER_TEMPERATURE_MIN, le=ANSWER_TEMPERATURE_MAX
+    )  # fixed: ADR-0014 D3
+    max_evidence_chars: int = Field(
+        default=AnswerSettings().max_evidence_chars, ge=ANSWER_MAX_EVIDENCE_CHARS_MIN, le=ANSWER_MAX_EVIDENCE_CHARS_MAX
+    )  # fixed: ADR-0014 D3
+
+
+class AnswerService:
+    def __init__(
+        self,
+        anchors: AnchorService,
+        *,
+        nonce_factory: Callable[[], str] = lambda: secrets.token_hex(8),
+        run_id_factory: Callable[[], str] = lambda: str(uuid.uuid4()),
+    ) -> None:
+        self._anchors = anchors
+        self._nonce_factory = nonce_factory
+        self._run_id_factory = run_id_factory
+
+    async def answer(
+        self,
+        scope,
+        question: str,
+        *,
+        prompts: RunPrompts,
+        retriever: Retriever,
+        technique_version: str,
+        index_version: IndexVersion | None,
+        chat: ChatModel,
+        ledger: UsageLedger,
+        config: AnswerConfig,
+        settings_sha256: str | None = None,
+        packer: ContextPacker | None = None,
+        citation_check: Literal["off", "warn"] = "off",
+    ) -> RunResponse:
+        if index_version is not None and config.min_score is None:
+            raise RunError("abstention_threshold_unset")
+        result = await retriever.retrieve(question)
+        if result.grounding != "none" and index_version is None:
+            raise RunError("index_version_required")
+        texts = tuple(hit.text for hit in result.hits)
+        nonce = ""
+        for _ in range(8):
+            nonce = self._nonce_factory()
+            if not nonce_conflicts(nonce, question, texts):
+                break
+        else:
+            raise RuntimeError("could not generate a non-conflicting nonce")
+
+        profile = chat.profile
+        pins = RunPins(
+            technique_id=result.technique_id,
+            technique_version=technique_version,
+            index_version_id=index_version.id if index_version else None,
+            embedding_key=index_version.embedding_key if index_version else None,
+            chat_profile_id=profile.id,
+            chat_provider=profile.provider,
+            chat_model=profile.model,
+            prompt_template=prompts.ungrounded.id if result.grounding == "none" else prompts.grounded.id,
+            prompt_sha256=prompts.ungrounded.content_sha256
+            if result.grounding == "none"
+            else prompts.grounded.content_sha256,
+            min_score=config.min_score if result.grounding != "none" else None,
+            k=config.k if result.grounding != "none" else None,
+            settings_sha256=settings_sha256,
+        )
+
+        def response(status, *, reason=None, answer=None, citations=(), evidence=(), warnings=()):
+            usage = ledger.totals()
+            return RunResponse(
+                run_id=self._run_id_factory(),
+                status=status,
+                abstention_reason=reason,
+                answer=answer,
+                citations=tuple(citations),
+                evidence=tuple(evidence),
+                pins=pins,
+                usage=RunUsage(
+                    model_calls=usage.calls,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    estimated_cost_usd=usage.cost_usd,
+                ),
+                warnings=tuple(warnings),
+            )
+
+        if result.grounding == "none":
+            request = build_ungrounded_request(
+                prompts.ungrounded,
+                question,
+                nonce=nonce,
+                max_output_tokens=config.max_output_tokens,
+                temperature=config.temperature,
+            )
+            completion = await chat.complete(request)
+            text = completion.text.strip()
+            if not text:
+                return response(RunStatus.ABSTAINED, reason=AbstentionReason.MODEL_DECLINED)
+            warnings = []
+            if completion.finish_reason == "length":
+                warnings.append("truncated_output")
+            if parse_markers(completion.text):
+                warnings.append("unexpected_markers")
+            return response(RunStatus.UNGROUNDED, answer=text, warnings=warnings)
+
+        gate = apply_gate(result.hits, min_score=config.min_score, max_evidence_chars=config.max_evidence_chars)
+        used = gate.used
+        packed = None
+        warnings = ["evidence_truncated"] if gate.truncated else []
+        if gate.outcome == "pass" and packer is not None:
+            packed = packer.pack(
+                RetrievalResult(
+                    technique_id=result.technique_id,
+                    grounding="corpus",
+                    index_version_id=result.index_version_id,
+                    hits=gate.used,
+                ),
+                model_context_window=chat.profile.capabilities.context_window,
+                reserve_output_tokens=config.max_output_tokens,
+                fixed_text=prompts.grounded.system_text + "\n" + question,
+            )
+            used = packed.items
+            if packed.trace.dropped:
+                warnings.append("evidence_packed_dropped")
+        evidence: list[Evidence] = []
+        anchors_by_marker = {}
+        for hit in result.hits:
+            marker = f"S{hit.rank}"
+            hit_anchors = await self._anchors.anchors_for_span(scope, hit.extraction_view_id, hit.start, hit.end)
+            anchors_by_marker[marker] = hit_anchors
+            evidence.append(
+                Evidence(
+                    marker=marker,
+                    rank=hit.rank,
+                    score=hit.score,
+                    used=hit in used,
+                    anchors=hit_anchors,
+                )
+            )
+        if gate.outcome != "pass":
+            reason = AbstentionReason.NO_EVIDENCE if gate.outcome == "no_evidence" else AbstentionReason.LOW_SCORE
+            return response(RunStatus.ABSTAINED, reason=reason, evidence=evidence)
+
+        if not used:
+            return response(
+                RunStatus.ABSTAINED,
+                reason=AbstentionReason.NO_EVIDENCE,
+                evidence=evidence,
+                warnings=[*warnings, "evidence_packing_empty"],
+            )
+
+        request = build_grounded_request(
+            prompts.grounded,
+            question,
+            tuple((f"S{hit.rank}", hit.text) for hit in used),
+            nonce=nonce,
+            max_output_tokens=config.max_output_tokens,
+            temperature=config.temperature,
+        )
+        completion = await chat.complete(request)
+        text = normalize_nonce_markers(completion.text, nonce)
+        check = check_answer(text, completion.finish_reason, {f"S{hit.rank}" for hit in used})
+        reason_by_outcome = {
+            "declined": AbstentionReason.MODEL_DECLINED,
+            "truncated": AbstentionReason.TRUNCATED_OUTPUT,
+            "uncited": AbstentionReason.UNCITED_ANSWER,
+            "invalid": AbstentionReason.INVALID_CITATION,
+        }
+        if check.outcome == "ok" and nonce in text:
+            # The nonce outside an accepted marker form must never reach a response (ADR-0013 amendment).
+            return response(
+                RunStatus.ABSTAINED, reason=AbstentionReason.INVALID_CITATION, evidence=evidence, warnings=warnings
+            )
+        if check.outcome != "ok":
+            return response(
+                RunStatus.ABSTAINED, reason=reason_by_outcome[check.outcome], evidence=evidence, warnings=warnings
+            )
+
+        if citation_check == "warn":
+            report = validate_citations(
+                text,
+                provided={f"S{hit.rank}": hit.text for hit in used},
+                known={item.marker for item in evidence},
+            )
+            # claim_invalid_citation cannot occur here: check_answer (known = used markers) has already
+            # abstained with invalid_citation on any unknown or unprovided marker. Kept only as a defensive check.
+            if report.invalid:
+                warnings.append("claim_invalid_citation")
+            if report.uncited:
+                warnings.append("claim_uncited")
+            if report.unsupported:
+                warnings.append("claim_unsupported_lexical")
+
+        citations = []
+        for marker in check.cited:
+            resolved = await self._anchors.resolve(scope, anchors_by_marker[marker])
+            if any(item.status != "exact" for item in resolved):
+                return response(
+                    RunStatus.ABSTAINED,
+                    reason=AbstentionReason.CITATION_UNRESOLVED,
+                    evidence=evidence,
+                    warnings=warnings,
+                )
+            citations.append(Citation(marker=marker, anchors=anchors_by_marker[marker]))
+        # The packer config is not pinned in RunPins, and there is no unsupported_claim reason;
+        # contract v1.2 is deferred by the owner.
+        return response(
+            RunStatus.ANSWERED,
+            answer=text.strip(),
+            citations=citations,
+            evidence=evidence,
+            warnings=warnings,
+        )

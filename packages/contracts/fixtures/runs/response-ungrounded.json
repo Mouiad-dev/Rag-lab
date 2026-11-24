@@ -1,0 +1,27 @@
+{
+  "contract_version": "1.0",
+  "run_id": "run-r01-1",
+  "status": "ungrounded",
+  "answer": "This answer is ungrounded.",
+  "citations": [],
+  "evidence": [],
+  "pins": {
+    "technique_id": "R01",
+    "technique_version": "1.0",
+    "index_version_id": null,
+    "embedding_key": null,
+    "chat_profile_id": "local",
+    "chat_provider": "ollama",
+    "chat_model": "gemma4:e4b",
+    "prompt_template": "grounded-answer-v1",
+    "min_score": null,
+    "k": null
+  },
+  "usage": {
+    "model_calls": 1,
+    "input_tokens": 100,
+    "output_tokens": 20,
+    "estimated_cost_usd": "0.000000"
+  },
+  "warnings": []
+}

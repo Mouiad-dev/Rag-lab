@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-storage"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "rag-foundry-domain",
+]
+
+[project.optional-dependencies]
+sql = [
+    "SQLAlchemy[asyncio]==2.1.6",
+    "alembic==1.20.0",
+    "psycopg[binary]==3.3.6",
+]
+
+[tool.uv.sources]
+rag-foundry-domain = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_storage"]
+
+[project.scripts]
+rag-foundry-migrate = "rag_foundry_storage.sql.migrate:main"

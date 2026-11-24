@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-worker"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "rag-foundry-core",
+    "rag-foundry-domain",
+    "rag-foundry-answering",
+    "rag-foundry-chunking",
+    "rag-foundry-indexing",
+    "rag-foundry-ingestion[pdf,html]",
+    "rag-foundry-providers[ollama]",
+    "rag-foundry-storage[sql]",
+]
+
+[project.scripts]
+rag-foundry-worker = "rag_foundry_worker.main:main"
+rag-foundry-extract = "rag_foundry_worker.extract_cli:main"
+rag-foundry-index = "rag_foundry_worker.index_cli:main"
+rag-foundry-ask = "rag_foundry_worker.ask_cli:main"
+rag-foundry-bundle = "rag_foundry_worker.bundle_cli:main"
+
+[tool.uv.sources]
+rag-foundry-core = { workspace = true }
+rag-foundry-answering = { workspace = true }
+rag-foundry-chunking = { workspace = true }
+rag-foundry-domain = { workspace = true }
+rag-foundry-indexing = { workspace = true }
+rag-foundry-ingestion = { workspace = true }
+rag-foundry-providers = { workspace = true }
+rag-foundry-storage = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_worker"]

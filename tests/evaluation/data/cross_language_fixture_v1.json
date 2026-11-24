@@ -1,0 +1,179 @@
+{
+  "cases": [
+    {
+      "answerable": true,
+      "case_id": "xl-en-en",
+      "language": "en",
+      "notes": "",
+      "question": "How often are sea levels recorded at Port Sallow?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 73,
+          "grade": 1,
+          "quote": "The tidal observatory at Port Sallow records sea levels every 17 minutes.",
+          "start": 0
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "name"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "xl-ar-ar",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0623\u064a\u0646 \u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u0645\u062e\u0637\u0648\u0637\u0627\u062a\u0647\u0627\u061f",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 134,
+          "grade": 1,
+          "quote": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a.",
+          "start": 75
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "name"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "xl-en-ar",
+      "language": "en",
+      "notes": "",
+      "question": "How many manuscripts does the Oasis Library keep?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 134,
+          "grade": 1,
+          "quote": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a.",
+          "start": 75
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "name",
+        "number"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "xl-ar-en",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0643\u0644 \u0643\u0645 \u062f\u0642\u064a\u0642\u0629 \u064a\u0633\u062c\u0644 \u0627\u0644\u0645\u0631\u0635\u062f \u0645\u0633\u062a\u0648\u0649 \u0633\u0637\u062d \u0627\u0644\u0628\u062d\u0631\u061f",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 73,
+          "grade": 1,
+          "quote": "The tidal observatory at Port Sallow records sea levels every 17 minutes.",
+          "start": 0
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "number"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "xl-en-ar-id",
+      "language": "en",
+      "notes": "",
+      "question": "Which warehouse holds part AB-1234?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 847,
+          "grade": 1,
+          "quote": "\u0631\u0642\u0645 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1234 \u0641\u064a \u0627\u0644\u0645\u062e\u0632\u0646 \u0627\u0644\u0634\u0645\u0627\u0644\u064a.",
+          "start": 810
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "identifier"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "xl-mixed-ar",
+      "language": "mixed",
+      "notes": "",
+      "question": "How many \u0645\u062e\u0637\u0648\u0637\u0629 does the Oasis Library keep?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 134,
+          "grade": 1,
+          "quote": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a.",
+          "start": 75
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "number"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "xl-ar-mixed",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0645\u062a\u0649 \u062a\u0641\u062a\u062d \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u0642\u0627\u0639\u0629 \u0627\u0644\u0642\u0631\u0627\u0621\u0629\u061f",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 953,
+          "grade": 1,
+          "quote": "The Oasis Library (\u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629) opens its reading room at 08:30.",
+          "start": 888
+        }
+      ],
+      "split": "dev",
+      "tags": []
+    },
+    {
+      "answerable": false,
+      "case_id": "xl-en-neg",
+      "language": "en",
+      "notes": "",
+      "question": "Which reading room does not open at 08:30?",
+      "relevant": [],
+      "split": "dev",
+      "tags": [
+        "negation"
+      ]
+    },
+    {
+      "answerable": false,
+      "case_id": "xl-ar-neg",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0623\u064a \u0645\u0643\u062a\u0628\u0629 \u0644\u0627 \u062a\u062d\u0641\u0638 \u0645\u062e\u0637\u0648\u0637\u0627\u062a\u061f",
+      "relevant": [],
+      "split": "dev",
+      "tags": [
+        "negation"
+      ]
+    }
+  ],
+  "dataset_id": "cross-language-fixture",
+  "dataset_version": "1",
+  "description": "Tiny offline cross-language fixture, not a benchmark",
+  "documents": [
+    {
+      "doc_key": "paired-fixture",
+      "length": 953,
+      "text_sha256": "c527975e121db72114f569e88afa4e0912bb45a7ac0a5e4224be7a513348c61b"
+    }
+  ],
+  "format": "rag-foundry.eval-dataset",
+  "format_version": "1"
+}

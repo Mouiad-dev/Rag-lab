@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "block_id": {
+      "minLength": 1,
+      "title": "Block Id",
+      "type": "string"
+    },
+    "end": {
+      "minimum": 0,
+      "title": "End",
+      "type": "integer"
+    },
+    "extraction_view_id": {
+      "minLength": 1,
+      "title": "Extraction View Id",
+      "type": "string"
+    },
+    "heading_level": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Heading Level"
+    },
+    "kind": {
+      "minLength": 1,
+      "title": "Kind",
+      "type": "string"
+    },
+    "ordinal": {
+      "minimum": 0,
+      "title": "Ordinal",
+      "type": "integer"
+    },
+    "page_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page Index"
+    },
+    "section_path": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Section Path",
+      "type": "array"
+    },
+    "start": {
+      "minimum": 0,
+      "title": "Start",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "extraction_view_id",
+    "block_id",
+    "ordinal",
+    "kind",
+    "start",
+    "end"
+  ],
+  "title": "BundleBlock",
+  "type": "object"
+}

@@ -1,0 +1,1267 @@
+# ruff: noqa: E501
+"""Scoped SQL implementation of IndexRepository."""
+
+import json
+import re
+import uuid
+from datetime import UTC, datetime
+from typing import Any
+
+from pydantic import ValidationError
+from rag_foundry_domain import NotFoundError, Scope, new_id
+from rag_foundry_domain.errors import IndexingError
+from rag_foundry_domain.graphs import GRAPH_SCHEMA, Entity, EntityGraph, GraphSpan, Relation
+from rag_foundry_domain.indexing import (
+    ChunkRecord,
+    FtsScoredChunk,
+    IndexVersion,
+    NewChunk,
+    NewIndexVersion,
+    ScoredChunk,
+    check_vector,
+)
+from rag_foundry_domain.knowledge import KG_SCHEMA, Fact, KEntity, KnowledgeGraph, KnowledgeSchema
+from rag_foundry_domain.representations import (
+    NewRepresentation,
+    RepresentationRecord,
+    RepresentationSet,
+    ScoredRepresentation,
+)
+from rag_foundry_domain.summary_tree import TREE_SCHEMA, SummaryTree, TreeNode
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from rag_foundry_storage.sql._tx import read, write
+
+
+def _uuid(value: str) -> str:
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        raise NotFoundError() from None
+    if parsed.version != 4 or str(parsed) != value:
+        raise NotFoundError()
+    return value
+
+
+def _version(row: Any, view_ids: tuple[str, ...]) -> IndexVersion:
+    return IndexVersion(
+        id=str(row["id"]),
+        tenant_id=str(row["tenant_id"]),
+        project_id=str(row["project_id"]),
+        chunker_id=row["chunker_id"],
+        chunker_version=row["chunker_version"],
+        chunker_config_json=row["chunker_config_json"],
+        chunker_config_sha256=row["chunker_config_sha256"],
+        embedding_profile_id=row["embedding_profile_id"],
+        embedding_provider=row["embedding_provider"],
+        embedding_model=row["embedding_model"],
+        embedding_dim=row["embedding_dim"],
+        distance=row["distance"],
+        embedding_key=row["embedding_key"],
+        extraction_view_ids=view_ids,
+        corpus_sha256=row["corpus_sha256"],
+        unanchored_chunk_count=row["unanchored_chunk_count"],
+        state=row["state"],
+        chunk_count=row["chunk_count"],
+        created_at=row["created_at"].astimezone(UTC),
+        ready_at=None if row["ready_at"] is None else row["ready_at"].astimezone(UTC),
+    )
+
+
+def _chunk(row: Any) -> ChunkRecord:
+    return ChunkRecord(
+        id=str(row["id"]),
+        tenant_id=str(row["tenant_id"]),
+        project_id=str(row["project_id"]),
+        index_version_id=str(row["index_version_id"]),
+        extraction_view_id=str(row["extraction_view_id"]),
+        ordinal=row["ordinal"],
+        start=row["start_cp"],
+        end=row["end_cp"],
+        split_level=row["split_level"],
+        block_ids=tuple(row["block_ids"]),
+        text=row["text"],
+        text_sha256=row["text_sha256"],
+        parent_start_cp=row["parent_start_cp"],
+        parent_end_cp=row["parent_end_cp"],
+    )
+
+
+class SqlIndexRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add_sparse(self, scope: Scope, index_version_id: str, encoder_key: str, rows: tuple) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            for cid, vector in rows:
+                try:
+                    inserted = await session.execute(
+                        text("""INSERT INTO chunk_sparse_vectors (tenant_id,project_id,index_version_id,chunk_id,encoder_key,terms,weights)
+                    SELECT :t,:p,:i,id,:e,:terms,:weights FROM chunks WHERE id=:c AND tenant_id=:t AND project_id=:p AND index_version_id=:i"""),
+                        {
+                            "t": scope.tenant_id,
+                            "p": scope.project_id,
+                            "i": iid,
+                            "c": _uuid(cid),
+                            "e": encoder_key,
+                            "terms": list(vector[0]),
+                            "weights": list(vector[1]),
+                        },
+                    )
+                except IntegrityError as exc:
+                    if "pk_chunk_sparse_vectors" in str(exc):
+                        raise IndexingError("duplicate_sparse_vector") from None
+                    raise
+                if inserted.rowcount != 1:
+                    raise NotFoundError()
+
+    async def sparse_search(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        encoder_key: str,
+        query: tuple[tuple[str, ...], tuple[float, ...]],
+        k: int,
+    ) -> list:
+        iid = _uuid(index_version_id)
+        if not 1 <= k <= 100:
+            raise IndexingError("invalid_k")
+        async with read(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            exists = await session.scalar(
+                text(
+                    "SELECT 1 FROM chunk_sparse_vectors WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND encoder_key=:e LIMIT 1"
+                ),
+                {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "e": encoder_key},
+            )
+            if exists is None:
+                other_key = await session.scalar(
+                    text(
+                        "SELECT 1 FROM chunk_sparse_vectors WHERE tenant_id=:t AND project_id=:p "
+                        "AND index_version_id=:i AND encoder_key<>:e LIMIT 1"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "e": encoder_key},
+                )
+                raise IndexingError("incompatible_sparse_encoder" if other_key is not None else "sparse_unavailable")
+            rows = (
+                (
+                    await session.execute(
+                        text("""WITH q AS (SELECT * FROM unnest(CAST(:qt AS text[]),CAST(:qw AS real[])) q(term,weight)),
+                d AS (SELECT c.*,sum(v.weight*q.weight) score FROM chunk_sparse_vectors s JOIN chunks c ON c.id=s.chunk_id AND c.tenant_id=s.tenant_id AND c.project_id=s.project_id AND c.index_version_id=s.index_version_id
+                CROSS JOIN LATERAL unnest(s.terms,s.weights) v(term,weight) JOIN q ON q.term=v.term WHERE s.tenant_id=:t AND s.project_id=:p AND s.index_version_id=:i AND s.encoder_key=:e
+                GROUP BY c.id), ranked_terms AS (SELECT s.chunk_id,q.term,sum(q.weight*v.weight) term_weight,row_number() OVER (PARTITION BY s.chunk_id ORDER BY sum(q.weight*v.weight) DESC) rn FROM chunk_sparse_vectors s CROSS JOIN LATERAL unnest(s.terms,s.weights) v(term,weight) JOIN q ON q.term=v.term WHERE s.tenant_id=:t AND s.project_id=:p AND s.index_version_id=:i AND s.encoder_key=:e GROUP BY s.chunk_id,q.term), m AS (SELECT chunk_id,array_agg(term ORDER BY term_weight DESC) terms,array_agg(term_weight ORDER BY term_weight DESC) weights FROM ranked_terms WHERE rn<=8 GROUP BY chunk_id) SELECT d.*,m.terms AS matched_terms,m.weights AS matched_weights FROM d JOIN m ON m.chunk_id=d.id ORDER BY score DESC,ordinal LIMIT :k"""),
+                        {
+                            "qt": list(query[0]),
+                            "qw": list(query[1]),
+                            "t": scope.tenant_id,
+                            "p": scope.project_id,
+                            "i": iid,
+                            "e": encoder_key,
+                            "k": k,
+                        },
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            from types import SimpleNamespace
+
+            result = []
+            for rank, row in enumerate(rows, 1):
+                result.append(
+                    SimpleNamespace(
+                        chunk=_chunk(row),
+                        score=float(row["score"]),
+                        rank=rank,
+                        terms=tuple(
+                            zip(row["matched_terms"][:8], (float(w) for w in row["matched_weights"][:8]), strict=True)
+                        ),
+                    )
+                )
+            return result
+
+    async def add_representations(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        rep_set: RepresentationSet,
+        rows: tuple[NewRepresentation, ...],
+    ) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT state,embedding_dim FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"
+                        ),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            if len(rows) > 500:
+                raise IndexingError("too_many_rows")
+            if not rows:
+                return
+            wanted = {r.chunk_id for r in rows}
+            found = await session.scalar(
+                text(
+                    "SELECT count(*) FROM chunks WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": sorted(wanted)},
+            )
+            if found != len(wanted):
+                raise NotFoundError()
+            if any(len(r.embedding) != version["embedding_dim"] for r in rows):
+                raise IndexingError("dimension_mismatch")
+            stored = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT technique_id,generator_json FROM representation_sets WHERE index_version_id=:i AND representation_key=:k"
+                        ),
+                        {"i": iid, "k": rep_set.representation_key},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if stored is not None and (
+                stored["technique_id"] != rep_set.technique_id or stored["generator_json"] != rep_set.generator_json
+            ):
+                raise IndexingError("representation_set_conflict")
+            slots = [(r.chunk_id, r.kind, r.ordinal) for r in rows]
+            if len(set(slots)) != len(slots):
+                raise IndexingError("duplicate_representation")
+            if stored is None:
+                await session.execute(
+                    text("""INSERT INTO representation_sets (tenant_id,project_id,index_version_id,representation_key,technique_id,generator_json)
+                    VALUES (:t,:p,:i,:k,:tech,:g)"""),
+                    {
+                        "t": scope.tenant_id,
+                        "p": scope.project_id,
+                        "i": iid,
+                        "k": rep_set.representation_key,
+                        "tech": rep_set.technique_id,
+                        "g": rep_set.generator_json,
+                    },
+                )
+            for r in rows:
+                try:
+                    async with session.begin_nested():
+                        await session.execute(
+                            text("""INSERT INTO chunk_representations
+                            (tenant_id,project_id,index_version_id,chunk_id,representation_key,kind,ordinal,text,text_sha256,embedded_input_sha256,embedding)
+                            VALUES (:t,:p,:i,:c,:k,:kind,:o,:text,:th,:eh,CAST(:e AS vector))"""),
+                            {
+                                "t": scope.tenant_id,
+                                "p": scope.project_id,
+                                "i": iid,
+                                "c": r.chunk_id,
+                                "k": rep_set.representation_key,
+                                "kind": r.kind,
+                                "o": r.ordinal,
+                                "text": r.text,
+                                "th": r.text_sha256,
+                                "eh": r.embedded_input_sha256,
+                                "e": "[" + ",".join(repr(x) for x in r.embedding) + "]",
+                            },
+                        )
+                except IntegrityError as exc:
+                    if "pk_chunk_representations" in str(exc):
+                        raise IndexingError("duplicate_representation") from None
+                    raise
+
+    async def get_representation_set(self, scope: Scope, index_version_id: str, key: str) -> RepresentationSet:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            row = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT representation_key,technique_id,generator_json FROM representation_sets "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND representation_key=:k"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": key},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                raise NotFoundError()
+            return RepresentationSet(
+                representation_key=row["representation_key"],
+                technique_id=row["technique_id"],
+                generator_json=row["generator_json"],
+            )
+
+    async def representation_search(
+        self, scope: Scope, index_version_id: str, key: str, query: tuple[float, ...], k: int
+    ) -> list[ScoredRepresentation]:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT state,embedding_dim FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"
+                        ),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            if not 1 <= k <= 100:
+                raise IndexingError("invalid_k")
+            vector = check_vector(query)
+            if len(vector) != version["embedding_dim"]:
+                raise IndexingError("dimension_mismatch")
+            if (
+                await session.scalar(
+                    text(
+                        "SELECT 1 FROM representation_sets WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND representation_key=:k"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": key},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            literal = "[" + ",".join(repr(x) for x in vector) + "]"
+            rows = (
+                await session.execute(
+                    text("""SELECT c.*, r.kind AS rep_kind, r.ordinal AS rep_ordinal, r.text AS rep_text,
+                       r.text_sha256 AS rep_text_sha256, r.embedded_input_sha256 AS rep_embedded_input_sha256,
+                       r.representation_key AS rep_key, r.embedding <=> CAST(:q AS vector) AS distance
+                FROM chunk_representations r
+                JOIN chunks c ON c.id=r.chunk_id AND c.tenant_id=r.tenant_id AND c.project_id=r.project_id AND c.index_version_id=r.index_version_id
+                JOIN index_versions v ON v.id=r.index_version_id AND v.tenant_id=r.tenant_id AND v.project_id=r.project_id
+                WHERE r.tenant_id=:t AND r.project_id=:p AND r.index_version_id=:i AND r.representation_key=:k AND v.state='ready'
+                ORDER BY distance, c.ordinal, r.kind COLLATE "C", r.ordinal LIMIT :n"""),
+                    {"q": literal, "t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": key, "n": k},
+                )
+            ).mappings()
+            return [
+                ScoredRepresentation(
+                    chunk=_chunk(row),
+                    representation=RepresentationRecord(
+                        chunk_id=str(row["id"]),
+                        kind=row["rep_kind"],
+                        ordinal=row["rep_ordinal"],
+                        text=row["rep_text"],
+                        text_sha256=row["rep_text_sha256"],
+                        embedded_input_sha256=row["rep_embedded_input_sha256"],
+                        index_version_id=str(row["index_version_id"]),
+                        tenant_id=str(row["tenant_id"]),
+                        project_id=str(row["project_id"]),
+                        representation_key=row["rep_key"],
+                    ),
+                    distance=float(row["distance"]),
+                    rank=n,
+                )
+                for n, row in enumerate(rows, 1)
+            ]
+
+    async def add_entity_graph(self, scope: Scope, index_version_id: str, graph: EntityGraph) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            graph.check_scope(scope, iid)
+            # Same error order as the in-memory store: a duplicate key is reported before span checks.
+            # The IntegrityError mapping below stays as the fallback for concurrent inserts.
+            if await session.scalar(text("SELECT 1 FROM entity_graphs WHERE graph_key=:g"), {"g": graph.graph_key}):
+                raise IndexingError("graph_exists")
+            spans = [m for e in graph.entities for m in e.mentions] + [s for r in graph.relations for s in r.evidence]
+            chunk_ids = sorted({s.chunk_id for s in spans})
+            chunks: dict[str, Any] = {}
+            if chunk_ids:
+                found = (
+                    await session.execute(
+                        text(
+                            "SELECT id,extraction_view_id,start_cp,end_cp,text FROM chunks "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": chunk_ids},
+                    )
+                ).mappings()
+                chunks = {str(row["id"]): row for row in found}
+            for span in spans:
+                chunk = chunks.get(span.chunk_id)
+                if (
+                    chunk is None
+                    or span.extraction_view_id != str(chunk["extraction_view_id"])
+                    or not chunk["start_cp"] <= span.start < span.end <= chunk["end_cp"]
+                    or chunk["text"][span.start - chunk["start_cp"] : span.end - chunk["start_cp"]] != span.quote
+                ):
+                    raise IndexingError("graph_source_mismatch")
+            base = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": graph.graph_key}
+            try:
+                await session.execute(
+                    text("""INSERT INTO entity_graphs (tenant_id,project_id,index_version_id,graph_key,technique_id,generator_json)
+                    VALUES (:t,:p,:i,:g,:tech,:gen)"""),
+                    {**base, "tech": graph.technique_id, "gen": graph.generator_json},
+                )
+            except IntegrityError as exc:
+                if "pk_entity_graphs" in str(exc) or "uq_entity_graphs" in str(exc):
+                    raise IndexingError("graph_exists") from None
+                raise
+            if graph.entities:
+                await session.execute(
+                    text("""INSERT INTO graph_entities (tenant_id,project_id,index_version_id,graph_key,entity_id,name,type)
+                    VALUES (:t,:p,:i,:g,:eid,:name,:type)"""),
+                    [{**base, "eid": e.entity_id, "name": e.name, "type": e.type} for e in graph.entities],
+                )
+            if graph.relations:
+                await session.execute(
+                    text("""INSERT INTO graph_relations (tenant_id,project_id,index_version_id,graph_key,relation_id,source_id,target_id,label)
+                    VALUES (:t,:p,:i,:g,:rid,:src,:dst,:label)"""),
+                    [
+                        {**base, "rid": r.relation_id, "src": r.source_id, "dst": r.target_id, "label": r.label}
+                        for r in graph.relations
+                    ],
+                )
+            span_rows = [(("entity", e.entity_id), n, m) for e in graph.entities for n, m in enumerate(e.mentions)] + [
+                (("relation", r.relation_id), n, s) for r in graph.relations for n, s in enumerate(r.evidence)
+            ]
+            if span_rows:
+                await session.execute(
+                    text("""INSERT INTO graph_spans
+                    (tenant_id,project_id,index_version_id,graph_key,owner_kind,owner_id,ordinal,chunk_id,extraction_view_id,start_cp,end_cp,quote)
+                    VALUES (:t,:p,:i,:g,:kind,:oid,:o,:c,:v,:s,:e,:q)"""),
+                    [
+                        {
+                            **base,
+                            "kind": owner[0],
+                            "oid": owner[1],
+                            "o": ordinal,
+                            "c": span.chunk_id,
+                            "v": span.extraction_view_id,
+                            "s": span.start,
+                            "e": span.end,
+                            "q": span.quote,
+                        }
+                        for owner, ordinal, span in span_rows
+                    ],
+                )
+
+    async def get_entity_graph(self, scope: Scope, index_version_id: str, graph_key: str) -> EntityGraph:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            params = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": graph_key}
+            where = "tenant_id=:t AND project_id=:p AND index_version_id=:i AND graph_key=:g"
+            head = (
+                (
+                    await session.execute(
+                        text(f"SELECT technique_id,generator_json FROM entity_graphs WHERE {where}"), params
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if head is None:
+                raise NotFoundError()
+            entity_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT entity_id,name,type FROM graph_entities WHERE {where} ORDER BY entity_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            relation_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT relation_id,source_id,target_id,label FROM graph_relations WHERE {where} ORDER BY relation_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            span_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT owner_kind,owner_id,chunk_id,extraction_view_id,start_cp,end_cp,quote FROM graph_spans WHERE {where} ORDER BY owner_kind COLLATE "C", owner_id COLLATE "C", ordinal'
+                    ),
+                    params,
+                )
+            ).mappings()
+            spans: dict[tuple[str, str], list[GraphSpan]] = {}
+            for row in span_rows:
+                spans.setdefault((row["owner_kind"], row["owner_id"]), []).append(
+                    GraphSpan(
+                        chunk_id=str(row["chunk_id"]),
+                        extraction_view_id=str(row["extraction_view_id"]),
+                        start=row["start_cp"],
+                        end=row["end_cp"],
+                        quote=row["quote"],
+                    )
+                )
+            entities = tuple(
+                Entity(
+                    entity_id=row["entity_id"],
+                    name=row["name"],
+                    type=row["type"],
+                    mentions=tuple(spans.get(("entity", row["entity_id"]), ())),
+                )
+                for row in entity_rows
+            )
+            relations = tuple(
+                Relation(
+                    relation_id=row["relation_id"],
+                    source_id=row["source_id"],
+                    target_id=row["target_id"],
+                    label=row["label"],
+                    evidence=tuple(spans.get(("relation", row["relation_id"]), ())),
+                )
+                for row in relation_rows
+            )
+            return EntityGraph(
+                schema=GRAPH_SCHEMA,
+                graph_key=graph_key,
+                tenant_id=scope.tenant_id,
+                project_id=scope.project_id,
+                index_version_id=iid,
+                technique_id=head["technique_id"],
+                generator_json=head["generator_json"],
+                entities=entities,
+                relations=relations,
+            )
+
+    async def add_summary_tree(self, scope: Scope, index_version_id: str, tree: SummaryTree) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            tree.check_scope(scope, iid)
+            # Same error order as the in-memory store: a duplicate key is reported before leaf checks.
+            if await session.scalar(text("SELECT 1 FROM summary_trees WHERE tree_key=:k"), {"k": tree.tree_key}):
+                raise IndexingError("tree_exists")
+            leaves = [n for n in tree.nodes if n.kind == "leaf"]
+            chunk_ids = sorted({n.span.chunk_id for n in leaves if n.span is not None})
+            chunks: dict[str, Any] = {}
+            if chunk_ids:
+                found = (
+                    await session.execute(
+                        text(
+                            "SELECT id,extraction_view_id,start_cp,end_cp,text FROM chunks "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": chunk_ids},
+                    )
+                ).mappings()
+                chunks = {str(row["id"]): row for row in found}
+            seen: set[str] = set()
+            for node in leaves:
+                span = node.span
+                chunk = chunks.get(span.chunk_id) if span is not None else None
+                if (
+                    span is None
+                    or chunk is None
+                    or span.chunk_id in seen
+                    or span.extraction_view_id != str(chunk["extraction_view_id"])
+                    or not chunk["start_cp"] <= span.start < span.end <= chunk["end_cp"]
+                    or chunk["text"][span.start - chunk["start_cp"] : span.end - chunk["start_cp"]] != span.quote
+                ):
+                    raise IndexingError("tree_source_mismatch")
+                seen.add(span.chunk_id)
+            base = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": tree.tree_key}
+            try:
+                await session.execute(
+                    text("""INSERT INTO summary_trees
+                    (tenant_id,project_id,index_version_id,tree_key,technique_id,embedding_key,embedding_dim,generator_json)
+                    VALUES (:t,:p,:i,:g,:tech,:ekey,:dim,:gen)"""),
+                    {
+                        **base,
+                        "tech": tree.technique_id,
+                        "ekey": tree.embedding_key,
+                        "dim": len(tree.nodes[0].embedding),
+                        "gen": tree.generator_json,
+                    },
+                )
+            except IntegrityError as exc:
+                if "pk_summary_trees" in str(exc) or "uq_summary_trees" in str(exc):
+                    raise IndexingError("tree_exists") from None
+                raise
+            await session.execute(
+                text("""INSERT INTO tree_nodes
+                (tenant_id,project_id,index_version_id,tree_key,node_id,level,kind,text,synthetic,embedding,chunk_id,extraction_view_id,start_cp,end_cp)
+                VALUES (:t,:p,:i,:g,:nid,:lv,:kind,:txt,:syn,CAST(:emb AS double precision[]),:c,:v,:s,:e)"""),
+                [
+                    {
+                        **base,
+                        "nid": n.node_id,
+                        "lv": n.level,
+                        "kind": n.kind,
+                        "txt": n.text,
+                        "syn": n.synthetic,
+                        "emb": list(n.embedding),
+                        "c": None if n.span is None else n.span.chunk_id,
+                        "v": None if n.span is None else n.span.extraction_view_id,
+                        "s": None if n.span is None else n.span.start,
+                        "e": None if n.span is None else n.span.end,
+                    }
+                    for n in tree.nodes
+                ],
+            )
+            edges = [
+                {**base, "par": n.node_id, "chd": c, "pos": pos} for n in tree.nodes for pos, c in enumerate(n.children)
+            ]
+            if edges:
+                await session.execute(
+                    text("""INSERT INTO tree_edges (tenant_id,project_id,index_version_id,tree_key,parent_id,child_id,position)
+                    VALUES (:t,:p,:i,:g,:par,:chd,:pos)"""),
+                    edges,
+                )
+
+    async def get_summary_tree(self, scope: Scope, index_version_id: str, tree_key: str) -> SummaryTree:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            params = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": tree_key}
+            where = "tenant_id=:t AND project_id=:p AND index_version_id=:i AND tree_key=:g"
+            head = (
+                (
+                    await session.execute(
+                        text(f"SELECT technique_id,embedding_key,generator_json FROM summary_trees WHERE {where}"),
+                        params,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if head is None:
+                raise NotFoundError()
+            node_rows = (
+                await session.execute(
+                    text(
+                        "SELECT node_id,level,kind,text,synthetic,embedding,chunk_id,extraction_view_id,start_cp,end_cp "
+                        f'FROM tree_nodes WHERE {where} ORDER BY level, node_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            edge_rows = (
+                await session.execute(
+                    text(
+                        f'SELECT parent_id,child_id FROM tree_edges WHERE {where} ORDER BY parent_id COLLATE "C", position'
+                    ),
+                    params,
+                )
+            ).mappings()
+            children: dict[str, list[str]] = {}
+            for row in edge_rows:
+                children.setdefault(row["parent_id"], []).append(row["child_id"])
+            # Rebuild through the validating constructors; a stored row set that breaks a domain rule is invalid.
+            try:
+                nodes = tuple(
+                    TreeNode(
+                        node_id=row["node_id"],
+                        level=row["level"],
+                        kind=row["kind"],
+                        text=row["text"],
+                        span=None
+                        if row["chunk_id"] is None
+                        else GraphSpan(
+                            chunk_id=str(row["chunk_id"]),
+                            extraction_view_id=str(row["extraction_view_id"]),
+                            start=row["start_cp"],
+                            end=row["end_cp"],
+                            quote=row["text"],
+                        ),
+                        children=tuple(children.get(row["node_id"], ())),
+                        embedding=tuple(row["embedding"]),
+                        synthetic=row["synthetic"],
+                    )
+                    for row in node_rows
+                )
+                return SummaryTree(
+                    schema=TREE_SCHEMA,
+                    tree_key=tree_key,
+                    tenant_id=scope.tenant_id,
+                    project_id=scope.project_id,
+                    index_version_id=iid,
+                    technique_id=head["technique_id"],
+                    embedding_key=head["embedding_key"],
+                    generator_json=head["generator_json"],
+                    nodes=nodes,
+                )
+            except ValidationError as exc:
+                raise IndexingError("tree_invalid") from exc
+
+    async def add_knowledge_graph(self, scope: Scope, index_version_id: str, graph: KnowledgeGraph) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            state = await session.scalar(
+                text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            if state is None:
+                raise NotFoundError()
+            if state != "ready":
+                raise IndexingError("not_ready")
+            graph.check_scope(scope, iid)
+            # Same error order as the in-memory store: a duplicate key is reported before span checks.
+            # kg_key hashes index_version_id (owned by one tenant), so this global lookup reveals nothing cross-tenant.
+            if await session.scalar(text("SELECT 1 FROM knowledge_graphs WHERE kg_key=:k"), {"k": graph.kg_key}):
+                raise IndexingError("kag_exists")
+            span_rows = [(("entity", e.entity_id), n, m) for e in graph.entities for n, m in enumerate(e.mentions)] + [
+                (("fact", f.fact_id), n, s) for f in graph.facts for n, s in enumerate(f.evidence)
+            ]
+            chunk_ids = sorted({s.chunk_id for _, _, s in span_rows})
+            chunks: dict[str, Any] = {}
+            if chunk_ids:
+                found = (
+                    await session.execute(
+                        text(
+                            "SELECT id,extraction_view_id,start_cp,end_cp,text FROM chunks "
+                            "WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": chunk_ids},
+                    )
+                ).mappings()
+                chunks = {str(row["id"]): row for row in found}
+            for _, _, span in span_rows:
+                chunk = chunks.get(span.chunk_id)
+                if (
+                    chunk is None
+                    or span.extraction_view_id != str(chunk["extraction_view_id"])
+                    or not chunk["start_cp"] <= span.start < span.end <= chunk["end_cp"]
+                    or chunk["text"][span.start - chunk["start_cp"] : span.end - chunk["start_cp"]] != span.quote
+                ):
+                    raise IndexingError("kag_source_mismatch")
+            base = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": graph.kg_key}
+            try:
+                await session.execute(
+                    text("""INSERT INTO knowledge_graphs
+                    (tenant_id,project_id,index_version_id,kg_key,technique_id,schema_json,schema_sha256,generator_json)
+                    VALUES (:t,:p,:i,:g,:tech,:sj,:sha,:gen)"""),
+                    {
+                        **base,
+                        "tech": graph.technique_id,
+                        "sj": graph.knowledge_schema._canonical_json(),
+                        "sha": graph.knowledge_schema.schema_sha256(),
+                        "gen": graph.generator_json,
+                    },
+                )
+            except IntegrityError as exc:
+                if "pk_knowledge_graphs" in str(exc) or "uq_knowledge_graphs" in str(exc):
+                    raise IndexingError("kag_exists") from None
+                raise
+            if graph.entities:
+                await session.execute(
+                    text("""INSERT INTO kg_entities (tenant_id,project_id,index_version_id,kg_key,entity_id,type,name)
+                    VALUES (:t,:p,:i,:g,:eid,:type,:name)"""),
+                    [{**base, "eid": e.entity_id, "type": e.type, "name": e.name} for e in graph.entities],
+                )
+            if graph.facts:
+                await session.execute(
+                    text("""INSERT INTO kg_facts
+                    (tenant_id,project_id,index_version_id,kg_key,fact_id,subject_id,predicate,object_id,literal_text,literal_int)
+                    VALUES (:t,:p,:i,:g,:fid,:sub,:pred,:obj,:ltext,:lint)"""),
+                    [
+                        {
+                            **base,
+                            "fid": f.fact_id,
+                            "sub": f.subject_id,
+                            "pred": f.predicate,
+                            "obj": f.object_id,
+                            "ltext": f.literal if isinstance(f.literal, str) else None,
+                            "lint": f.literal if isinstance(f.literal, int) else None,
+                        }
+                        for f in graph.facts
+                    ],
+                )
+            if span_rows:
+                await session.execute(
+                    text("""INSERT INTO kg_spans
+                    (tenant_id,project_id,index_version_id,kg_key,owner_kind,owner_id,ordinal,chunk_id,extraction_view_id,start_cp,end_cp,quote)
+                    VALUES (:t,:p,:i,:g,:kind,:oid,:o,:c,:v,:s,:e,:q)"""),
+                    [
+                        {
+                            **base,
+                            "kind": owner[0],
+                            "oid": owner[1],
+                            "o": ordinal,
+                            "c": span.chunk_id,
+                            "v": span.extraction_view_id,
+                            "s": span.start,
+                            "e": span.end,
+                            "q": span.quote,
+                        }
+                        for owner, ordinal, span in span_rows
+                    ],
+                )
+
+    async def get_knowledge_graph(self, scope: Scope, index_version_id: str, kg_key: str) -> KnowledgeGraph:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            params = {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "g": kg_key}
+            where = "tenant_id=:t AND project_id=:p AND index_version_id=:i AND kg_key=:g"
+            head = (
+                (
+                    await session.execute(
+                        text(
+                            f"SELECT technique_id,schema_json,schema_sha256,generator_json FROM knowledge_graphs WHERE {where}"
+                        ),
+                        params,
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if head is None:
+                raise NotFoundError()
+            entity_rows = (
+                await session.execute(
+                    text(f'SELECT entity_id,type,name FROM kg_entities WHERE {where} ORDER BY entity_id COLLATE "C"'),
+                    params,
+                )
+            ).mappings()
+            fact_rows = (
+                await session.execute(
+                    text(
+                        "SELECT fact_id,subject_id,predicate,object_id,literal_text,literal_int "
+                        f'FROM kg_facts WHERE {where} ORDER BY fact_id COLLATE "C"'
+                    ),
+                    params,
+                )
+            ).mappings()
+            span_rows = (
+                await session.execute(
+                    text(
+                        "SELECT owner_kind,owner_id,chunk_id,extraction_view_id,start_cp,end_cp,quote "
+                        f'FROM kg_spans WHERE {where} ORDER BY owner_kind COLLATE "C", owner_id COLLATE "C", ordinal'
+                    ),
+                    params,
+                )
+            ).mappings()
+            # Rebuild through the validating constructors; a stored row set that breaks a domain rule is invalid.
+            try:
+                schema = KnowledgeSchema.model_validate_json(head["schema_json"])
+                if schema.schema_sha256() != head["schema_sha256"].strip():
+                    raise IndexingError("kag_invalid")
+                spans: dict[tuple[str, str], list[GraphSpan]] = {}
+                for row in span_rows:
+                    spans.setdefault((row["owner_kind"], row["owner_id"]), []).append(
+                        GraphSpan(
+                            chunk_id=str(row["chunk_id"]),
+                            extraction_view_id=str(row["extraction_view_id"]),
+                            start=row["start_cp"],
+                            end=row["end_cp"],
+                            quote=row["quote"],
+                        )
+                    )
+                entities = tuple(
+                    KEntity(
+                        entity_id=row["entity_id"],
+                        type=row["type"],
+                        name=row["name"],
+                        mentions=tuple(spans.get(("entity", row["entity_id"]), ())),
+                    )
+                    for row in entity_rows
+                )
+                facts = tuple(
+                    Fact(
+                        fact_id=row["fact_id"],
+                        subject_id=row["subject_id"],
+                        predicate=row["predicate"],
+                        object_id=row["object_id"],
+                        literal=row["literal_text"] if row["literal_text"] is not None else row["literal_int"],
+                        evidence=tuple(spans.get(("fact", row["fact_id"]), ())),
+                    )
+                    for row in fact_rows
+                )
+                return KnowledgeGraph(
+                    schema=KG_SCHEMA,
+                    kg_key=kg_key,
+                    tenant_id=scope.tenant_id,
+                    project_id=scope.project_id,
+                    index_version_id=iid,
+                    technique_id=head["technique_id"],
+                    knowledge_schema=schema,
+                    generator_json=head["generator_json"],
+                    entities=entities,
+                    facts=facts,
+                )
+            except (ValidationError, IndexingError) as exc:
+                raise IndexingError("kag_invalid") from exc
+
+    async def _locked(self, session: AsyncSession, scope: Scope, iid: str):
+        row = (
+            (
+                await session.execute(
+                    text("SELECT * FROM index_versions WHERE id=:id AND tenant_id=:t AND project_id=:p FOR UPDATE"),
+                    {"id": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            raise NotFoundError()
+        return row
+
+    async def _views(self, session: AsyncSession, scope: Scope, version_id: str) -> tuple[str, ...]:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT extraction_view_id FROM index_version_views WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i ORDER BY extraction_view_id"
+                ),
+                {"t": scope.tenant_id, "p": scope.project_id, "i": version_id},
+            )
+        ).scalars()
+        return tuple(str(x) for x in rows)
+
+    async def create_index_version(self, scope: Scope, new: NewIndexVersion) -> IndexVersion:
+        async with write(self._session) as session:
+            for view_id in new.extraction_view_ids:
+                found = await session.scalar(
+                    text("SELECT id FROM extraction_views WHERE id=:v AND tenant_id=:t AND project_id=:p"),
+                    {"v": view_id, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                if found is None:
+                    raise NotFoundError()
+            iid = new_id()
+            values = new.model_dump(exclude={"extraction_view_ids"})
+            await session.execute(
+                text("""INSERT INTO index_versions
+                (id,tenant_id,project_id,chunker_id,chunker_version,chunker_config_json,chunker_config_sha256,
+                 embedding_profile_id,embedding_provider,embedding_model,embedding_dim,distance,embedding_key,
+                 corpus_sha256,unanchored_chunk_count,state,chunk_count)
+                VALUES (:id,:t,:p,:chunker_id,:chunker_version,:chunker_config_json,:chunker_config_sha256,
+                 :embedding_profile_id,:embedding_provider,:embedding_model,:embedding_dim,:distance,:embedding_key,
+                 :corpus_sha256,:unanchored_chunk_count,'building',0)"""),
+                {**values, "id": iid, "t": scope.tenant_id, "p": scope.project_id},
+            )
+            for view_id in new.extraction_view_ids:
+                await session.execute(
+                    text(
+                        "INSERT INTO index_version_views (tenant_id,project_id,index_version_id,extraction_view_id) VALUES (:t,:p,:i,:v)"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "v": view_id},
+                )
+            row = (await session.execute(text("SELECT * FROM index_versions WHERE id=:i"), {"i": iid})).mappings().one()
+            return _version(row, tuple(new.extraction_view_ids))
+
+    async def add_chunks(self, scope: Scope, index_version_id: str, chunks: tuple[NewChunk, ...]) -> None:
+        iid = _uuid(index_version_id)
+        async with write(self._session) as session:
+            version = await self._locked(session, scope, iid)
+            if version["state"] != "building":
+                raise IndexingError("not_building")
+            for chunk in chunks:
+                vector = check_vector(chunk.embedding)
+                if len(vector) != version["embedding_dim"]:
+                    raise IndexingError("dimension_mismatch")
+                if (
+                    await session.scalar(
+                        text(
+                            "SELECT 1 FROM index_version_views WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND extraction_view_id=:v"
+                        ),
+                        {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "v": chunk.extraction_view_id},
+                    )
+                    is None
+                ):
+                    raise NotFoundError()
+                try:
+                    await session.execute(
+                        text("""INSERT INTO chunks
+                        (id,tenant_id,project_id,index_version_id,extraction_view_id,ordinal,start_cp,end_cp,split_level,block_ids,text,text_sha256,embedding,parent_start_cp,parent_end_cp)
+                        VALUES (:id,:t,:p,:i,:v,:ordinal,:start,:end,:split_level,:block_ids,:text,:text_sha256,CAST(:embedding AS vector),:parent_start_cp,:parent_end_cp)"""),
+                        {
+                            "id": new_id(),
+                            "t": scope.tenant_id,
+                            "p": scope.project_id,
+                            "i": iid,
+                            "v": chunk.extraction_view_id,
+                            "ordinal": chunk.ordinal,
+                            "start": chunk.start,
+                            "end": chunk.end,
+                            "split_level": chunk.split_level,
+                            "block_ids": list(chunk.block_ids),
+                            "text": chunk.text,
+                            "text_sha256": chunk.text_sha256,
+                            "embedding": "[" + ",".join(repr(x) for x in vector) + "]",
+                            "parent_start_cp": chunk.parent_start_cp,
+                            "parent_end_cp": chunk.parent_end_cp,
+                        },
+                    )
+                except IntegrityError as exc:
+                    if "uq_chunks_version_ordinal" in str(exc):
+                        raise IndexingError("duplicate_ordinal") from None
+                    raise
+
+    async def _transition(self, scope: Scope, iid: str, target: str) -> IndexVersion:
+        async with write(self._session) as session:
+            row = await self._locked(session, scope, iid)
+            if row["state"] != "building":
+                raise IndexingError("not_building")
+            count = await session.scalar(
+                text("SELECT count(*) FROM chunks WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i"),
+                {"t": scope.tenant_id, "p": scope.project_id, "i": iid},
+            )
+            if target == "ready" and count == 0:
+                raise IndexingError("empty_index")
+            await session.execute(
+                text(
+                    "UPDATE index_versions SET state=:s,chunk_count=:c,ready_at=:r WHERE id=:i AND tenant_id=:t AND project_id=:p"
+                ),
+                {
+                    "s": target,
+                    "c": count if target == "ready" else row["chunk_count"],
+                    "r": datetime.now(UTC) if target == "ready" else None,
+                    "i": iid,
+                    "t": scope.tenant_id,
+                    "p": scope.project_id,
+                },
+            )
+            updated = (
+                (await session.execute(text("SELECT * FROM index_versions WHERE id=:i"), {"i": iid})).mappings().one()
+            )
+            return _version(updated, await self._views(session, scope, iid))
+
+    async def mark_ready(self, scope: Scope, index_version_id: str) -> IndexVersion:
+        return await self._transition(scope, _uuid(index_version_id), "ready")
+
+    async def mark_failed(self, scope: Scope, index_version_id: str) -> IndexVersion:
+        return await self._transition(scope, _uuid(index_version_id), "failed")
+
+    async def get_index_version(self, scope: Scope, index_version_id: str) -> IndexVersion:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            row = (
+                (
+                    await session.execute(
+                        text("SELECT * FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if row is None:
+                raise NotFoundError()
+            return _version(row, await self._views(session, scope, iid))
+
+    async def chunk_embeddings(
+        self, scope: Scope, index_version_id: str, chunk_ids: tuple[str, ...]
+    ) -> dict[str, tuple[float, ...]]:
+        iid = _uuid(index_version_id)
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            if len(chunk_ids) > 100:
+                raise IndexingError("too_many_ids")
+            ids = []
+            for value in chunk_ids:
+                try:
+                    parsed = uuid.UUID(value)
+                except (ValueError, AttributeError, TypeError):
+                    continue
+                if parsed.version == 4 and str(parsed) == value:
+                    ids.append(parsed)
+            if not ids:
+                return {}
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT id, embedding::text AS e FROM chunks WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i AND id = ANY(CAST(:ids AS uuid[]))"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "ids": ids},
+                )
+            ).mappings()
+            return {str(row["id"]): tuple(float(value) for value in json.loads(row["e"])) for row in rows}
+
+    async def list_chunks(
+        self, scope: Scope, index_version_id: str, *, offset: int = 0, limit: int = 100
+    ) -> list[ChunkRecord]:
+        iid = _uuid(index_version_id)
+        if offset < 0 or not 1 <= limit <= 500:
+            raise IndexingError("invalid_page")
+        async with read(self._session) as session:
+            if (
+                await session.scalar(
+                    text("SELECT 1 FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                    {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                )
+                is None
+            ):
+                raise NotFoundError()
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT * FROM chunks WHERE tenant_id=:t AND project_id=:p AND index_version_id=:i ORDER BY ordinal OFFSET :o LIMIT :l"
+                    ),
+                    {"t": scope.tenant_id, "p": scope.project_id, "i": iid, "o": offset, "l": limit},
+                )
+            ).mappings()
+            return [_chunk(row) for row in rows]
+
+    async def search(self, scope: Scope, index_version_id: str, query: tuple[float, ...], k: int) -> list[ScoredChunk]:
+        iid = _uuid(index_version_id)
+        if not 1 <= k <= 100:
+            raise IndexingError("invalid_k")
+        vector = check_vector(query)
+        literal = "[" + ",".join(repr(x) for x in vector) + "]"
+        async with read(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT state,embedding_dim FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"
+                        ),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            if version["embedding_dim"] != len(vector):
+                raise IndexingError("dimension_mismatch")
+            rows = (
+                await session.execute(
+                    text("""SELECT c.*, c.embedding <=> CAST(:q AS vector) AS distance
+                FROM chunks c JOIN index_versions v ON v.id=c.index_version_id AND v.tenant_id=c.tenant_id AND v.project_id=c.project_id
+                WHERE c.tenant_id=:t AND c.project_id=:p AND c.index_version_id=:i AND v.state='ready'
+                ORDER BY c.embedding <=> CAST(:q AS vector), c.ordinal LIMIT :k"""),
+                    {"q": literal, "t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": k},
+                )
+            ).mappings()
+            return [
+                ScoredChunk(chunk=_chunk(row), distance=float(row["distance"]), rank=n) for n, row in enumerate(rows, 1)
+            ]
+
+    async def fts_search(
+        self,
+        scope: Scope,
+        index_version_id: str,
+        query: str,
+        k: int,
+        *,
+        operator: str,
+    ) -> list[FtsScoredChunk]:
+        iid = _uuid(index_version_id)
+        if not 1 <= k <= 100:
+            raise IndexingError("invalid_k")
+        if operator == "and":
+            sql_query = query
+        elif operator == "or":
+            terms = [term for term in re.findall(r"[^\W_]+", query, flags=re.UNICODE) if term.lower() != "or"]
+            if not terms:
+                raise IndexingError("no_query_terms")
+            sql_query = " or ".join(terms)
+        else:
+            raise ValueError("operator must be 'and' or 'or'")
+        async with read(self._session) as session:
+            version = (
+                (
+                    await session.execute(
+                        text("SELECT state FROM index_versions WHERE id=:i AND tenant_id=:t AND project_id=:p"),
+                        {"i": iid, "t": scope.tenant_id, "p": scope.project_id},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if version is None:
+                raise NotFoundError()
+            if version["state"] != "ready":
+                raise IndexingError("not_ready")
+            # ts_rank_cd normalization 0: no length normalization; scores are not comparable across queries.
+            rows = (
+                await session.execute(
+                    text("""SELECT c.*, ts_rank_cd(c.fts_simple, q, 0) AS ts_rank
+                FROM chunks c JOIN index_versions v ON v.id=c.index_version_id AND v.tenant_id=c.tenant_id AND v.project_id=c.project_id,
+                     websearch_to_tsquery('simple', :q) q
+                WHERE c.fts_simple @@ q AND c.tenant_id=:t AND c.project_id=:p
+                  AND c.index_version_id=:i AND v.state='ready'
+                ORDER BY ts_rank DESC, c.ordinal LIMIT :k"""),
+                    {"q": sql_query, "t": scope.tenant_id, "p": scope.project_id, "i": iid, "k": k},
+                )
+            ).mappings()
+            return [
+                FtsScoredChunk(chunk=_chunk(row), ts_rank=float(row["ts_rank"]), rank=rank)
+                for rank, row in enumerate(rows, 1)
+            ]

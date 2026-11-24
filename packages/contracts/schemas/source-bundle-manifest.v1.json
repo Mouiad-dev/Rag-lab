@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "BundleAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "documents",
+            "structure",
+            "anchors",
+            "text"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "role",
+        "media_type",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "BundleAsset",
+      "type": "object"
+    },
+    "OmittedAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "document_version_id": {
+          "minLength": 1,
+          "title": "Document Version Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "original",
+            "page_render"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "reason": {
+          "const": "not_exported",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_version_id",
+        "kind",
+        "reason"
+      ],
+      "title": "OmittedAsset",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "Provider-qualified pointer to an immutable document version and extraction view.",
+      "properties": {
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "document_version_id": {
+          "minLength": 1,
+          "title": "Document Version Id",
+          "type": "string"
+        },
+        "extraction_view_id": {
+          "minLength": 1,
+          "title": "Extraction View Id",
+          "type": "string"
+        },
+        "provider_namespace": {
+          "minLength": 1,
+          "title": "Provider Namespace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_namespace",
+        "document_id",
+        "document_version_id",
+        "extraction_view_id"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/BundleAsset"
+      },
+      "title": "Assets",
+      "type": "array"
+    },
+    "bundle_id": {
+      "minLength": 1,
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "contract_version": {
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "inclusion_policy": {
+      "const": "text_and_structure",
+      "title": "Inclusion Policy",
+      "type": "string"
+    },
+    "omitted": {
+      "items": {
+        "$ref": "#/$defs/OmittedAsset"
+      },
+      "title": "Omitted",
+      "type": "array"
+    },
+    "provider_namespace": {
+      "minLength": 1,
+      "title": "Provider Namespace",
+      "type": "string"
+    },
+    "views": {
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Views",
+      "type": "array"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "provider_namespace",
+    "created_at",
+    "inclusion_policy",
+    "views",
+    "assets",
+    "omitted"
+  ],
+  "title": "BundleManifest",
+  "type": "object"
+}

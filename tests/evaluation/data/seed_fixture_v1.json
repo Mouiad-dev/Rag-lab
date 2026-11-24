@@ -1,0 +1,196 @@
+{
+  "cases": [
+    {
+      "answerable": true,
+      "case_id": "en-fact",
+      "language": "en",
+      "notes": "",
+      "question": "How often does the Port Sallow observatory record sea levels?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 73,
+          "grade": 1,
+          "quote": "The tidal observatory at Port Sallow records sea levels every 17 minutes.",
+          "start": 0
+        }
+      ],
+      "split": "dev",
+      "tags": []
+    },
+    {
+      "answerable": true,
+      "case_id": "en-variant",
+      "language": "en",
+      "notes": "",
+      "question": "Port Sallow tide readings",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 73,
+          "grade": 1,
+          "quote": "The tidal observatory at Port Sallow records sea levels every 17 minutes.",
+          "start": 0
+        }
+      ],
+      "split": "dev",
+      "tags": []
+    },
+    {
+      "answerable": true,
+      "case_id": "paraphrase",
+      "language": "en",
+      "notes": "",
+      "question": "How frequently is the ocean height measured at the harbour station?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 73,
+          "grade": 1,
+          "quote": "The tidal observatory at Port Sallow records sea levels every 17 minutes.",
+          "start": 0
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "paraphrase"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "id-exact",
+      "language": "en",
+      "notes": "",
+      "question": "AB-1234",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 847,
+          "grade": 1,
+          "quote": "\u0631\u0642\u0645 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1234 \u0641\u064a \u0627\u0644\u0645\u062e\u0632\u0646 \u0627\u0644\u0634\u0645\u0627\u0644\u064a.",
+          "start": 810
+        }
+      ],
+      "split": "dev",
+      "tags": [
+        "identifier"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "en-club",
+      "language": "en",
+      "notes": "",
+      "question": "Which club meets on Tuesday evenings?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 300,
+          "grade": 1,
+          "quote": "Members of the chess club meet on Tuesday evenings.",
+          "start": 249
+        }
+      ],
+      "split": "dev",
+      "tags": []
+    },
+    {
+      "answerable": true,
+      "case_id": "ar-fact",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0643\u0645 \u0645\u062e\u0637\u0648\u0637\u0629 \u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629\u061f",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 134,
+          "grade": 1,
+          "quote": "\u062a\u062d\u0641\u0638 \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 \u062b\u0644\u0627\u062b\u0629 \u0622\u0644\u0627\u0641 \u0648\u0645\u0626\u062a\u064a \u0645\u062e\u0637\u0648\u0637\u0629 \u0641\u064a \u0642\u0628\u0648\u0647\u0627 \u0627\u0644\u0634\u0645\u0627\u0644\u064a.",
+          "start": 75
+        }
+      ],
+      "split": "validation",
+      "tags": []
+    },
+    {
+      "answerable": true,
+      "case_id": "mixed",
+      "language": "mixed",
+      "notes": "",
+      "question": "When does \u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629 open its reading room?",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 953,
+          "grade": 1,
+          "quote": "The Oasis Library (\u0645\u0643\u062a\u0628\u0629 \u0627\u0644\u0648\u0627\u062d\u0629) opens its reading room at 08:30.",
+          "start": 888
+        }
+      ],
+      "split": "validation",
+      "tags": []
+    },
+    {
+      "answerable": false,
+      "case_id": "unanswerable",
+      "language": "en",
+      "notes": "",
+      "question": "What is the population of the oasis town?",
+      "relevant": [],
+      "split": "validation",
+      "tags": []
+    },
+    {
+      "answerable": true,
+      "case_id": "id-ar",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0623\u064a\u0646 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1243\u061f",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 886,
+          "grade": 1,
+          "quote": "\u0631\u0642\u0645 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1243 \u0641\u064a \u0627\u0644\u0645\u062e\u0632\u0646 \u0627\u0644\u062c\u0646\u0648\u0628\u064a.",
+          "start": 849
+        }
+      ],
+      "split": "held_out",
+      "tags": [
+        "identifier"
+      ]
+    },
+    {
+      "answerable": true,
+      "case_id": "ar-diacritic",
+      "language": "ar",
+      "notes": "",
+      "question": "\u0627\u0644\u0645\u064e\u062e\u0652\u0632\u064e\u0646 \u0627\u0644\u062c\u0646\u0648\u0628\u064a",
+      "relevant": [
+        {
+          "doc_key": "paired-fixture",
+          "end": 886,
+          "grade": 1,
+          "quote": "\u0631\u0642\u0645 \u0627\u0644\u0642\u0637\u0639\u0629 AB-1243 \u0641\u064a \u0627\u0644\u0645\u062e\u0632\u0646 \u0627\u0644\u062c\u0646\u0648\u0628\u064a.",
+          "start": 849
+        }
+      ],
+      "split": "held_out",
+      "tags": [
+        "diacritics"
+      ]
+    }
+  ],
+  "dataset_id": "seed-fixture",
+  "dataset_version": "1",
+  "description": "Tiny offline fixture, not a benchmark. Built from the P5.2 bilingual paired fixture.",
+  "documents": [
+    {
+      "doc_key": "paired-fixture",
+      "length": 953,
+      "text_sha256": "c527975e121db72114f569e88afa4e0912bb45a7ac0a5e4224be7a513348c61b"
+    }
+  ],
+  "format": "rag-foundry.eval-dataset",
+  "format_version": "1"
+}

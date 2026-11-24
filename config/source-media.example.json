@@ -1,0 +1,54 @@
+{
+  "contract_version": "1.0",
+  "fixture_only": true,
+  "note": "Illustrative authored text and invented video intervals, not actual extraction, audio alignment or a deployed API.",
+  "raglab_source": {
+    "provider_namespace": "urn:example:knowledge-provider",
+    "document_id": "doc_demo",
+    "document_version_id": "dv_demo_1",
+    "extraction_view_id": "ev_demo_1",
+    "anchor_id": "anchor_demo_1",
+    "block_id": "paragraph_1",
+    "section_path": [
+      "Caching"
+    ],
+    "canonical_block_text": "التخزين المؤقت يعيد استخدام نتيجة سابقة.",
+    "selector": {
+      "unit": "unicode_code_point",
+      "start": 0,
+      "end": 40,
+      "exact": "التخزين المؤقت يعيد استخدام نتيجة سابقة."
+    },
+    "regions": [],
+    "page_index": null,
+    "page_label": null,
+    "precision": "exact_text",
+    "resolution_status": "resolved"
+  },
+  "consumer_owned_manifest": {
+    "asset_id": "video_demo",
+    "asset_version": "render_demo_1",
+    "script_revision": "script_demo_1",
+    "timing_status": "illustrative_unverified",
+    "asset_hash": null,
+    "links": [
+      {
+        "link_id": "link_1",
+        "statement_id": "statement_1",
+        "start_ms": 133000,
+        "end_ms": 161000,
+        "relation": "explains",
+        "source_refs": [
+          {
+            "provider_namespace": "urn:example:knowledge-provider",
+            "document_version_id": "dv_demo_1",
+            "extraction_view_id": "ev_demo_1",
+            "anchor_id": "anchor_demo_1"
+          }
+        ],
+        "semantic_review": "not_reviewed",
+        "timing_review": "not_measured"
+      }
+    ]
+  }
+}

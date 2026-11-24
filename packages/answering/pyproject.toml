@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-foundry-answering"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "rag-foundry-chunking",
+    "rag-foundry-contracts",
+    "rag-foundry-domain",
+    "rag-foundry-ingestion",
+    "rag-foundry-indexing",
+    "rag-foundry-providers",
+    "rag-foundry-techniques",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_foundry_answering"]

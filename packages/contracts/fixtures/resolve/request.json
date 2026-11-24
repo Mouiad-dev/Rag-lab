@@ -1,0 +1,53 @@
+{
+  "contract_version": "1.0",
+  "anchors": [
+    {
+      "contract_version": "1.0",
+      "anchor_id": "xa-en-2",
+      "source": {
+        "provider_namespace": "rag-foundry-fixtures",
+        "document_id": "doc-en",
+        "document_version_id": "docv-en-1",
+        "extraction_view_id": "xv-en-1"
+      },
+      "block_id": "p1",
+      "section_path": [],
+      "text_range": {
+        "start": 68,
+        "end": 85
+      },
+      "exact": "points to a shelf",
+      "prefix": " record ",
+      "suffix": ", so a r",
+      "page_index": null,
+      "page_label": null,
+      "regions": [],
+      "precision": "exact_text",
+      "warnings": []
+    },
+    {
+      "contract_version": "1.0",
+      "anchor_id": "xa-ar-2",
+      "source": {
+        "provider_namespace": "rag-foundry-fixtures",
+        "document_id": "doc-ar",
+        "document_version_id": "docv-ar-1",
+        "extraction_view_id": "xv-ar-1"
+      },
+      "block_id": "p1",
+      "section_path": [],
+      "text_range": {
+        "start": 10,
+        "end": 31
+      },
+      "exact": "فَهْرِسُ المَكْتَبَةِ",
+      "prefix": "حْتَوِي ",
+      "suffix": " عَلَى ب",
+      "page_index": null,
+      "page_label": null,
+      "regions": [],
+      "precision": "exact_text",
+      "warnings": []
+    }
+  ]
+}

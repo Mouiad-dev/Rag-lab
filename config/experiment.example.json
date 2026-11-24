@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "kind": "proposed_experiment_contract",
+  "name": "recursive_dense_baseline",
+  "status": "example_not_executable_yet",
+  "corpus_snapshot": "TO_BE_CREATED",
+  "dataset_version": "TO_BE_CREATED",
+  "pipeline": {
+    "chunking": {
+      "technique_id": "C05",
+      "unit": "tokens",
+      "target_size": 400,
+      "overlap": 60,
+      "tokenizer_profile": "TO_BE_VERIFIED"
+    },
+    "embedding_profile": "TO_BE_CREATED",
+    "index_version": "TO_BE_BUILT",
+    "retrieval": {
+      "branches": [
+        {
+          "technique_id": "R02",
+          "candidate_k": 20
+        }
+      ],
+      "fusion": null,
+      "reranker": null,
+      "final_k": 5
+    },
+    "context": {
+      "max_input_tokens": 3000,
+      "reserve_output_tokens": 800,
+      "preserve_source_spans": true
+    },
+    "generation": {
+      "model_profile": "TO_BE_CONFIGURED",
+      "temperature": 0,
+      "require_citations": true,
+      "allow_abstention": true
+    },
+    "workflow": {
+      "kind": "two_step",
+      "max_retrieval_rounds": 1
+    },
+    "privacy": {
+      "web_fallback": false,
+      "send_document_text_to_remote_provider": false,
+      "trace_raw_source_text": false
+    }
+  },
+  "experiment": {
+    "split": "development",
+    "repetitions": 3,
+    "cache_mode": "disabled",
+    "concurrency": 1,
+    "budget": {
+      "paid_calls_enabled": false,
+      "max_api_cost_usd": 0,
+      "max_case_seconds": 60
+    },
+    "compare_to": null,
+    "metrics": [
+      "hit_rate_at_5",
+      "recall_at_5",
+      "citation_accuracy",
+      "claim_support",
+      "abstention_correctness",
+      "ttft_ms",
+      "end_to_end_ms",
+      "api_cost_usd"
+    ]
+  }
+}
