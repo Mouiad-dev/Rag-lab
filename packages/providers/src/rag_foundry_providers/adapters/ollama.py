@@ -18,9 +18,17 @@ from rag_foundry_providers.adapters._ollama_http import (
     post_json,
     status_error,
 )
-from rag_foundry_providers.capabilities import Capabilities, ModelKind, ModelProfile
-from rag_foundry_providers.errors import ProviderCallError, ProviderError
-from rag_foundry_providers.messages import ChatChunk, ChatRequest, ChatResult, EmbeddingResult
+from rag_foundry_providers.capabilities import Capabilities, Capability, ModelKind, ModelProfile
+from rag_foundry_providers.errors import CapabilityProblem, MissingCapabilityError, ProviderCallError, ProviderError
+from rag_foundry_providers.messages import (
+    ChatChunk,
+    ChatRequest,
+    ChatResult,
+    EmbeddingResult,
+    RawCompletionRequest,
+    RawCompletionResult,
+    TokenLogprob,
+)
 from rag_foundry_providers.ports import check_chat_request
 from rag_foundry_providers.usage import (
     Clock,
@@ -169,6 +177,22 @@ def ollama_chat_profile(
         cost_per_mtok_in=zero,
         cost_per_mtok_out=zero,
         cost_per_mtok_cache_read=zero,
+    )
+
+
+def ollama_raw_completion_profile(
+    id: str = "local-raw-logprobs", model: str = "selfrag-local", *, context_window: int = 2048
+) -> ModelProfile:
+    """Opt-in profile for Ollama models verified to support raw completion logprobs."""
+    zero = Decimal("0")
+    return ModelProfile(
+        id=id,
+        provider="ollama",
+        model=model,
+        kind=ModelKind.CHAT,
+        capabilities=Capabilities(raw_logprobs=True, local=True, context_window=context_window),
+        cost_per_mtok_in=zero,
+        cost_per_mtok_out=zero,
     )
 
 
@@ -368,3 +392,134 @@ class OllamaChatModel:
             if client is not None:
                 await client.aclose()
         yield ChatChunk(delta="", usage=usage)
+
+
+class OllamaRawCompletionModel:
+    """RawCompletionModel on Ollama `POST /api/generate` with token logprobs."""
+
+    def __init__(
+        self,
+        profile: ModelProfile,
+        *,
+        api_base: str,
+        timeout_s: float = 120.0,
+        transport: Any = None,
+        clock: Clock = time.perf_counter,
+    ) -> None:
+        self.profile = profile
+        self._api_base = api_base
+        self._timeout_s = timeout_s
+        self._transport = transport
+        self._clock = clock
+
+    def _bad(self) -> ProviderCallError:
+        return ProviderCallError(self.profile.id, "bad_response")
+
+    @staticmethod
+    def _number(value: Any) -> float | None:
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            return None
+        try:
+            number = float(value)
+        except OverflowError:
+            return None
+        # A log probability cannot be positive; tolerate tiny rounding above zero only.
+        return number if math.isfinite(number) and number <= 1e-6 else None
+
+    def _tokens(self, body: dict[str, Any]) -> tuple[TokenLogprob, ...]:
+        entries = body.get("logprobs")
+        if not isinstance(entries, list):
+            raise self._bad()
+        parsed: list[TokenLogprob] = []
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("token"), str):
+                raise self._bad()
+            logprob = self._number(entry.get("logprob"))
+            alternatives = entry.get("top_logprobs")
+            if logprob is None or not isinstance(alternatives, list):
+                raise self._bad()
+            top: list[tuple[str, float]] = []
+            for alternative in alternatives:
+                if not isinstance(alternative, dict) or not isinstance(alternative.get("token"), str):
+                    raise self._bad()
+                alt_logprob = self._number(alternative.get("logprob"))
+                if alt_logprob is None:
+                    raise self._bad()
+                top.append((alternative["token"], alt_logprob))
+            parsed.append(TokenLogprob(token=entry["token"], logprob=logprob, top=tuple(top)))
+        return tuple(parsed)
+
+    def _usage(self, body: dict[str, Any], request: RawCompletionRequest, text: str, start: float) -> Usage:
+        tokens_in = _count(body.get("prompt_eval_count"))
+        tokens_out = _count(body.get("eval_count"))
+        if tokens_in is not None and tokens_out is not None:
+            source = TokenSource.PROVIDER
+        else:
+            source = TokenSource.ESTIMATED
+            tokens_in = estimate_tokens(request.prompt)
+            tokens_out = estimate_tokens(text)
+        return Usage(
+            profile_id=self.profile.id,
+            provider=self.profile.provider,
+            model=self.profile.model,
+            operation=Operation.CHAT,
+            input_tokens=tokens_in,
+            output_tokens=tokens_out,
+            token_source=source,
+            latency_ms=measure_latency_ms(self._clock, start),
+            estimated_cost_usd=estimate_cost(self.profile, tokens_in, tokens_out),
+            timings=_timings(body),
+        )
+
+    async def complete_raw(self, request: RawCompletionRequest) -> RawCompletionResult:
+        if self.profile.declared(Capability.RAW_LOGPROBS) is not True:
+            raise MissingCapabilityError(
+                (
+                    CapabilityProblem(
+                        stage=None,
+                        profile_id=self.profile.id,
+                        capability=Capability.RAW_LOGPROBS.value,
+                        declared=self.profile.declared(Capability.RAW_LOGPROBS),
+                    ),
+                )
+            )
+        options: dict[str, Any] = {
+            "temperature": request.temperature,
+            "top_p": request.top_p,
+            "top_k": request.top_k,
+            "num_predict": request.max_output_tokens,
+        }
+        if self.profile.capabilities.context_window is not None:
+            options["num_ctx"] = self.profile.capabilities.context_window
+        if request.stop:
+            options["stop"] = list(request.stop)
+        start = self._clock()
+        body = await post_json(
+            self._api_base,
+            "/api/generate",
+            {
+                "model": self.profile.model,
+                "prompt": request.prompt,
+                "raw": True,
+                "logprobs": True,
+                "top_logprobs": request.top_logprobs,
+                "stream": False,
+                "options": options,
+            },
+            timeout_s=self._timeout_s,
+            transport=self._transport,
+            profile_id=self.profile.id,
+        )
+        if "error" in body or body.get("done") is not True:
+            raise self._bad()
+        text = body.get("response")
+        reason = body.get("done_reason")
+        if not isinstance(text, str) or reason not in ("stop", "length"):
+            raise self._bad()
+        tokens = self._tokens(body)
+        return RawCompletionResult(
+            text=text,
+            tokens=tokens,
+            finish_reason=reason,
+            usage=self._usage(body, request, text, start),
+        )

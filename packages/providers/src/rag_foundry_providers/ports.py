@@ -16,6 +16,8 @@ from rag_foundry_providers.messages import (
     ChatResult,
     EmbeddingResult,
     MultivectorResult,
+    RawCompletionRequest,
+    RawCompletionResult,
     RerankResult,
     SparseEncodingResult,
     TokenEncodingResult,
@@ -35,6 +37,15 @@ class ChatModel(Protocol):
     async def complete(self, request: ChatRequest) -> ChatResult: ...
 
     def stream(self, request: ChatRequest) -> AsyncIterator[ChatChunk]: ...
+
+
+@runtime_checkable
+class RawCompletionModel(Protocol):
+    """Raw prompt completion with provider token log probabilities."""
+
+    profile: ModelProfile
+
+    async def complete_raw(self, request: RawCompletionRequest) -> RawCompletionResult: ...
 
 
 @runtime_checkable

@@ -13,7 +13,14 @@ from typing import Any
 
 from rag_foundry_providers.capabilities import Capability, ModelKind, ModelProfile
 from rag_foundry_providers.errors import MissingCapabilityError
-from rag_foundry_providers.messages import ChatMessage, ChatRequest, ChatResult, ToolSpec
+from rag_foundry_providers.messages import (
+    ChatMessage,
+    ChatRequest,
+    ChatResult,
+    RawCompletionRequest,
+    RawCompletionResult,
+    ToolSpec,
+)
 from rag_foundry_providers.registry import ProviderRegistry, StageRequirement
 from rag_foundry_providers.usage import Operation, TokenSource, Usage
 
@@ -258,6 +265,24 @@ RERANK_CHECKS: tuple[Callable[[Any], Awaitable[None]], ...] = (
     check_rerank_top_n,
     check_rerank_usage,
 )
+
+# --- raw completion -----------------------------------------------------------------------
+
+
+async def check_raw_completion(model: Any) -> None:
+    request = RawCompletionRequest(prompt="hello world", max_output_tokens=8, top_logprobs=5)
+    if model.profile.declared(Capability.RAW_LOGPROBS) is not True:
+        await _expect_missing(lambda: model.complete_raw(request), "complete_raw")
+        return
+    result = await model.complete_raw(request)
+    if not isinstance(result, RawCompletionResult):
+        _fail(f"complete_raw returned {type(result).__name__}, expected RawCompletionResult")
+    if not result.text or not result.tokens:
+        _fail("raw completion must return text and token logprobs")
+    _check_usage(result.usage, model.profile, Operation.CHAT)
+
+
+RAW_COMPLETION_CHECKS: tuple[Callable[[Any], Awaitable[None]], ...] = (check_raw_completion,)
 
 # --- registry -----------------------------------------------------------------------------
 

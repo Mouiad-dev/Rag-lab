@@ -13,14 +13,18 @@ from collections.abc import AsyncIterator, Sequence
 from decimal import Decimal
 from typing import Literal
 
-from rag_foundry_providers.capabilities import Capabilities, ModelKind, ModelProfile
+from rag_foundry_providers.capabilities import Capabilities, Capability, ModelKind, ModelProfile
+from rag_foundry_providers.errors import CapabilityProblem, MissingCapabilityError
 from rag_foundry_providers.messages import (
     ChatChunk,
     ChatRequest,
     ChatResult,
     EmbeddingResult,
+    RawCompletionRequest,
+    RawCompletionResult,
     RerankItem,
     RerankResult,
+    TokenLogprob,
 )
 from rag_foundry_providers.ports import check_chat_request
 from rag_foundry_providers.usage import (
@@ -48,13 +52,24 @@ class StepClock:
         return self._ticks * self._step_s
 
 
-def fake_chat_profile(id: str = "fake-chat", *, streaming: bool = True) -> ModelProfile:  # noqa: A002
+def fake_chat_profile(
+    id: str = "fake-chat",  # noqa: A002
+    *,
+    streaming: bool = True,
+    raw_logprobs: bool | None = None,
+) -> ModelProfile:
     return ModelProfile(
         id=id,
         provider="fake",
         model="fake-chat-v1",
         kind=ModelKind.CHAT,
-        capabilities=Capabilities(streaming=streaming, tool_calling=False, structured_output=False, local=True),
+        capabilities=Capabilities(
+            streaming=streaming,
+            tool_calling=False,
+            structured_output=False,
+            raw_logprobs=raw_logprobs,
+            local=True,
+        ),
         cost_per_mtok_in=_ZERO,
         cost_per_mtok_out=_ZERO,
     )
@@ -128,6 +143,26 @@ class FakeChatModel:
         text = self._text(request)
         usage = _usage(self.profile, Operation.CHAT, self._input_tokens(request), _tokens(text), self._clock, start)
         return ChatResult(text=text, finish_reason="stop", usage=usage)
+
+    async def complete_raw(self, request: RawCompletionRequest) -> RawCompletionResult:
+        declared = self.profile.declared(Capability.RAW_LOGPROBS)
+        if declared is not True:
+            raise MissingCapabilityError(
+                (
+                    CapabilityProblem(
+                        stage=None,
+                        profile_id=self.profile.id,
+                        capability=Capability.RAW_LOGPROBS.value,
+                        declared=declared,
+                    ),
+                )
+            )
+        # Scripted fixture values only; these are not measurements from a model.
+        tokens = (TokenLogprob(token="[fake]", logprob=-0.1, top=(("[fake]", -0.1),)),)
+        text = "[fake]"
+        start = self._clock()
+        usage = _usage(self.profile, Operation.CHAT, _tokens(request.prompt), 1, self._clock, start)
+        return RawCompletionResult(text=text, tokens=tokens, finish_reason="stop", usage=usage)
 
     async def stream(self, request: ChatRequest) -> AsyncIterator[ChatChunk]:
         check_chat_request(self.profile, request, streaming=True)

@@ -96,7 +96,7 @@ def test_capability_numeric_and_strict_validation():
 
 
 def test_capability_enum_has_eleven_members():
-    assert len(Capability) == 11
+    assert len(Capability) == 12
 
 
 def test_declared_table():

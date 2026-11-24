@@ -28,9 +28,10 @@ class Capability(StrEnum):
     RERANKING = "reranking"
     LOCAL = "local"
     PROMPT_CACHE_CONTROL = "prompt_cache_control"
+    RAW_LOGPROBS = "raw_logprobs"
 
 
-_CHAT_ONLY = ("streaming", "tool_calling", "structured_output", "vision")
+_CHAT_ONLY = ("streaming", "tool_calling", "structured_output", "vision", "raw_logprobs")
 
 PositiveInt = Annotated[int, Field(gt=0)]
 
@@ -47,6 +48,7 @@ class Capabilities(BaseModel):
     token_embeddings: bool | None = None
     multivector: bool | None = None
     prompt_cache_control: bool | None = None
+    raw_logprobs: bool | None = None
     local: bool = False
     context_window: PositiveInt | None = None
     max_output_tokens: PositiveInt | None = None
