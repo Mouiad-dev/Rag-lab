@@ -1,6 +1,6 @@
 # Technique Catalogue
 
-72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C21, R01-R28, R37-R39, R42, R47-R51; remaining entries are planned.
+72 curriculum entries: 21 chunking/embedding entries and 51 retrieval/knowledge/caching-related entries. These are different categories, not 72 interchangeable RAG architectures. Implemented entries: C01-C10, C12-C19, C20, C21, R01-R28, R31, R37-R39, R41, R42, R45, R47-R51 (C20, R31, R41 and R45 are adaptations; R31 passes only on the llama.cpp runtime, not on Ollama); blocked entries: R40 and R46 (exact requirements in their lessons and ADR-0022); remaining entries are planned.
 
 Canonical machine-readable inventory: `../../config/techniques.json` (schema v2: adds category, catalog_status, primary_source, date_added, phase and roadmap_step). Update both representations together.
 
@@ -27,7 +27,7 @@ The acceptance column describes evidence that must exist before validation. Each
 | C17 | chunking / P4.4 | Propositions | Generate atomic supported facts linked to original spans. | Check negation/conditions and detect unsupported generated claims. | implemented |
 | C18 | chunking / P4.5 | Hierarchical parent-child | Create linked granularities with stable parent references. | Find a specific fact in a child and inspect enclosing context. | implemented |
 | C19 | chunking / P4.4 | Adaptive segmentation | Route document regions to explicit segmentation policies. | Compare policy decisions and failures against one fixed policy. | implemented |
-| C20 | embedding_representation / P7.5 | Late chunking | Pool token representations after wider-context encoding. | Use a compatible encoder; compare early/late with the same model. | planned |
+| C20 | embedding_representation / P7.5 | Late chunking | Pool token representations after wider-context encoding. | Use a compatible encoder; compare early/late with the same model. | implemented |
 | C21 | chunking / P4.2 | Multilingual boundary handling | Handle Arabic/English/mixed segmentation and reversible normalization. | Preserve original locators and inspect Arabic diacritics and punctuation. | implemented |
 | R01 | control / P3.4 | No-retrieval baseline | Answer without corpus retrieval as a diagnostic control. | Label absent grounding and compare on corpus-specific questions. | implemented |
 | R02 | retrieval / P3.4 | Dense two-step RAG | Embed query, retrieve text vectors, generate grounded answer. | Retrieve a known fact and abstain on a missing one. | implemented |
@@ -59,7 +59,7 @@ The acceptance column describes evidence that must exist before validation. Each
 | R28 | workflow / P6.4 | Conversational RAG | Resolve references using bounded conversation state. | Test follow-ups, topic switches and prevention of unsupported memory facts. | implemented |
 | R29 | workflow / P8.1 | Corrective RAG adaptation | Grade retrieval, rewrite/retry and exit under a strict budget. | Label adaptation to CRAG, show successful recovery and no-progress termination. | planned |
 | R30 | workflow / P8.1 | Prompt-based self-checks | Validate support and revise/abstain using explicit checks. | Keep separate from trained Self-RAG and test false-positive judge decisions. | planned |
-| R31 | research / P7.5 | Faithful Self-RAG inference | Use a compatible reflection-token model and original method references. | Record checkpoint/license/hardware, actual reflection behavior and deviations. | planned |
+| R31 | research / P7.5 | Faithful Self-RAG inference | Use a compatible reflection-token model and original method references. | Record checkpoint/license/hardware, actual reflection behavior and deviations. | implemented |
 | R32 | workflow / P8.1 | Adaptive routing | Choose direct, retrieval or advanced workflow by explicit policy. | Evaluate router errors as well as total quality/cost. | planned |
 | R33 | workflow / P8.2 | Agentic retrieval | Let a bounded agent choose retrieval tools and subsequent steps. | Trace tool decisions, stop conditions and budget consumption. | planned |
 | R34 | workflow / P8.2 | Multi-hop retrieval | Use evidence from one hop to form the next retrieval step. | Show a genuine dependency between facts across sources. | planned |
@@ -68,13 +68,13 @@ The acceptance column describes evidence that must exist before validation. Each
 | R37 | research / P7.3 | RAPTOR hierarchy | Recursively cluster/summarize and retrieve at multiple levels. | Preserve leaf lineage; compare against a flat summary index. | implemented |
 | R38 | graph / P7.2 | Entity-relation GraphRAG | Extract grounded entities/relations and retrieve graph neighborhoods. | Answer a relationship question impossible with adjacent-chunk expansion alone. | implemented |
 | R39 | graph / P7.2 | Community/global GraphRAG | Build graph communities and summaries for corpus-level questions. | Trace summary claims to sources and measure index/update cost. | implemented |
-| R40 | multimodal / P7.5 | Text-table-image RAG | Route extraction and use vision-aware answers with source links. | Test chart/table questions and generated-caption errors. | planned |
-| R41 | multimodal / P7.5 | Visual multivector retrieval | Use ColPali-compatible page/query encoders and late-interaction scoring. | Question-dependent real scores, page provenance, memory/latency comparison. | planned |
+| R40 | multimodal / P7.5 | Text-table-image RAG | Route extraction and use vision-aware answers with source links. | Test chart/table questions and generated-caption errors. | blocked |
+| R41 | multimodal / P7.5 | Visual multivector retrieval | Use ColPali-compatible page/query encoders and late-interaction scoring. | Question-dependent real scores, page provenance, memory/latency comparison. | implemented |
 | R42 | evaluation_cohort / P6.4 | Cross-language RAG | Search across Arabic/English and mixed-language questions/documents. | Report each language pair separately, including names/numbers/negation. | implemented |
 | R43 | structured_retrieval / P8.3 | Constrained SQL retrieval | Retrieve factual aggregates through a restricted readonly datasource. | Test scoped views, disallowed functions, timeout and result bounds. | planned |
 | R44 | workflow / P8.2 | Explicit web fallback | Use public web retrieval only under an enabled privacy policy. | Label web sources, avoid private query leakage, handle conflicting freshness. | planned |
-| R45 | retrieval / P7.5 | Text late-interaction retrieval | Use a compatible ColBERT-style token multivector model/scorer. | Contrast single-vector and token matching with the same question set. | planned |
-| R46 | research / P7.5 | CRAG research reproduction | Reproduce the published correction/refinement approach using primary sources. | Document evaluator/refinement/fallback fidelity separately from R29. | planned |
+| R45 | retrieval / P7.5 | Text late-interaction retrieval | Use a compatible ColBERT-style token multivector model/scorer. | Contrast single-vector and token matching with the same question set. | implemented |
+| R46 | research / P7.5 | CRAG research reproduction | Reproduce the published correction/refinement approach using primary sources. | Document evaluator/refinement/fallback fidelity separately from R29. | blocked |
 | R47 | knowledge_context / P7.4 | Cache-augmented generation (CAG) | Preload bounded versioned knowledge and reuse compatible context KV state. | Compare real cold/warm CAG, uncached full context and RAG; reject overflow; retain source citations. | implemented |
 | R48 | knowledge_graph_reasoning / P7.3 | Knowledge-augmented generation (KAG) | Build schema-grounded knowledge with source links and logical-form-guided retrieval/reasoning. | Inspect grounded multi-hop operations, conflicts and missing facts; document OpenSPG fidelity and compare graph/dense baselines. | implemented |
 | R49 | inference_optimization / P7.4 | Prefix KV caching | Reuse shared-token-prefix prefill computation in a compatible serving runtime. | Observe actual cache metrics or declare unavailable; measure cold/warm TTFT and eviction; distinguish decode from prefill. | implemented |

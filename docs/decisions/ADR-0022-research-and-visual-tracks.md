@@ -48,5 +48,36 @@ Requirements: the authors' fine-tuned T5-large retrieval evaluator (link and lic
 - `ExtractionError.CODES`: `page_render_limit`, `page_image_invalid` (ingestion rendering and R41 provenance checks on source bytes).
 - `RunError.CODES`: `selfrag_tokens_missing`, `selfrag_logprobs_unavailable`, `selfrag_output_invalid`.
 
+## Fidelity as built
+Filled 2026-11-25 (P7.5-12). Status and decisions above are unchanged. Figures are in the evidence files; none is a quality or speed claim.
+
+### C20 late chunking: adaptation
+- One token-level encode per window, mean pooling per chunk span; early baseline uses the same model.
+- bge-m3 is CLS-trained, so mean pooling is an adaptation; no long-context model trained for late chunking.
+- In-memory cosine, tenant-scoped, not persisted. Live: one CPU run, 5 answerable questions, one rank changed (AR1, 3 to 2).
+- Evidence: `docs/evidence/P7.5/late_chunking_and_late_interaction.md`; lesson `docs/techniques/lessons/C20-late-chunking.md`.
+
+### R45 late interaction: adaptation
+- Exhaustive MaxSim on the bge-m3 ColBERT head; no PLAID, no pruning; special tokens dropped (official BGE-M3 keeps the final `</s>`).
+- Not the original ColBERT checkpoint. In-memory, tenant-scoped, not persisted.
+- Live (n=5): single-vector and MaxSim differ on MIX1 and MIX2, where single-vector ranks the relevant chunk first.
+- Evidence: same file as C20; lesson `docs/techniques/lessons/R45-late-interaction.md`.
+
+### R41 visual multivector: adaptation
+- colSmol-256M (LoRA on ColSmolVLM-Instruct-256M) through peft and sentence-transformers; `colpali-engine` unused (needs torch < 2.14).
+- Exhaustive MaxSim over page patches, no pooling, in memory; a page is evidence only through text chunks on it.
+- Live: 4-page fixture, 3 answerable questions, both R41 and the text arm rank the expected page first; no abstention threshold.
+- Evidence: `docs/evidence/P7.5/visual_multivector.md`; lesson `docs/techniques/lessons/R41-visual-multivector.md`.
+
+### R31 Self-RAG: adaptation, implemented under the owner exception
+- Quantized unofficial Q4_K_M GGUF, our retriever, short-form only; retrieval threshold on normalized probabilities (upstream uses raw logprobs); -100 fallback for absent tokens.
+- Citation guard (owner decision 2026-11-24): citation only, candidate selection unchanged.
+- Passes rules (d) and (e) only on llama.cpp b12220 (full-vocabulary logprobs with ids: 11 scored positions, 0 missing). On Ollama (top 20) it fails rule (d): 7 scored, 4 missing, 0.57.
+- Live fixture has one chunk, so candidate ranking was not exercised.
+- Evidence: `docs/evidence/P7.5/self_rag_live.md`; lesson `docs/techniques/lessons/R31-self-rag.md`.
+
+### R40 and R46: blocked
+- No implementation. Requirements are the D4 and D6 lists above; lessons `R40-text-table-image.md` and `R46-crag-reproduction.md`.
+
 ## Consequences
 No measured claims are made here. Evidence files (P7.5-12 and the live-run specs) carry the numbers. The catalogue keeps all entries; R40 and R46 are `blocked`, not removed.
