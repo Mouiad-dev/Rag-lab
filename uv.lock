@@ -1350,6 +1350,9 @@ dependencies = [
 anthropic = [
     { name = "httpx" },
 ]
+llamacpp = [
+    { name = "httpx" },
+]
 ollama = [
     { name = "httpx" },
 ]
@@ -1377,6 +1380,7 @@ visual = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", marker = "extra == 'anthropic'", specifier = "==0.28.1" },
+    { name = "httpx", marker = "extra == 'llamacpp'", specifier = "==0.28.1" },
     { name = "httpx", marker = "extra == 'ollama'", specifier = "==0.28.1" },
     { name = "httpx", marker = "extra == 'openai-compatible'", specifier = "==0.28.1" },
     { name = "peft", marker = "extra == 'visual'", specifier = "==0.22.0" },
@@ -1390,7 +1394,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'tokens'", specifier = "==2.15.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "extra == 'visual'", specifier = "==2.15.0", index = "https://download.pytorch.org/whl/cpu" },
 ]
-provides-extras = ["ollama", "anthropic", "openai-compatible", "sparse", "tokens", "visual"]
+provides-extras = ["ollama", "llamacpp", "anthropic", "openai-compatible", "sparse", "tokens", "visual"]
 
 [[package]]
 name = "rag-foundry-storage"
