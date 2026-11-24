@@ -8,6 +8,10 @@ markers before it is placed after the fixed prompt. The raw Self-RAG prompt has
 no structural separation between instruction and passage, so passage text can
 only be neutralised, not isolated: lines starting with "###" lose their leading
 hashes so they cannot fake instruction or response turns.
+
+The wide retrieval-decision distribution is requested in a separate one-token
+call. Under the pinned greedy sampler its position 0 matches position 0 of the
+following generation; this costs one additional model call.
 """
 
 import math
@@ -57,8 +61,29 @@ class SelfRagConfig(BaseModel):
     use_seqscore: bool = True
     k: int = Field(default=5, ge=1, le=50)
     max_new_tokens: int = Field(default=100, ge=1)
+    decision_top_logprobs: int = Field(default=20, ge=1, le=65536)
+    evidence_top_logprobs: int = Field(default=20, ge=1, le=65536)
     supported_languages: tuple[str, ...] = ("en",)
     token_strings: tuple[str, ...] = REFLECTION_TOKENS
+    token_ids: dict[str, int] = Field(
+        default_factory=lambda: {
+            "[No Retrieval]": 32000,
+            "[Retrieval]": 32001,
+            "[Continue to Use Evidence]": 32002,
+            "[Irrelevant]": 32003,
+            "[Relevant]": 32004,
+            "<paragraph>": 32005,
+            "</paragraph>": 32006,
+            "[Utility:1]": 32007,
+            "[Utility:2]": 32008,
+            "[Utility:3]": 32009,
+            "[Utility:4]": 32010,
+            "[Utility:5]": 32011,
+            "[Fully supported]": 32012,
+            "[Partially supported]": 32013,
+            "[No support / Contradictory]": 32014,
+        }
+    )
 
 
 class SelfRagCitation(BaseModel):
@@ -112,15 +137,22 @@ class SelfRagWorkflow:
             "passage_reflection_tokens_removed": 0,
             "passage_prompt_markers_removed": 0,
         }
-        decision = await self._complete(raw_model, f"### Instruction:\n{question}\n\n### Response:\n", trace)
+        prompt = f"### Instruction:\n{question}\n\n### Response:\n"
+        decision = await self._complete(
+            raw_model, prompt, trace, top_logprobs=self.config.decision_top_logprobs, max_output_tokens=1
+        )
         first = decision.tokens[0] if decision.tokens else None
-        first_map = _top_map(first)
+        first_map, match_mode = _reflection_top_map(first, self.config)
+        trace["match_mode"] = match_mode
         missing_decision = all(token not in first_map for token in RETRIEVAL)
         trace["scored_positions"] += 1
+        generation = None
         if missing_decision:
             trace["positions_missing_group_tokens"] += 1
             trace["retrieval_fallbacks"] += 2
-            do_retrieve = RETRIEVAL[0] in decision.text
+            # Upstream tests the full generation, not the one-token decision call.
+            generation = await self._complete(raw_model, prompt, trace)
+            do_retrieve = any(_generated_reflection(token, RETRIEVAL[:1], self.config) for token in generation.tokens)
             p_ret = None
             rule = "undetermined_topk_generated_token"
         else:
@@ -137,11 +169,17 @@ class SelfRagWorkflow:
             "rule": rule,
             "generated_text": decision.text,
             "logprobs": _token_rows(decision.tokens[:1]),
+            "k": self.config.decision_top_logprobs,
+            "top_logprobs": self.config.decision_top_logprobs,
+            "alternatives_returned": len(first.top) if first is not None else 0,
+            "match_mode": match_mode,
         }
         if not do_retrieve:
+            if generation is None:
+                generation = await self._complete(raw_model, prompt, trace)
             trace["answer_grounding"] = "ungrounded"
             self.last_trace = trace
-            return SelfRagAnswer(status="answered", answer=_strip_reflections(decision.text), grounding="ungrounded")
+            return SelfRagAnswer(status="answered", answer=_strip_reflections(generation.text), grounding="ungrounded")
 
         retrieved: RetrievalResult = await retriever.retrieve(question)
         scored: list[tuple[float, RetrievedChunk, str, dict]] = []
@@ -154,12 +192,13 @@ class SelfRagWorkflow:
             trace["passage_reflection_tokens_removed"] += removed
             trace["passage_prompt_markers_removed"] += markers
             prompt = f"### Instruction:\n{question}\n\n### Response:\n[Retrieval]<paragraph>\n{clean_text}</paragraph>"
-            candidate = await self._complete(raw_model, prompt, trace)
+            candidate = await self._complete(raw_model, prompt, trace, top_logprobs=self.config.evidence_top_logprobs)
             part, valid = _score_candidate(candidate, trace, self.config)
             row = {
                 "chunk_id": hit.chunk_id,
                 "token_probabilities": _token_rows(candidate.tokens),
                 "chosen": False,
+                "match_mode": _reflection_top_map(candidate.tokens[0], self.config)[1],
                 **part,
             }
             if not valid:
@@ -193,25 +232,59 @@ class SelfRagWorkflow:
             status="answered", answer=_strip_reflections(text), grounding="corpus", citations=(citation,)
         )
 
-    async def _complete(self, model: RawCompletionModel, prompt: str, trace: dict):
+    async def _complete(
+        self,
+        model: RawCompletionModel,
+        prompt: str,
+        trace: dict,
+        *,
+        top_logprobs: int = 20,
+        max_output_tokens: int | None = None,
+    ):
         result = await model.complete_raw(
             RawCompletionRequest(
                 prompt=prompt,
-                max_output_tokens=self.config.max_new_tokens,
+                max_output_tokens=max_output_tokens or self.config.max_new_tokens,
                 temperature=0.0,
                 top_p=1.0,
                 top_k=0,
-                top_logprobs=20,
+                top_logprobs=top_logprobs,
             )
         )
         if not result.tokens or all(not token.top for token in result.tokens):
             raise RunError("selfrag_logprobs_unavailable")
-        trace["calls"].append({"usage": result.usage.model_dump(), "finish_reason": result.finish_reason})
+        trace["calls"].append(
+            {"usage": result.usage.model_dump(), "finish_reason": result.finish_reason, "top_logprobs": top_logprobs}
+        )
         return result
 
 
 def _top_map(token) -> dict[str, float]:
     return {} if token is None else {name: lp for name, lp in token.top}
+
+
+def _reflection_top_map(token, config: SelfRagConfig) -> tuple[dict[str, float], str]:
+    if token is None:
+        return {}, "text"
+    if token.token_id is not None or token.top_ids is not None:
+        if token.top_ids is None:
+            return {}, "id"
+        by_id = {value: key for key, value in config.token_ids.items()}
+        matched = {
+            by_id[token_id]: pair[1]
+            for token_id, pair in zip(token.top_ids, token.top, strict=True)
+            if token_id in by_id
+        }
+        return matched, "id"
+    return _top_map(token), "text"
+
+
+def _generated_reflection(token, names: Sequence[str], config: SelfRagConfig) -> str | None:
+    if token.token_id is not None:  # id wins: a text lookalike with another id never matches
+        by_id = {value: key for key, value in config.token_ids.items()}
+        name = by_id.get(token.token_id)
+        return name if name in names else None
+    return token.token if token.token in names else None
 
 
 def _lp(top: dict[str, float], token: str, trace: dict, group: str) -> float:
@@ -231,7 +304,7 @@ def _group_probs(top: dict[str, float], tokens: Sequence[str], trace: dict, grou
 
 
 def _score_candidate(result, trace: dict, config: SelfRagConfig) -> tuple[dict, bool]:
-    tops = [_top_map(token) for token in result.tokens]
+    tops = [_reflection_top_map(token, config)[0] for token in result.tokens]
     # Official code reads position 0's top-k whatever token was generated.
     trace["scored_positions"] += 1
     if not any(token in tops[0] for token in RELEVANCE):
@@ -240,10 +313,20 @@ def _score_candidate(result, trace: dict, config: SelfRagConfig) -> tuple[dict, 
     rel = _group_probs(tops[0], RELEVANCE, trace, "relevance")
     relevance = rel[0]
     support_at = next(
-        (top for generated, top in zip(result.tokens, tops, strict=True) if generated.token in SUPPORT), None
+        (
+            top
+            for generated, top in zip(result.tokens, tops, strict=True)
+            if _generated_reflection(generated, SUPPORT, config)
+        ),
+        None,
     )
     utility_at = next(
-        (top for generated, top in zip(result.tokens, tops, strict=True) if generated.token in UTILITY), None
+        (
+            top
+            for generated, top in zip(result.tokens, tops, strict=True)
+            if _generated_reflection(generated, UTILITY, config)
+        ),
+        None,
     )
     support_score = utility_score = 0.0
     support_probs = utility_probs = None

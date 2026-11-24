@@ -5,18 +5,42 @@ from types import SimpleNamespace
 import pytest
 from rag_foundry_answering.self_rag import SelfRagConfig, SelfRagWorkflow
 from rag_foundry_domain.errors import RunError
+from rag_foundry_providers.errors import ProviderCallError
+
+TOKEN_IDS = {
+    "[No Retrieval]": 32000,
+    "[Retrieval]": 32001,
+    "[Continue to Use Evidence]": 32002,
+    "[Irrelevant]": 32003,
+    "[Relevant]": 32004,
+    "<paragraph>": 32005,
+    "</paragraph>": 32006,
+    "[Utility:1]": 32007,
+    "[Utility:2]": 32008,
+    "[Utility:3]": 32009,
+    "[Utility:4]": 32010,
+    "[Utility:5]": 32011,
+    "[Fully supported]": 32012,
+    "[Partially supported]": 32013,
+    "[No support / Contradictory]": 32014,
+}
 
 
-def _token(token, values):
+def _token(token, values, *, ids=True, token_id=None):
+    top = tuple((name, math.log(value)) for name, value in values.items())
     return SimpleNamespace(
-        token=token, logprob=0.0, top=tuple((name, math.log(value)) for name, value in values.items())
+        token=token,
+        logprob=0.0,
+        top=top,
+        token_id=TOKEN_IDS.get(token) if token_id is None and ids else token_id,
+        top_ids=tuple(TOKEN_IDS.get(name, -1) for name, _ in top) if ids else None,
     )
 
 
-def _response(text, rows):
+def _response(text, rows, *, ids=True):
     return SimpleNamespace(
         text=text,
-        tokens=tuple(_token(token, values) for token, values in rows),
+        tokens=tuple(_token(token, values, ids=ids) for token, values in rows),
         finish_reason="stop",
         usage=SimpleNamespace(model_dump=lambda: {"input_tokens": 1, "output_tokens": len(rows)}),
     )
@@ -85,7 +109,7 @@ def test_retrieval_decision_takes_both_threshold_sides():
     async def run(p_ret):
         workflow = SelfRagWorkflow(SelfRagConfig(threshold=0.2))
         retriever = FixedRetriever([])
-        model = ScriptedRawModel([_decision(p_ret)])
+        model = ScriptedRawModel([_decision(p_ret), _response("answer", [("answer", {"answer": 1.0})])])
         result = await workflow.answer("Question?", retriever=retriever, raw_model=model)
         return result, workflow, retriever
 
@@ -122,7 +146,9 @@ def test_hand_computed_candidate_scores_choose_best_and_strip_passage_tokens():
     assert workflow.last_trace["passage_reflection_tokens_removed"] == 1
     assert "[Fully supported]" not in model.prompts[1]
     assert all(request.temperature == 0 and request.top_p == 1 and request.top_k == 0 for request in model.requests)
-    assert all(request.top_logprobs == 20 for request in model.requests)
+    assert model.requests[0].max_output_tokens == 1
+    assert model.requests[0].top_logprobs == SelfRagConfig().decision_top_logprobs
+    assert all(request.top_logprobs == SelfRagConfig().evidence_top_logprobs for request in model.requests[1:])
 
 
 def test_missing_capability_empty_token_config_and_empty_logprobs():
@@ -149,6 +175,89 @@ def test_reflection_token_missing_from_top20_uses_official_floor_and_counts_fall
     assert workflow.last_trace["retrieval_decision"]["p_retrieval"] == pytest.approx(1.0)
 
 
+def _raw(text, tokens):
+    return SimpleNamespace(
+        text=text,
+        tokens=tuple(tokens),
+        finish_reason="stop",
+        usage=SimpleNamespace(model_dump=lambda: {"input_tokens": 1, "output_tokens": len(tokens)}),
+    )
+
+
+def test_decision_matches_token_ids_when_text_is_not_the_reflection_token():
+    # A duplicate alternative has the exact text "[Retrieval]" but ordinary id 44 and a higher
+    # probability. Only the id-32001 entry counts: p_ret = .1 / (.1 + .3) = .25. Counting the
+    # id-44 entry (.6) would give .6 / .9 = .667.
+    decision = _raw(
+        "[Retrieval]",
+        [
+            SimpleNamespace(
+                token="[Retrieval]",
+                token_id=32001,
+                logprob=0.0,
+                top=(
+                    ("[Retrieval]", math.log(0.6)),
+                    ("[Retrieval]", math.log(0.1)),
+                    ("[No Retrieval]", math.log(0.3)),
+                ),
+                top_ids=(44, 32001, 32000),
+            )
+        ],
+    )
+    _, workflow, model = _run([decision], [])
+    assert workflow.last_trace["retrieval_decision"]["p_retrieval"] == pytest.approx(0.25)
+    assert workflow.last_trace["retrieval_decision"]["retrieve"] is True
+    assert workflow.last_trace["match_mode"] == "id"
+    assert model.requests[0].max_output_tokens == 1
+
+
+def test_evidence_support_position_requires_reflection_id_and_records_match_mode():
+    # The second generated token has the text "[Fully supported]" but an ordinary id: not a support position.
+    relevance = _token("[Relevant]", {"[Relevant]": 0.8, "[Irrelevant]": 0.2})
+    lookalike = SimpleNamespace(
+        token="[Fully supported]",
+        token_id=99,
+        logprob=0.0,
+        top=(("[Fully supported]", math.log(1.0)),),
+        top_ids=(32012,),
+    )
+    candidate = _raw("[Relevant] [Fully supported]", [relevance, lookalike])
+    _, workflow, _ = _run([_decision(0.9), candidate], [_hit("A", 1, "text")])
+    row = workflow.last_trace["candidates"][0]
+    assert row["support_state"] == "absent" and row["support"] == 0.0
+    assert row["match_mode"] == "id"
+
+
+def test_ollama_style_wide_decision_error_surfaces_unchanged():
+    class OllamaLikeModel(ScriptedRawModel):
+        async def complete_raw(self, request):
+            if request.top_logprobs > 20:
+                raise ProviderCallError("ollama-test", "invalid_request")
+            return await super().complete_raw(request)
+
+    model = OllamaLikeModel([])
+    workflow = SelfRagWorkflow(SelfRagConfig(decision_top_logprobs=21))
+    with pytest.raises(ProviderCallError, match="invalid_request"):
+        asyncio.run(workflow.answer("Question?", retriever=FixedRetriever([]), raw_model=model))
+    assert model.requests == []
+
+
+def test_text_matching_still_works_without_token_ids():
+    decision = _response("[Retrieval]", [("[Retrieval]", {"[Retrieval]": 0.9, "[No Retrieval]": 0.1})], ids=False)
+    _, workflow, _ = _run([decision], [])
+    assert workflow.last_trace["retrieval_decision"]["retrieve"] is True
+    assert workflow.last_trace["match_mode"] == "text"
+
+
+def test_decision_threshold_uses_both_retrieval_ids_when_present():
+    decision = _response("token text", [("token text", {"retrieval alias": 0.7, "no retrieval alias": 0.3})])
+    token = decision.tokens[0]
+    object.__setattr__(token, "top_ids", (32001, 32000))
+    _, workflow, _ = _run([decision], [])
+    assert workflow.last_trace["retrieval_decision"]["retrieve"] is True
+    assert workflow.last_trace["retrieval_decision"]["p_retrieval"] == pytest.approx(0.7)
+
+
 def test_invalid_candidate_is_skipped_and_all_invalid_abstains():
     async def run():
         retriever = FixedRetriever([_hit("invalid", 1, "text")])
@@ -165,7 +274,10 @@ def test_invalid_candidate_is_skipped_and_all_invalid_abstains():
 def test_arabic_question_passes_through_and_is_outside_supported_language():
     question = "\u0645\u0627 \u0647\u0648 \u0627\u0644\u062c\u0648\u0627\u0628\u061f"
     model = ScriptedRawModel(
-        [_response("[No Retrieval]", [("[No Retrieval]", {"[No Retrieval]": 0.9, "[Retrieval]": 0.1})])]
+        [
+            _response("[No Retrieval]", [("[No Retrieval]", {"[No Retrieval]": 0.9, "[Retrieval]": 0.1})]),
+            _response("answer", [("answer", {"answer": 1.0})]),
+        ]
     )
     workflow = SelfRagWorkflow(SelfRagConfig())
     result = asyncio.run(workflow.answer(question, retriever=FixedRetriever([]), raw_model=model))
@@ -187,15 +299,25 @@ def test_no_hits_abstains_with_no_passages():
     assert workflow.last_trace["answer_grounding"] == "none"
 
 
-def test_undetermined_topk_falls_back_to_generated_retrieval_token():
-    result, workflow, _ = _run([_response("[Retrieval]", [("[Retrieval]", {"other": 0.9})])], [])
+def test_undetermined_topk_falls_back_to_full_generation_text():
+    # Decision token "The" has no retrieval token in its top-k; "[Retrieval]" appears only later.
+    decision_call = _response("The", [("The", {"The": 0.9})])
+    result, workflow, model = _run(
+        [decision_call, _response("The [Retrieval]", [("The", {"The": 0.9}), ("[Retrieval]", {"x": 1.0})])], []
+    )
     decision = workflow.last_trace["retrieval_decision"]
     assert decision["rule"] == "undetermined_topk_generated_token" and decision["retrieve"] is True
     assert decision["p_retrieval"] is None and result.abstention_reason == "no_passages"
-    result, workflow, _ = _run([_response("Plain answer", [("Plain", {"Plain": 0.9})])], [])
+    assert len(model.requests) == 2
+    # Mirror: no retrieval token anywhere in the generation; the generation is reused as the answer.
+    result, workflow, model = _run(
+        [decision_call, _response("The cat", [("The", {"The": 0.9}), ("cat", {"cat": 0.9})])], []
+    )
     decision = workflow.last_trace["retrieval_decision"]
     assert decision["rule"] == "undetermined_topk_generated_token" and decision["retrieve"] is False
-    assert result.grounding == "ungrounded" and workflow.last_trace["positions_missing_group_tokens"] == 1
+    assert result.grounding == "ungrounded" and result.answer == "The cat"
+    assert workflow.last_trace["positions_missing_group_tokens"] == 1
+    assert len(model.requests) == 2
 
 
 def test_scored_positions_and_fallback_counters():

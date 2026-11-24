@@ -16,7 +16,7 @@ P7.5 covers C20 (late chunking), R45 (text late interaction), R41 (visual multiv
 - Models are local only: `local_files_only=True`, directories from `RAG_*_MODEL_DIR`, never downloaded at run time. Weights load only from safetensors (no unpickling). Revision and sha256 are recorded in evidence.
 - Missing extra or files raise `TechniqueUnavailableError`; there is no fallback.
 - Tenant scope: every in-memory index (C20, R45, R41) stores the tenant and project of its chunk records and refuses any other caller scope with NotFound.
-- D7 (hardware, checked 2026-11-23): NVIDIA RTX 3060 Laptop, 6 GB VRAM, 15.3 GB RAM, 51 GB free disk. Torch stays the CPU build; GPU is used only through the Ollama runtime (R31).
+- D7 (hardware, checked 2026-11-23): NVIDIA RTX 3060 Laptop, 6 GB VRAM, 15.3 GB RAM, 51 GB free disk. Torch stays the CPU build; R31 may use Ollama or the owner-approved local llama.cpp server.
 
 ### D1/D2: C20 and R45 (approved)
 - Model: BAAI/bge-m3 (MIT) at commit 5617a9f61b028005a4858fdac845db406aefb181. That commit has only `pytorch_model.bin` and `colbert_linear.pt`, so the orchestrator converts them locally to safetensors (weights_only load) and records all sha256 values. One download serves C20 and R45. No jina models.
@@ -35,6 +35,10 @@ Requirements: image parts in the provider `ChatMessage` schema with size and for
 - Source: a community quantized GGUF of `selfrag_llama2_7b` (Llama 2 Community Licence, about 4 GB, must fit 6 GB VRAM) on Ollama or llama.cpp, gated by P7.5-13. The P7.5-13 header read and the GGUF download are shown to the owner (source and bytes) before they run.
 - Label is always `adaptation`: quantized, unofficial conversion, top-k-only logprobs, our retriever.
 - Missing single added reflection tokens (`[Retrieve]`, `[IsRel]`, `[IsSup]`, `[IsUse]` families) or token logprobs: `blocked` with the exact gap. Prompt self-checking is never Self-RAG.
+
+#### Amendment 2026-11-24
+- Owner decision: rerun R31 only on llama.cpp server release b12220, commit `4b46d965385c9b3b0e912f4fde73e57cd1751d0d`, archive `llama-b12220-bin-win-vulkan-x64.zip` (37,846,996 bytes, sha256 `5df033b72421e4c423438f3f5007bb0e439ad0c3e9d364c5c6b3407bf94c1e45`). The binary is kept under `var/tools/` (git-ignored), bound to `127.0.0.1`, and started/stopped manually.
+- Rules (d) and (e) in `docs/evidence/P7.5/r31_gguf_check.md`, section 6, apply unchanged to the rerun. R31 becomes `implemented` (adaptation, never `validated`) only if the rerun passes; otherwise it remains `blocked`.
 
 ### D6: R46 `blocked`
 Requirements: the authors' fine-tuned T5-large retrieval evaluator (link and licence from the official repo); knowledge refinement (decompose, filter, recompose); web search through an approved, budgeted provider in enriched mode. A reranker or LLM grader is R29 (P8.1), not R46.

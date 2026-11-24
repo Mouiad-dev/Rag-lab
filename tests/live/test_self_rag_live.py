@@ -15,6 +15,10 @@ pytestmark = [
     ),
 ]
 
+_RUNTIME = os.environ.get("RAG_SELFRAG_RUNTIME", "ollama")
+if _RUNTIME not in {"ollama", "llamacpp"}:
+    raise ValueError(f"unknown RAG_SELFRAG_RUNTIME: {_RUNTIME}")
+
 
 DOCUMENT = """# Northbridge reference
 
@@ -53,9 +57,11 @@ def test_self_rag_short_form_live(tmp_path, monkeypatch):
             ollama_embedding_profile,
             ollama_raw_completion_profile,
         )
+        from rag_foundry_providers.messages import RawCompletionRequest
         from test_extraction_service import ingest, setup
 
         model_name = os.environ["RAG_SELFRAG_MODEL"]
+        runtime = _RUNTIME
         scope = make_scope()
         extraction, intake, _spy, store, _docs, views, _scope = setup(tmp_path, scope)
         doc_id, version_id = await ingest(
@@ -70,10 +76,26 @@ def test_self_rag_short_form_live(tmp_path, monkeypatch):
         chunker = RecursiveChunker(RecursiveConfig(chunk_size=500, chunk_overlap=0))
         version = await index_service.build(scope, (view.id,), chunker, embedder)
         retriever = DenseRetriever(DenseConfig(k=5), scope=scope, index_version=version, index=index, embedder=embedder)
-        raw_model = OllamaRawCompletionModel(
-            ollama_raw_completion_profile(model=model_name), api_base=settings.ollama_base_url
-        )
-        workflow = SelfRagWorkflow(SelfRagConfig())
+        if runtime == "ollama":
+            raw_model = OllamaRawCompletionModel(
+                ollama_raw_completion_profile(model=model_name), api_base=settings.ollama_base_url
+            )
+            config = SelfRagConfig()
+            check_k = 20
+        else:
+            from rag_foundry_providers.adapters.llamacpp import (
+                LlamaCppRawCompletionModel,
+                llamacpp_raw_completion_profile,
+            )
+
+            raw_model = LlamaCppRawCompletionModel(
+                llamacpp_raw_completion_profile(model=model_name),
+                vocab_size=32016,
+                base_url=os.environ.get("RAG_LLAMACPP_BASE_URL", "http://127.0.0.1:8091"),
+            )
+            config = SelfRagConfig(decision_top_logprobs=32016, evidence_top_logprobs=5000)
+            check_k = 32016
+        workflow = SelfRagWorkflow(config)
         print(f"model={model_name} embedding_model={embedder.profile.model} reflection_tokens={len(REFLECTION_TOKENS)}")
         total_scored = total_missing = 0
         for name, question in QUESTIONS:
@@ -81,27 +103,35 @@ def test_self_rag_short_form_live(tmp_path, monkeypatch):
             # Warm the prompt cache first: cold and warm calls differ by up to ~0.07 logprob (measured 2026-11-24),
             # so both compared calls must run in the same cache state; only top_k may differ.
             await raw_model.complete_raw(
-                __import__("rag_foundry_providers.messages", fromlist=["RawCompletionRequest"]).RawCompletionRequest(
-                    prompt=prompt, max_output_tokens=1, temperature=0.0, top_p=1.0, top_k=0, top_logprobs=20
+                RawCompletionRequest(
+                    prompt=prompt, max_output_tokens=1, temperature=0.0, top_p=1.0, top_k=0, top_logprobs=check_k
                 )
             )
             top_one = await raw_model.complete_raw(
-                __import__("rag_foundry_providers.messages", fromlist=["RawCompletionRequest"]).RawCompletionRequest(
-                    prompt=prompt, max_output_tokens=1, temperature=0.0, top_p=1.0, top_k=1, top_logprobs=20
+                RawCompletionRequest(
+                    prompt=prompt, max_output_tokens=1, temperature=0.0, top_p=1.0, top_k=1, top_logprobs=check_k
                 )
             )
             top_zero = await raw_model.complete_raw(
-                __import__("rag_foundry_providers.messages", fromlist=["RawCompletionRequest"]).RawCompletionRequest(
-                    prompt=prompt, max_output_tokens=1, temperature=0.0, top_p=1.0, top_k=0, top_logprobs=20
+                RawCompletionRequest(
+                    prompt=prompt, max_output_tokens=1, temperature=0.0, top_p=1.0, top_k=0, top_logprobs=check_k
                 )
             )
             a = top_one.tokens[0].top if top_one.tokens else ()
             b = top_zero.tokens[0].top if top_zero.tokens else ()
-            same_order = bool(a) and [x[0] for x in a] == [x[0] for x in b]
+            ids_a = top_one.tokens[0].top_ids if top_one.tokens else None
+            ids_b = top_zero.tokens[0].top_ids if top_zero.tokens else None
+            if ids_a is not None and ids_b is not None:
+                same_order = bool(a) and list(ids_a) == list(ids_b)
+            else:
+                same_order = bool(a) and [x[0] for x in a] == [x[0] for x in b]
             max_diff = max((abs(x[1] - y[1]) for x, y in zip(a, b, strict=False)), default=float("inf"))
             # Post-sampler top_k=1 would leave one token; tiny float noise from prompt-cache reuse is tolerated.
             equal = same_order and max_diff <= 1e-3
-            print(f"{name} pre_sampler_same_order={same_order} pre_sampler_max_abs_diff={max_diff:.6g}")
+            print(
+                f"{name} pre_sampler_same_order={same_order} pre_sampler_max_abs_diff={max_diff:.6g} "
+                f"top_logprobs={check_k}"
+            )
             started = time.perf_counter()
             result = await workflow.answer(question, retriever=retriever, raw_model=raw_model)
             elapsed = time.perf_counter() - started
@@ -109,6 +139,8 @@ def test_self_rag_short_form_live(tmp_path, monkeypatch):
             decision = trace["retrieval_decision"]
             print(
                 f"{name} pre_sampler_check={'equal' if equal else 'different'} "
+                f"rule={decision['rule']} p_ret={decision['p_retrieval']} "
+                f"alternatives={decision['alternatives_returned']} match_mode={decision['match_mode']} "
                 f"decision={decision} scored_positions={trace['scored_positions']} "
                 f"positions_missing_group_tokens={trace['positions_missing_group_tokens']}"
             )
